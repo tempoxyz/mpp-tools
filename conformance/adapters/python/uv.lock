@@ -79,18 +79,18 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pympp", specifier = "==0.8.0" }]
+requires-dist = [{ name = "pympp", specifier = "==0.8.1" }]
 
 [[package]]
 name = "pympp"
-version = "0.8.0"
+version = "0.8.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/2d/c0/b7c18c939086564ee4dab503a353bd1d843d8881c0db9e150fe8a6bddaf7/pympp-0.8.0.tar.gz", hash = "sha256:8afe5e9a2ebd5898d6687f98dd8ee8533c64bf49ce04e36244383c461b1898fe", size = 146377, upload-time = "2026-05-16T17:24:15.529Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d1/f1/ab49e523734add0f0e29d21ef77206fa987dd2bf098a5586aa567bd29ca9/pympp-0.8.1.tar.gz", hash = "sha256:663d05d0bea4c082e44edb5122c8efe7630d13999edee0534f606a8d9dd58db4", size = 146914, upload-time = "2026-06-01T16:50:52.464Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3e/79/2a0b6f0a789a22c32c949a2fc039f5fea4e3fb781de08e6cb565aaa78522/pympp-0.8.0-py3-none-any.whl", hash = "sha256:2a377ad746efa6fe8e269794f4e3bea53520170347356abd44e424ad111207c9", size = 86851, upload-time = "2026-05-16T17:24:13.967Z" },
+    { url = "https://files.pythonhosted.org/packages/b0/f5/c6c8c8d98cd6fc6211eb7aa63a36bc5ee6ae3bb97bec406baad60c00417f/pympp-0.8.1-py3-none-any.whl", hash = "sha256:191c0e3e0bd2ce0cab548dc9cf31a1300faf8ba34bac81c3c2bf08e70ae279d9", size = 87023, upload-time = "2026-06-01T16:50:51.358Z" },
 ]
 
 [[package]]
