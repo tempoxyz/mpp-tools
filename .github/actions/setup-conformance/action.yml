@@ -1,0 +1,84 @@
+name: Setup conformance adapter
+description: Install shared toolchains needed by conformance adapter jobs.
+
+inputs:
+  adapter:
+    description: Adapter to prepare, or all.
+    required: true
+  conformance-directory:
+    description: Path to the conformance directory.
+    required: false
+    default: conformance
+  setup-node:
+    description: Install Node.js even when the selected adapter is not TypeScript.
+    required: false
+    default: "false"
+  ruby-bundler-cache:
+    description: Enable ruby/setup-ruby bundler cache.
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.12"
+        cache: pip
+        cache-dependency-path: ${{ inputs.conformance-directory }}/requirements.txt
+
+    - name: Setup Node.js
+      if: inputs.setup-node == 'true' || inputs.adapter == 'typescript' || inputs.adapter == 'all'
+      uses: actions/setup-node@v6
+      with:
+        node-version: "20"
+        cache: npm
+        cache-dependency-path: ${{ inputs.conformance-directory }}/package-lock.json
+
+    - name: Setup Rust
+      if: inputs.adapter == 'rust' || inputs.adapter == 'all'
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache Rust dependencies
+      if: inputs.adapter == 'rust' || inputs.adapter == 'all'
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: ${{ inputs.conformance-directory }}/adapters/rust -> target
+
+    - name: Setup Go
+      if: inputs.adapter == 'go' || inputs.adapter == 'all'
+      uses: actions/setup-go@v6
+      with:
+        go-version: "1.26.0"
+        check-latest: true
+        cache-dependency-path: ${{ inputs.conformance-directory }}/adapters/go/go.sum
+
+    - name: Setup Java
+      if: inputs.adapter == 'java' || inputs.adapter == 'all'
+      uses: actions/setup-java@v5
+      with:
+        distribution: temurin
+        java-version: "17"
+        cache: gradle
+        cache-dependency-path: |
+          ${{ inputs.conformance-directory }}/adapters/java/*.gradle
+          ${{ inputs.conformance-directory }}/adapters/java/gradle.lockfile
+          ${{ inputs.conformance-directory }}/adapters/java/gradle/wrapper/gradle-wrapper.properties
+
+    - name: Setup Ruby
+      if: inputs.adapter == 'ruby' || inputs.adapter == 'all'
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: "3.3"
+        bundler-cache: ${{ inputs.ruby-bundler-cache }}
+        working-directory: ${{ inputs.conformance-directory }}/adapters/ruby
+
+    - name: Install uv
+      if: inputs.adapter == 'python' || inputs.adapter == 'all'
+      uses: astral-sh/setup-uv@v7
+      with:
+        version: latest
+        python-version: "3.12"
+        enable-cache: true
+        cache-dependency-glob: ${{ inputs.conformance-directory }}/adapters/python/uv.lock

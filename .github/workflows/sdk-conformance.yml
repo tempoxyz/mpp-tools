@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       adapter:
-        description: SDK adapter to test, for example rust, ruby, go, python, or typescript.
+        description: SDK adapter to test, for example rust, ruby, go, python, or typescript. Java is tested by mpp-tools CI only because local SDK override support is not implemented.
         required: true
         type: string
       conformance-ref:
@@ -51,6 +51,7 @@ jobs:
               ;;
             *)
               echo "Unsupported adapter: $REQUESTED_ADAPTER" >&2
+              echo "Java is intentionally excluded until use_local_sdk.py can point the Java adapter at a local SDK checkout." >&2
               exit 2
               ;;
           esac
@@ -65,54 +66,13 @@ jobs:
           ref: ${{ steps.resolve.outputs.conformance_ref }}
           path: mpp-tools
 
-      - name: Setup Python
-        uses: actions/setup-python@v6
+      - name: Setup conformance adapter
+        uses: ./mpp-tools/.github/actions/setup-conformance
         with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: mpp-tools/conformance/requirements.txt
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '20'
-          cache: npm
-          cache-dependency-path: mpp-tools/conformance/package-lock.json
-
-      - name: Setup Rust
-        if: steps.resolve.outputs.adapter == 'rust'
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust dependencies
-        if: steps.resolve.outputs.adapter == 'rust'
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: mpp-tools/conformance/adapters/rust -> target
-
-      - name: Setup Go
-        if: steps.resolve.outputs.adapter == 'go'
-        uses: actions/setup-go@v6
-        with:
-          go-version: '1.26.0'
-          check-latest: true
-          cache-dependency-path: mpp-tools/conformance/adapters/go/go.sum
-
-      - name: Setup Ruby
-        if: steps.resolve.outputs.adapter == 'ruby'
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.3'
-          bundler-cache: false
-          working-directory: mpp-tools/conformance/adapters/ruby
-
-      - name: Install uv
-        if: steps.resolve.outputs.adapter == 'python'
-        uses: astral-sh/setup-uv@v7
-        with:
-          version: latest
-          python-version: '3.12'
-          enable-cache: true
-          cache-dependency-glob: mpp-tools/conformance/adapters/python/uv.lock
+          adapter: ${{ steps.resolve.outputs.adapter }}
+          conformance-directory: mpp-tools/conformance
+          setup-node: "true"
+          ruby-bundler-cache: "false"
 
       - name: Install conformance runner dependencies
         run: make install-runner

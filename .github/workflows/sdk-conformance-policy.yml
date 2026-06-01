@@ -99,60 +99,10 @@ jobs:
             "repos/tempoxyz/mpp-tools/pulls/${CONFORMANCE_PR}/files" \
             --jq '.[].filename' > conformance-pr-files.txt
 
-          python3 - <<'PY'
-          from fnmatch import fnmatchcase
-          import json
-          import os
-          from pathlib import Path
-
-          def split_patterns(value):
-              return [
-                  line.strip()
-                  for line in value.replace(",", "\n").splitlines()
-                  if line.strip() and not line.strip().startswith("#")
-              ]
-
-          def path_matches(path, pattern):
-              normalized = path.strip("/")
-              normalized_pattern = pattern.strip("/")
-              if normalized_pattern.endswith("/**"):
-                  prefix = normalized_pattern[:-3].rstrip("/")
-                  return normalized == prefix or normalized.startswith(prefix + "/")
-              if normalized_pattern.endswith("/"):
-                  return normalized.startswith(normalized_pattern)
-              return fnmatchcase(normalized, normalized_pattern)
-
-          pr = json.loads(Path("conformance-pr.json").read_text(encoding="utf-8"))
-          state = pr.get("state")
-          merged_at = pr.get("merged_at")
-          if state != "open" and not merged_at:
-              print("Referenced Conformance-PR must be open or merged.")
-              print(f"State: {state}, merged_at: {merged_at}")
-              raise SystemExit(1)
-
-          files = [
-              line.strip()
-              for line in Path("conformance-pr-files.txt").read_text(encoding="utf-8").splitlines()
-              if line.strip()
-          ]
-          patterns = split_patterns(os.environ["CONFORMANCE_PATHS"])
-          matched = [path for path in files if any(path_matches(path, pattern) for pattern in patterns)]
-
-          if matched:
-              print("Referenced Conformance-PR touches coverage files:")
-              for path in matched:
-                  print(f"  - {path}")
-              raise SystemExit(0)
-
-          print(
-              "Referenced Conformance-PR does not touch any configured conformance coverage paths.",
-              flush=True,
-          )
-          print("Expected one of:")
-          for pattern in patterns:
-              print(f"  - {pattern}")
-          raise SystemExit(1)
-          PY
+          python3 mpp-tools/conformance/scripts/validate_conformance_pr.py \
+            --pr-json conformance-pr.json \
+            --files conformance-pr-files.txt \
+            --conformance-paths "$CONFORMANCE_PATHS"
 
       - name: Write summary
         if: always()

@@ -1,0 +1,91 @@
+name: SDK Conformance Monitor
+
+on:
+  schedule:
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  conformance:
+    uses: ./.github/workflows/conformance.yml
+    permissions:
+      contents: read
+      pull-requests: read
+
+  report:
+    runs-on: ubuntu-latest
+    needs: conformance
+    if: always()
+    steps:
+      - name: Check existing issues
+        id: check-issue
+        run: |
+          existing=$(gh issue list --label conformance-failure --state open --limit 1 --json number -q '.[0].number')
+          echo "existing=$existing" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Open or update GitHub issue on failure
+        if: needs.conformance.result != 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SDK_SUMMARY: ${{ needs.conformance.outputs.sdk_summary }}
+          VECTOR_PASSED: ${{ needs.conformance.outputs.vector_passed }}
+          VECTOR_FAILED: ${{ needs.conformance.outputs.vector_failed }}
+          VECTOR_TOTAL: ${{ needs.conformance.outputs.vector_total }}
+          VECTOR_ERRORS: ${{ needs.conformance.outputs.vector_errors }}
+          FLOW_STATUS: ${{ needs.conformance.outputs.flow_status }}
+          FLOW_ERRORS: ${{ needs.conformance.outputs.flow_errors }}
+        run: |
+          body=$(cat <<ISSUE_BODY
+          ## Conformance tests failing
+
+          **SDK Versions:** ${SDK_SUMMARY:-unknown}
+          **Vector Results:** ${VECTOR_PASSED:-0} passed, ${VECTOR_FAILED:-0} failed, ${VECTOR_TOTAL:-0} total
+          **Flow Results:** ${FLOW_STATUS:-unknown}
+          **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          ### Vector Failures
+
+          ${VECTOR_ERRORS:-No vector details available.}
+
+          ### Flow Failures
+
+          ${FLOW_ERRORS:-No flow details available.}
+
+          ### Reproduction
+
+          \`\`\`bash
+          git clone ${{ github.server_url }}/${{ github.repository }}
+          cd mpp-tools
+          cd conformance && make install && make test && make flow
+          \`\`\`
+          ISSUE_BODY
+          )
+
+          if [ -n "${{ steps.check-issue.outputs.existing }}" ]; then
+            gh issue comment "${{ steps.check-issue.outputs.existing }}" --body "$body"
+          else
+            gh issue create \
+              --title "Conformance tests failing" \
+              --body "$body" \
+              --label conformance-failure
+          fi
+
+      - name: Close issue on recovery
+        if: needs.conformance.result == 'success' && steps.check-issue.outputs.existing != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SDK_SUMMARY: ${{ needs.conformance.outputs.sdk_summary }}
+        run: |
+          gh issue close "${{ steps.check-issue.outputs.existing }}" \
+            --comment "Conformance tests passing again. SDKs: ${SDK_SUMMARY:-unknown}"
