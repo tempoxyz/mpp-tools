@@ -4,7 +4,7 @@ updates:
   - package-ecosystem: "npm"
     directory: "/conformance"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     groups:
       npm-dependencies:
         patterns:
@@ -13,7 +13,7 @@ updates:
   - package-ecosystem: "cargo"
     directory: "/conformance/adapters/rust"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     groups:
       rust-dependencies:
         patterns:
@@ -22,7 +22,7 @@ updates:
   - package-ecosystem: "uv"
     directory: "/conformance/adapters/python"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     groups:
       python-dependencies:
         patterns:
@@ -31,7 +31,7 @@ updates:
   - package-ecosystem: "gomod"
     directory: "/conformance/adapters/go"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     groups:
       go-dependencies:
         patterns:
@@ -40,7 +40,7 @@ updates:
   - package-ecosystem: "bundler"
     directory: "/conformance/adapters/ruby"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     groups:
       ruby-dependencies:
         patterns:
@@ -49,7 +49,7 @@ updates:
   - package-ecosystem: "gradle"
     directory: "/conformance/adapters/java"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     groups:
       java-dependencies:
         patterns:
@@ -58,7 +58,7 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     groups:
       github-actions:
         patterns:
