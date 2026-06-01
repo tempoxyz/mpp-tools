@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -434,11 +435,14 @@ func formatReceiptTimestamp(timestamp time.Time) string {
 }
 
 func encodeJSONBase64URL(data map[string]any) (string, error) {
-	encoded, err := json.Marshal(data)
-	if err != nil {
+	var buffer bytes.Buffer
+	encoder := json.NewEncoder(&buffer)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(data); err != nil {
 		return "", err
 	}
-	return base64.RawURLEncoding.EncodeToString(encoded), nil
+	encoded := strings.TrimSuffix(buffer.String(), "\n")
+	return base64.RawURLEncoding.EncodeToString([]byte(encoded)), nil
 }
 
 func stringField(data map[string]any, key string) string {

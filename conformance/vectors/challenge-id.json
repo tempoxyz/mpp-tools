@@ -189,6 +189,28 @@
       "expected": "TqujwpuDDg_zsWGINAd5XObO2rRe6uYufpqvtDmr6N8"
     },
     {
+      "name": "html_sensitive_request_canonicalization",
+      "description": "HMAC input preserves HTML-sensitive JSON string characters without escaping them",
+      "tags": [
+        "happy-path",
+        "cross-sdk-validated",
+        "canonicalization"
+      ],
+      "input": {
+        "secretKey": "test-vector-secret",
+        "realm": "api.example.com",
+        "method": "tempo",
+        "intent": "charge",
+        "request": {
+          "amount": "1500",
+          "currency": "USD",
+          "description": "Access <premium> & analytics",
+          "recipient": "merchant"
+        }
+      },
+      "expected": "9wuIbToTGnzxJuu715tZMeGH5MS0xVO6FgpFLBXqWCY"
+    },
+    {
       "name": "resource_path_query_binding",
       "description": "Route and query resource discriminator is part of the HMAC input",
       "tags": [
