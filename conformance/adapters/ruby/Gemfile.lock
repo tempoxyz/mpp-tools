@@ -4,7 +4,7 @@ GEM
     base64 (0.3.0)
     mpp-rb (0.1.2)
       base64 (~> 0.3)
-    sorbet-runtime (0.6.13261)
+    sorbet-runtime (0.6.13266)
 
 PLATFORMS
   aarch64-linux
@@ -20,7 +20,7 @@ CHECKSUMS
   base64 (0.3.0) sha256=27337aeabad6ffae05c265c450490628ef3ebd4b67be58257393227588f5a97b
   bundler (4.0.12) sha256=7f8b757d28dfb636e7b24fba2344ac6dd13b5b24f4b46d62573d483f211825ac
   mpp-rb (0.1.2) sha256=fd592ff60d69f3969433bcc8c33e9c3bd02ebcb66e3900bbe69ba8a13d7519ba
-  sorbet-runtime (0.6.13261) sha256=880c1575676b9f3ddfd42328ea5dd13739e24186c35bac63adad41589ee3c763
+  sorbet-runtime (0.6.13266) sha256=4a7123b62a9174d64a80ec5feae6abbf2d68553cc4c77315c0633b72c9823cc9
 
 BUNDLED WITH
   4.0.9
