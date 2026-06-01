@@ -125,7 +125,7 @@ jobs:
 
       - name: Upload vector results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vector-results-${{ matrix.adapter }}
           path: |
@@ -264,7 +264,7 @@ jobs:
 
       - name: Download vector results
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: vector-results-*
           path: conformance/vector-results
