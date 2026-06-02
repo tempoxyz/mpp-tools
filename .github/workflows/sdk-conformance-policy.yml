@@ -17,6 +17,11 @@ on:
         required: false
         type: string
         default: conformance-not-needed
+      require-conformance-reference:
+        description: Whether protocol-sensitive SDK PRs must reference a conformance PR instead of falling back to the default conformance ref.
+        required: false
+        type: boolean
+        default: false
       conformance-paths:
         description: Newline-separated mpp-tools path globs that count as conformance coverage in a referenced Conformance-PR.
         required: false
@@ -77,13 +82,15 @@ jobs:
           PROTOCOL_PATHS: ${{ inputs.protocol-paths }}
           DEFAULT_CONFORMANCE_REF: ${{ inputs.default-conformance-ref }}
           SKIP_LABEL: ${{ inputs.skip-label }}
+          REQUIRE_CONFORMANCE_REFERENCE: ${{ inputs.require-conformance-reference }}
         run: |
           python3 mpp-tools/conformance/scripts/check_conformance_policy.py \
             --event-path "$GITHUB_EVENT_PATH" \
             --changed-files changed-files.txt \
             --protocol-paths "$PROTOCOL_PATHS" \
             --default-conformance-ref "$DEFAULT_CONFORMANCE_REF" \
-            --skip-label "$SKIP_LABEL"
+            --skip-label "$SKIP_LABEL" \
+            --require-reference "$REQUIRE_CONFORMANCE_REFERENCE"
 
       - name: Validate referenced conformance PR
         if: steps.policy.outputs.conformance_pr != ''

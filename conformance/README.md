@@ -193,9 +193,12 @@ Then make the called `conformance` job a required branch-protection or ruleset
 check in the SDK repository.
 
 For protocol-sensitive SDK paths, add the policy gate before the behavior gate.
-The policy gate fails PRs that change those paths unless the PR body references
-an open or merged conformance PR, or a maintainer applies the
-`conformance-not-needed` label.
+When those paths change, the policy gate chooses the conformance ref used by
+the behavior gate. By default it uses `mpp-tools` `main`, which lets SDK PRs pass
+when existing conformance coverage already exercises the behavior. If new
+coverage is still pending in `mpp-tools`, reference that conformance PR in the
+SDK PR body. Maintainers can apply the `conformance-not-needed` label when a
+protocol-sensitive SDK change intentionally does not need conformance coverage.
 Include the `edited`, `labeled`, and `unlabeled` pull request event types so
 updates to those fields rerun the policy check.
 
@@ -216,7 +219,8 @@ jobs:
       conformance-ref: ${{ needs.conformance-policy.outputs.conformance_ref }}
 ```
 
-When a PR changes one of those paths, include this in the PR body:
+When a PR needs pending conformance coverage that has not landed on
+`mpp-tools` `main`, include this in the PR body:
 
 ```text
 Conformance-PR: tempoxyz/mpp-tools#123
@@ -228,6 +232,10 @@ against `refs/pull/<number>/head` for that conformance PR. By default the
 coverage paths are
 `conformance/vectors/**`, `conformance/flows/**`, `conformance/schemas/**`, and
 `conformance/operations.json`.
+
+Set `require-conformance-reference: true` if an SDK repository wants to keep the
+stricter policy where every protocol-sensitive PR must reference a conformance
+PR or carry the skip label.
 
 To run the same mode locally:
 

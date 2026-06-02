@@ -106,7 +106,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--protocol-paths", required=True)
     parser.add_argument("--default-conformance-ref", default="main")
     parser.add_argument("--skip-label", default="conformance-not-needed")
+    parser.add_argument("--require-reference", default="false")
     return parser.parse_args()
+
+
+def parse_bool(value: str) -> bool:
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off", ""}:
+        return False
+    raise ValueError(f"invalid boolean value {value!r}")
 
 
 def main() -> int:
@@ -115,6 +125,10 @@ def main() -> int:
     pr = pull_request(event)
     default_ref = args.default_conformance_ref
     patterns = split_patterns(args.protocol_paths)
+    try:
+        require_reference = parse_bool(args.require_reference)
+    except ValueError as exc:
+        return fail(str(exc), {"reason": "Invalid require-reference value."})
 
     base_outputs = {
         "conformance_ref": default_ref,
@@ -164,6 +178,12 @@ def main() -> int:
         ref = f"refs/pull/{number}/head"
         reason = f"Using mpp-tools PR #{number} as conformance ref."
         output({**policy_outputs, "conformance_ref": ref, "conformance_pr": number, "reason": reason})
+        print(reason)
+        return 0
+
+    if not require_reference:
+        reason = f"No Conformance-PR referenced; using default conformance ref {default_ref!r} so existing coverage must pass."
+        output({**policy_outputs, "reason": reason})
         print(reason)
         return 0
 
