@@ -112,7 +112,12 @@ func handleFormatWWWAuthenticate(input string) {
 		return
 	}
 
-	printJSON(commandResponse{Success: true, Result: challenge.ToAuthenticate(challenge.Realm)})
+	header, err := challenge.ToAuthenticateStrict(challenge.Realm)
+	if err != nil {
+		printJSON(commandResponse{Success: false, Error: err.Error(), ErrorType: "format_error"})
+		return
+	}
+	printJSON(commandResponse{Success: true, Result: header})
 }
 
 func handleFormatAuthorization(input string) {

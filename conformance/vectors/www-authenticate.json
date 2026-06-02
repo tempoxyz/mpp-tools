@@ -135,7 +135,47 @@
       },
       "wire": "Payment id=\"ch_escaped\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\", description=\"Pay \\\"premium\\\" API\"",
       "tests": {
-        "parse": true
+        "parse": true,
+        "format": true,
+        "roundtrip": true
+      }
+    },
+    {
+      "name": "escaped_backslashes_in_description",
+      "description": "Escaped quoted-string values preserve literal backslashes",
+      "tags": ["happy-path", "edge-case", "quoted-string"],
+      "object": {
+        "description": "Path C:\\tempo\\api",
+        "id": "ch_backslash",
+        "intent": "charge",
+        "method": "tempo",
+        "realm": "api.example.com",
+        "request": {}
+      },
+      "wire": "Payment id=\"ch_backslash\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\", description=\"Path C:\\\\tempo\\\\api\"",
+      "tests": {
+        "parse": true,
+        "format": true,
+        "roundtrip": true
+      }
+    },
+    {
+      "name": "error_crlf_in_description_format",
+      "description": "Rejects CRLF in quoted-string values during formatting",
+      "tags": ["error", "quoted-string", "header-injection"],
+      "object": {
+        "description": "Line one\r\nLine two",
+        "id": "ch_crlf",
+        "intent": "charge",
+        "method": "tempo",
+        "realm": "api.example.com",
+        "request": {}
+      },
+      "tests": {
+        "format": {
+          "success": false,
+          "error_type": "format_error"
+        }
       }
     },
     {
