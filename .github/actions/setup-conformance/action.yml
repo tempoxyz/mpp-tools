@@ -32,7 +32,7 @@ runs:
       if: inputs.setup-node == 'true' || inputs.adapter == 'typescript' || inputs.adapter == 'all'
       uses: actions/setup-node@v6
       with:
-        node-version: "20"
+        node-version: "24.5"
         cache: npm
         cache-dependency-path: ${{ inputs.conformance-directory }}/package-lock.json
 
