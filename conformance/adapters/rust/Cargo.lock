@@ -646,9 +646,9 @@ dependencies = [
 
 [[package]]
 name = "mpp"
-version = "0.10.3"
+version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "019fe17dda01228c29e716e73cb099ca5eb35acae3de5bbd01dd624b3ed26076"
+checksum = "30e72c53d545bed570868bcbb47a6aa8fecf2547fe7f678b154acf60ec1e3913"
 dependencies = [
  "base64",
  "hmac",
