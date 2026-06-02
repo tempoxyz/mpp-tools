@@ -8,7 +8,8 @@
     "./authorization.json": "./authorization.json",
     "./receipt.json": "./receipt.json",
     "./base64url.json": "./base64url.json",
-    "./challenge-id.json": "./challenge-id.json"
+    "./challenge-id.json": "./challenge-id.json",
+    "./tempo-proof.json": "./tempo-proof.json"
   },
   "files": [
     "*.json"

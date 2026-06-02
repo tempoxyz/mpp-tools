@@ -33,6 +33,7 @@ fn main() {
         "base64url-encode" => handle_base64url_encode(input),
         "base64url-decode" => handle_base64url_decode(input),
         "generate-challenge-id" => handle_generate_challenge_id(input),
+        "tempo-proof-typed-data" => handle_tempo_proof_typed_data(input),
         _ => print_error(&format!("Unknown command: {}", command), "unknown_error"),
     }
 }
@@ -353,6 +354,35 @@ fn handle_generate_challenge_id(input: &str) {
     }
 }
 
+fn handle_tempo_proof_typed_data(input: &str) {
+    match serde_json::from_str::<serde_json::Value>(input) {
+        Ok(params) => {
+            let chain_id = params.get("chainId").and_then(|v| v.as_u64()).unwrap_or(0);
+            let challenge_id = str_field(&params, "challengeId");
+            let realm = str_field(&params, "realm");
+            print_success(json!({
+                "domain": {
+                    "name": "MPP",
+                    "version": "2",
+                    "chainId": chain_id,
+                },
+                "types": {
+                    "Proof": [
+                        { "name": "challengeId", "type": "string" },
+                        { "name": "realm", "type": "string" },
+                    ],
+                },
+                "primaryType": "Proof",
+                "message": {
+                    "challengeId": challenge_id,
+                    "realm": realm,
+                },
+            }));
+        }
+        Err(e) => print_error(&e.to_string(), "generation_error"),
+    }
+}
+
 fn print_adapter_success<T: serde::Serialize>(value: T) {
     println!(
         "{}",
@@ -416,6 +446,7 @@ fn legacy_command_for_operation(op: &str) -> Option<&'static str> {
         "base64url.encode" => Some("base64url-encode"),
         "base64url.decode" => Some("base64url-decode"),
         "challenge.id" => Some("generate-challenge-id"),
+        "tempo.proof.typed_data" => Some("tempo-proof-typed-data"),
         _ => None,
     }
 }
