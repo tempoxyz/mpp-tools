@@ -82,6 +82,14 @@ jobs:
         env:
           ADAPTER: ${{ steps.resolve.outputs.adapter }}
 
+      - name: Build TypeScript SDK checkout
+        if: steps.resolve.outputs.adapter == 'typescript'
+        working-directory: sdk
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm build
+
       - name: Install adapter dependencies
         run: |
           case "$ADAPTER" in
