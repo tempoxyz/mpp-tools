@@ -116,6 +116,22 @@
       "invalid_challenge_id": true
     },
     {
+      "name": "missing_challenge_expires_rejected",
+      "path": "/charge/missing-challenge-expires",
+      "request": {
+        "amount": "850",
+        "currency": "USD",
+        "recipient": "merchant",
+        "expires": "2099-01-01T00:00:00Z"
+      },
+      "payload": {
+        "type": "transaction",
+        "signature": "0xmissingexpires"
+      },
+      "expected_signature": "0xmissingexpires",
+      "omit_challenge_expires": true
+    },
+    {
       "name": "no_receipt_header",
       "path": "/charge/no-receipt",
       "request": {

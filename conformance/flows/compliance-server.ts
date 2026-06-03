@@ -50,6 +50,7 @@ type FlowCase = {
   http_method?: string
   invalid_challenge_id?: boolean
   invalid_www_authenticate?: boolean
+  omit_challenge_expires?: boolean
   omit_receipt?: boolean
   mismatch_request?: boolean
   no_payment?: boolean

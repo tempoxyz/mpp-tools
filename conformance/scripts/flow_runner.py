@@ -341,6 +341,8 @@ def run_flow_case(
         challenge["request"] = {**request, "amount": "1"}
     if flow_case.get("invalid_challenge_id"):
         challenge["id"] = "invalid-challenge-id"
+    if flow_case.get("omit_challenge_expires"):
+        challenge.pop("expires", None)
 
     payload = flow_case.get("payload")
     credential = {"challenge": challenge, "payload": payload if payload is not None else {}}

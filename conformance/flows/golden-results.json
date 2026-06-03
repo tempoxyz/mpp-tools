@@ -231,6 +231,39 @@
       }
     },
     {
+      "name": "missing_challenge_expires_rejected",
+      "outcome": {
+        "ok": false,
+        "status": 402,
+        "error_type": "payment_required",
+        "content_type": "application/problem+json"
+      },
+      "challenge": {
+        "id": "1LBsi_ajm1XQTFwdzUegxptQnxNTA0ThYDXZ99Q8dzc",
+        "method": "tempo",
+        "intent": "charge",
+        "realm": "conformance",
+        "request": {
+          "amount": "850",
+          "currency": "USD",
+          "expires": "2099-01-01T00:00:00Z",
+          "recipient": "merchant"
+        }
+      },
+      "credential": {
+        "payload": {
+          "type": "transaction",
+          "signature": "0xmissingexpires"
+        }
+      },
+      "problem_details": {
+        "type": "https://paymentauth.org/problems/invalid-challenge",
+        "title": "Invalid Challenge",
+        "status": 402,
+        "detail": "Challenge \"1LBsi_ajm1XQTFwdzUegxptQnxNTA0ThYDXZ99Q8dzc\" is invalid: challenge was not issued by this server."
+      }
+    },
+    {
       "name": "no_receipt_header",
       "outcome": {
         "ok": true,
