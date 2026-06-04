@@ -41,6 +41,7 @@ interface ErrorResult {
 		| 'format_error'
 		| 'encoding_error'
 		| 'generation_error'
+		| 'http_error'
 		| 'unsupported_operation'
 		| 'unknown_error'
 }
@@ -236,10 +237,82 @@ function responseValueForOperation(op: string, result: unknown): unknown {
 	return result
 }
 
-function runAdapterRequest(request: { op: string; input: unknown }): AdapterResponse {
-	if (request.op === 'http.payment_request') {
-		return adapterError('http.payment_request is not implemented by this adapter yet', 'unsupported_operation')
+type HttpPaymentRequest = {
+	url: string
+	method: string
+	headers: Record<string, string>
+	body: string | null
+	payment: {
+		payload: Record<string, unknown>
+		source?: Record<string, unknown> | string | null
 	}
+	mode: string
+}
+
+function headersToObject(headers: Headers): Record<string, string> {
+	const result: Record<string, string> = {}
+	headers.forEach((value, key) => {
+		result[key] = value
+	})
+	return result
+}
+
+async function runHttpPaymentRequest(input: HttpPaymentRequest): Promise<AdapterResponse> {
+	try {
+		const response = await fetch(input.url, {
+			method: input.method,
+			headers: input.headers,
+			body: input.body,
+		})
+
+		if (response.status !== 402) {
+			return adapterSuccess({
+				status: response.status,
+				headers: headersToObject(response.headers),
+				body: await response.text(),
+			})
+		}
+
+		const initialOrigin = new URL(input.url).origin
+		const challengeUrl = response.url ? new URL(response.url) : new URL(input.url)
+		if (challengeUrl.origin !== initialOrigin) {
+			return adapterError(
+				`Refusing to send payment credential across redirect from ${initialOrigin} to ${challengeUrl.origin}`,
+				'http_error',
+			)
+		}
+
+		const header = response.headers.get('www-authenticate')
+		if (!header) return adapterError('402 response missing WWW-Authenticate header', 'http_error')
+
+		const challenge = Challenge.deserialize(header)
+		const source = typeof input.payment.source === 'string' ? input.payment.source : undefined
+		const credential = Credential.serialize(
+			Credential.from({
+				challenge,
+				payload: input.payment.payload,
+				...(source === undefined ? {} : { source }),
+			}),
+		)
+		const retryHeaders = new Headers(input.headers)
+		retryHeaders.set('Authorization', credential)
+		const paymentResponse = await fetch(challengeUrl, {
+			method: input.method,
+			headers: retryHeaders,
+			body: input.body,
+		})
+		return adapterSuccess({
+			status: paymentResponse.status,
+			headers: headersToObject(paymentResponse.headers),
+			body: await paymentResponse.text(),
+		})
+	} catch (err) {
+		return adapterError(err instanceof Error ? err.message : String(err), 'http_error')
+	}
+}
+
+async function runAdapterRequest(request: { op: string; input: unknown }): Promise<AdapterResponse> {
+	if (request.op === 'http.payment_request') return runHttpPaymentRequest(request.input as HttpPaymentRequest)
 	const command = OP_TO_COMMAND[request.op]
 	if (!command) return adapterError(`Unknown operation: ${request.op}`, 'unsupported_operation')
 	const result = runCommand(command, commandInputForRequest(request.op, request.input))
@@ -253,7 +326,7 @@ async function main(): Promise<void> {
 	if (!command) {
 		const stdin = await readStdin()
 		const request = JSON.parse(stdin)
-		console.log(JSON.stringify(runAdapterRequest(request)))
+		console.log(JSON.stringify(await runAdapterRequest(request)))
 		return
 	}
 
