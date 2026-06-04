@@ -114,6 +114,7 @@ type AdapterResponse =
           | 'encoding_error'
           | 'generation_error'
           | 'http_error'
+          | 'verification_error'
           | 'unsupported_operation'
           | 'unknown_error'
         message: string
@@ -173,6 +174,7 @@ Required for vector conformance:
 | `base64url.encode` | `{ "text": string }` | `{ "text": string }` |
 | `base64url.decode` | `{ "text": string }` | `{ "text": string }` |
 | `challenge.id` | challenge id params | `{ "id": string }` |
+| `tempo.transaction.verify` | transaction credential plus receipt fixture | `{ "status": "success", "reference": string }` |
 
 Required for flow conformance:
 

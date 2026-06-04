@@ -50,6 +50,7 @@ class TestType(str, Enum):
     FORMAT = "format"
     ROUNDTRIP = "roundtrip"
     GENERATE = "generate"
+    OPERATION = "operation"
 
 
 def base64url_decode(s: str) -> bytes:
@@ -221,6 +222,27 @@ class VectorRunner:
 
         return True, None
 
+    def compare_adapter_response(
+        self, expected: dict[str, Any], actual: dict[str, Any]
+    ) -> tuple[bool, str | None]:
+        expected_ok = expected.get("ok")
+        actual_ok = actual.get("ok")
+        if expected_ok != actual_ok:
+            return False, f"ok mismatch: expected {expected_ok}, got {actual_ok}"
+
+        if expected_ok is False:
+            expected_type = expected.get("error", {}).get("type")
+            actual_type = actual.get("error", {}).get("type")
+            if expected_type != actual_type:
+                return False, f"error.type mismatch: expected {expected_type}, got {actual_type}"
+            return True, None
+
+        expected_value = expected.get("value")
+        actual_value = actual.get("value")
+        if expected_value != actual_value:
+            return False, format_mismatch_error(expected_value, actual_value, "value")
+        return True, None
+
     def normalize_credential_result(self, result: dict[str, Any]) -> dict[str, Any]:
         """Normalize a credential result for semantic comparison.
         
@@ -311,8 +333,14 @@ class VectorRunner:
         parse_cmd = commands.get("parse")
         format_cmd = commands.get("format")
         generate_cmd = commands.get("generate")
+        operation = commands.get("operation")
 
-        if not parse_cmd and not format_cmd and not generate_cmd:
+        if operation:
+            if operation not in adapter.capabilities:
+                if self.verbose:
+                    print(f"  {vector_name}.json SKIPPED ({adapter.name} lacks {operation})")
+                return
+        elif not parse_cmd and not format_cmd and not generate_cmd:
             print(f"  ⚠ No commands defined in {vector_name}.json")
             return
 
@@ -328,6 +356,26 @@ class VectorRunner:
 
             name = scenario["name"]
             tests = scenario.get("tests", {})
+
+            if operation:
+                result = AdapterClient(adapter).call(
+                    operation,
+                    scenario["input"],
+                    context={"caseName": name, "vectorName": vector_name},
+                )
+                expected = scenario["expected"]
+                passed, error = self.compare_adapter_response(expected, result)
+                self._record_result(
+                    vector_file=vector_name,
+                    test_type=TestType.OPERATION,
+                    test_name=name,
+                    adapter=adapter.name,
+                    passed=passed,
+                    expected=expected,
+                    actual=result,
+                    error=error,
+                )
+                continue
 
             if is_challenge_id:
                 input_data = json.dumps(scenario["input"])

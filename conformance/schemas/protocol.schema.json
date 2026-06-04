@@ -15,7 +15,8 @@
         "base64url.encode",
         "base64url.decode",
         "challenge.id",
-        "http.payment_request"
+        "http.payment_request",
+        "tempo.transaction.verify"
       ]
     },
     "ErrorType": {
@@ -26,6 +27,7 @@
         "encoding_error",
         "generation_error",
         "http_error",
+        "verification_error",
         "unsupported_operation",
         "unknown_error"
       ]
@@ -183,6 +185,24 @@
           "additionalProperties": { "type": "string" }
         },
         "body": { "type": "string" }
+      }
+    },
+    "TempoTransactionVerificationInput": {
+      "type": "object",
+      "required": ["credential", "receipt"],
+      "additionalProperties": false,
+      "properties": {
+        "credential": { "$ref": "#/$defs/Credential" },
+        "receipt": { "$ref": "#/$defs/JsonObject" }
+      }
+    },
+    "TempoTransactionVerificationOutput": {
+      "type": "object",
+      "required": ["status", "reference"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "type": "string", "const": "success" },
+        "reference": { "type": "string", "minLength": 1 }
       }
     }
   }
