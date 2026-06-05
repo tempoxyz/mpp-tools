@@ -81,6 +81,14 @@
       "errorTypes": ["http_error"],
       "comparison": "http",
       "description": "Send one normalized HTTP request through the SDK payment-aware transport."
+    },
+    "tempo.fee_payer.cosign": {
+      "category": "vector",
+      "inputRef": "protocol.schema.json#/$defs/TempoFeePayerCosignInput",
+      "successRef": "protocol.schema.json#/$defs/TempoFeePayerCosignOutput",
+      "errorTypes": ["verification_error"],
+      "comparison": "exact",
+      "description": "Co-sign a Tempo fee-payer envelope with a sponsor and enforce sponsor policy."
     }
   }
 }

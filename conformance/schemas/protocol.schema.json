@@ -15,7 +15,8 @@
         "base64url.encode",
         "base64url.decode",
         "challenge.id",
-        "http.payment_request"
+        "http.payment_request",
+        "tempo.fee_payer.cosign"
       ]
     },
     "ErrorType": {
@@ -26,6 +27,7 @@
         "encoding_error",
         "generation_error",
         "http_error",
+        "verification_error",
         "unsupported_operation",
         "unknown_error"
       ]
@@ -183,6 +185,89 @@
           "additionalProperties": { "type": "string" }
         },
         "body": { "type": "string" }
+      }
+    },
+    "HexValue": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]*$"
+    },
+    "UintValue": {
+      "anyOf": [
+        { "type": "integer", "minimum": 0 },
+        { "type": "string", "pattern": "^(0|[1-9][0-9]*|max|now\\+[1-9][0-9]*)$" }
+      ]
+    },
+    "TempoFeePayerCall": {
+      "type": "object",
+      "required": ["to", "value", "data"],
+      "additionalProperties": false,
+      "properties": {
+        "to": { "$ref": "#/$defs/HexValue" },
+        "value": { "$ref": "#/$defs/UintValue" },
+        "data": { "$ref": "#/$defs/HexValue" }
+      }
+    },
+    "TempoFeePayerTransaction": {
+      "type": "object",
+      "required": [
+        "chainId",
+        "maxPriorityFeePerGas",
+        "maxFeePerGas",
+        "gasLimit",
+        "calls",
+        "accessList",
+        "nonceKey",
+        "nonce",
+        "validBefore",
+        "feeToken"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "chainId": { "$ref": "#/$defs/UintValue" },
+        "maxPriorityFeePerGas": { "$ref": "#/$defs/UintValue" },
+        "maxFeePerGas": { "$ref": "#/$defs/UintValue" },
+        "gasLimit": { "$ref": "#/$defs/UintValue" },
+        "calls": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/TempoFeePayerCall" }
+        },
+        "accessList": {
+          "type": "array",
+          "items": true
+        },
+        "nonceKey": { "$ref": "#/$defs/UintValue" },
+        "nonce": { "$ref": "#/$defs/UintValue" },
+        "validBefore": { "$ref": "#/$defs/UintValue" },
+        "feeToken": {
+          "anyOf": [
+            { "$ref": "#/$defs/HexValue" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "TempoFeePayerCosignInput": {
+      "type": "object",
+      "required": ["payerPrivateKey", "feePayerPrivateKey", "feeToken", "request", "transaction"],
+      "additionalProperties": false,
+      "properties": {
+        "payerPrivateKey": { "$ref": "#/$defs/HexValue" },
+        "feePayerPrivateKey": { "$ref": "#/$defs/HexValue" },
+        "feeToken": { "$ref": "#/$defs/HexValue" },
+        "request": { "$ref": "#/$defs/JsonObject" },
+        "transaction": { "$ref": "#/$defs/TempoFeePayerTransaction" }
+      }
+    },
+    "TempoFeePayerCosignOutput": {
+      "type": "object",
+      "required": ["type", "feeToken", "accessListLength", "callCount"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "const": "0x76" },
+        "feeToken": { "$ref": "#/$defs/HexValue" },
+        "accessListLength": { "type": "integer", "minimum": 0 },
+        "callCount": { "type": "integer", "minimum": 0 }
       }
     }
   }

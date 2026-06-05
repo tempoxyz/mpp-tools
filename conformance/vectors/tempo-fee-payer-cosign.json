@@ -1,0 +1,273 @@
+{
+  "version": "2.0.0",
+  "spec_ref": "MPP Tempo fee-payer sponsor policy",
+  "description": "Fee-payer sponsor/cosign verification must reject envelopes that violate sponsor policy before adding the fee-payer signature.",
+  "commands": {
+    "operation": "tempo.fee_payer.cosign"
+  },
+  "scenarios": [
+    {
+      "name": "valid_fee_payer_envelope_cosigned",
+      "description": "A valid fee-payer envelope is cosigned with the server-selected fee token and no access list.",
+      "tags": ["happy-path", "fee-payer", "oss-303"],
+      "input": {
+        "payerPrivateKey": "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "feePayerPrivateKey": "0x2222222222222222222222222222222222222222222222222222222222222222",
+        "feeToken": "0x20c0000000000000000000000000000000000000",
+        "request": {
+          "amount": "1000000",
+          "currency": "0x20c0000000000000000000000000000000000000",
+          "recipient": "0x742d35Cc6634c0532925a3b844bC9e7595F8fE00",
+          "methodDetails": {
+            "feePayer": true,
+            "chainId": 42431
+          }
+        },
+        "transaction": {
+          "chainId": 42431,
+          "maxPriorityFeePerGas": 1,
+          "maxFeePerGas": 1,
+          "gasLimit": 1000000,
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": 0,
+              "data": "0xa9059cbb000000000000000000000000742d35cc6634c0532925a3b844bc9e7595f8fe0000000000000000000000000000000000000000000000000000000000000f4240"
+            }
+          ],
+          "accessList": [],
+          "nonceKey": "max",
+          "nonce": 0,
+          "validBefore": "now+60",
+          "feeToken": null
+        }
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "type": "0x76",
+          "feeToken": "0x20c0000000000000000000000000000000000000",
+          "accessListLength": 0,
+          "callCount": 1
+        }
+      }
+    },
+    {
+      "name": "extra_call_rejected",
+      "description": "A fee-payer envelope with an extra payment call is rejected instead of being cosigned.",
+      "tags": ["security", "fee-payer", "oss-303"],
+      "input": {
+        "payerPrivateKey": "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "feePayerPrivateKey": "0x2222222222222222222222222222222222222222222222222222222222222222",
+        "feeToken": "0x20c0000000000000000000000000000000000000",
+        "request": {
+          "amount": "1000000",
+          "currency": "0x20c0000000000000000000000000000000000000",
+          "recipient": "0x742d35Cc6634c0532925a3b844bC9e7595F8fE00",
+          "methodDetails": {"feePayer": true, "chainId": 42431}
+        },
+        "transaction": {
+          "chainId": 42431,
+          "maxPriorityFeePerGas": 1,
+          "maxFeePerGas": 1,
+          "gasLimit": 1000000,
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": 0,
+              "data": "0xa9059cbb000000000000000000000000742d35cc6634c0532925a3b844bc9e7595f8fe0000000000000000000000000000000000000000000000000000000000000f4240"
+            },
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": 0,
+              "data": "0xa9059cbb000000000000000000000000742d35cc6634c0532925a3b844bc9e7595f8fe0000000000000000000000000000000000000000000000000000000000000f4240"
+            }
+          ],
+          "accessList": [],
+          "nonceKey": "max",
+          "nonce": 0,
+          "validBefore": "now+60",
+          "feeToken": null
+        }
+      },
+      "expected": {"ok": false, "error": {"type": "verification_error"}}
+    },
+    {
+      "name": "gas_limit_above_policy_rejected",
+      "description": "A fee-payer envelope with gas above the sponsor policy is rejected.",
+      "tags": ["security", "fee-payer", "oss-303"],
+      "input": {
+        "payerPrivateKey": "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "feePayerPrivateKey": "0x2222222222222222222222222222222222222222222222222222222222222222",
+        "feeToken": "0x20c0000000000000000000000000000000000000",
+        "request": {
+          "amount": "1000000",
+          "currency": "0x20c0000000000000000000000000000000000000",
+          "recipient": "0x742d35Cc6634c0532925a3b844bC9e7595F8fE00",
+          "methodDetails": {"feePayer": true, "chainId": 42431}
+        },
+        "transaction": {
+          "chainId": 42431,
+          "maxPriorityFeePerGas": 1,
+          "maxFeePerGas": 1,
+          "gasLimit": 2000001,
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": 0,
+              "data": "0xa9059cbb000000000000000000000000742d35cc6634c0532925a3b844bc9e7595f8fe0000000000000000000000000000000000000000000000000000000000000f4240"
+            }
+          ],
+          "accessList": [],
+          "nonceKey": "max",
+          "nonce": 0,
+          "validBefore": "now+60",
+          "feeToken": null
+        }
+      },
+      "expected": {"ok": false, "error": {"type": "verification_error"}}
+    },
+    {
+      "name": "attacker_fee_token_rejected",
+      "description": "A fee-payer envelope that names a fee token is rejected because the server sets the fee token.",
+      "tags": ["security", "fee-payer", "oss-303"],
+      "input": {
+        "payerPrivateKey": "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "feePayerPrivateKey": "0x2222222222222222222222222222222222222222222222222222222222222222",
+        "feeToken": "0x20c0000000000000000000000000000000000000",
+        "request": {
+          "amount": "1000000",
+          "currency": "0x20c0000000000000000000000000000000000000",
+          "recipient": "0x742d35Cc6634c0532925a3b844bC9e7595F8fE00",
+          "methodDetails": {"feePayer": true, "chainId": 42431}
+        },
+        "transaction": {
+          "chainId": 42431,
+          "maxPriorityFeePerGas": 1,
+          "maxFeePerGas": 1,
+          "gasLimit": 1000000,
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": 0,
+              "data": "0xa9059cbb000000000000000000000000742d35cc6634c0532925a3b844bc9e7595f8fe0000000000000000000000000000000000000000000000000000000000000f4240"
+            }
+          ],
+          "accessList": [],
+          "nonceKey": "max",
+          "nonce": 0,
+          "validBefore": "now+60",
+          "feeToken": "0x9999999999999999999999999999999999999999"
+        }
+      },
+      "expected": {"ok": false, "error": {"type": "verification_error"}}
+    },
+    {
+      "name": "wrong_nonce_key_rejected",
+      "description": "A fee-payer envelope must use the expiring nonce key.",
+      "tags": ["security", "fee-payer", "oss-303"],
+      "input": {
+        "payerPrivateKey": "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "feePayerPrivateKey": "0x2222222222222222222222222222222222222222222222222222222222222222",
+        "feeToken": "0x20c0000000000000000000000000000000000000",
+        "request": {
+          "amount": "1000000",
+          "currency": "0x20c0000000000000000000000000000000000000",
+          "recipient": "0x742d35Cc6634c0532925a3b844bC9e7595F8fE00",
+          "methodDetails": {"feePayer": true, "chainId": 42431}
+        },
+        "transaction": {
+          "chainId": 42431,
+          "maxPriorityFeePerGas": 1,
+          "maxFeePerGas": 1,
+          "gasLimit": 1000000,
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": 0,
+              "data": "0xa9059cbb000000000000000000000000742d35cc6634c0532925a3b844bc9e7595f8fe0000000000000000000000000000000000000000000000000000000000000f4240"
+            }
+          ],
+          "accessList": [],
+          "nonceKey": 0,
+          "nonce": 0,
+          "validBefore": "now+60",
+          "feeToken": null
+        }
+      },
+      "expected": {"ok": false, "error": {"type": "verification_error"}}
+    },
+    {
+      "name": "validity_window_above_policy_rejected",
+      "description": "A fee-payer envelope whose validity window exceeds sponsor policy is rejected.",
+      "tags": ["security", "fee-payer", "oss-303"],
+      "input": {
+        "payerPrivateKey": "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "feePayerPrivateKey": "0x2222222222222222222222222222222222222222222222222222222222222222",
+        "feeToken": "0x20c0000000000000000000000000000000000000",
+        "request": {
+          "amount": "1000000",
+          "currency": "0x20c0000000000000000000000000000000000000",
+          "recipient": "0x742d35Cc6634c0532925a3b844bC9e7595F8fE00",
+          "methodDetails": {"feePayer": true, "chainId": 42431}
+        },
+        "transaction": {
+          "chainId": 42431,
+          "maxPriorityFeePerGas": 1,
+          "maxFeePerGas": 1,
+          "gasLimit": 1000000,
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": 0,
+              "data": "0xa9059cbb000000000000000000000000742d35cc6634c0532925a3b844bc9e7595f8fe0000000000000000000000000000000000000000000000000000000000000f4240"
+            }
+          ],
+          "accessList": [],
+          "nonceKey": "max",
+          "nonce": 0,
+          "validBefore": "now+901",
+          "feeToken": null
+        }
+      },
+      "expected": {"ok": false, "error": {"type": "verification_error"}}
+    },
+    {
+      "name": "access_list_rejected",
+      "description": "A fee-payer envelope with a non-empty access list is rejected.",
+      "tags": ["security", "fee-payer", "oss-303"],
+      "input": {
+        "payerPrivateKey": "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "feePayerPrivateKey": "0x2222222222222222222222222222222222222222222222222222222222222222",
+        "feeToken": "0x20c0000000000000000000000000000000000000",
+        "request": {
+          "amount": "1000000",
+          "currency": "0x20c0000000000000000000000000000000000000",
+          "recipient": "0x742d35Cc6634c0532925a3b844bC9e7595F8fE00",
+          "methodDetails": {"feePayer": true, "chainId": 42431}
+        },
+        "transaction": {
+          "chainId": 42431,
+          "maxPriorityFeePerGas": 1,
+          "maxFeePerGas": 1,
+          "gasLimit": 1000000,
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": 0,
+              "data": "0xa9059cbb000000000000000000000000742d35cc6634c0532925a3b844bc9e7595f8fe0000000000000000000000000000000000000000000000000000000000000f4240"
+            }
+          ],
+          "accessList": [
+            ["0x20c0000000000000000000000000000000000000", ["0x0000000000000000000000000000000000000000000000000000000000000000"]]
+          ],
+          "nonceKey": "max",
+          "nonce": 0,
+          "validBefore": "now+60",
+          "feeToken": null
+        }
+      },
+      "expected": {"ok": false, "error": {"type": "verification_error"}}
+    }
+  ]
+}
