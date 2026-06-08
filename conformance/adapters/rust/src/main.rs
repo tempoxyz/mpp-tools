@@ -211,7 +211,7 @@ fn handle_format_www_authenticate(input: &str) {
 
             let challenge = PaymentChallenge {
                 id: str_field(&value, "id"),
-                realm: str_field(&value, "realm").into(),
+                realm: str_field(&value, "realm"),
                 method: str_field(&value, "method").into(),
                 intent: str_field(&value, "intent").into(),
                 request: request_b64,
@@ -329,16 +329,18 @@ fn handle_generate_challenge_id(input: &str) {
             let digest = opt_str_field(&params, "digest");
             let opaque = opt_str_field(&params, "opaque");
 
-            let id = match generate_conformance_challenge_id(
+            let challenge_id_params = ChallengeIdParams {
                 secret_key,
-                &realm,
-                &method,
-                &intent,
-                &request,
-                expires.as_deref(),
-                digest.as_deref(),
-                opaque.as_deref(),
-            ) {
+                realm: &realm,
+                method: &method,
+                intent: &intent,
+                request: &request,
+                expires: expires.as_deref(),
+                digest: digest.as_deref(),
+                opaque: opaque.as_deref(),
+            };
+
+            let id = match generate_conformance_challenge_id(challenge_id_params) {
                 Ok(id) => id,
                 Err(e) => {
                     print_error(&e.to_string(), "generation_error");
@@ -511,33 +513,37 @@ fn adapter_value_for_operation(op: &str, result: Value) -> Value {
     result
 }
 
+struct ChallengeIdParams<'a> {
+    secret_key: &'a str,
+    realm: &'a str,
+    method: &'a str,
+    intent: &'a str,
+    request: &'a Value,
+    expires: Option<&'a str>,
+    digest: Option<&'a str>,
+    opaque: Option<&'a str>,
+}
+
 fn generate_conformance_challenge_id(
-    secret_key: &str,
-    realm: &str,
-    method: &str,
-    intent: &str,
-    request: &Value,
-    expires: Option<&str>,
-    digest: Option<&str>,
-    opaque: Option<&str>,
+    params: ChallengeIdParams<'_>,
 ) -> Result<String, std::fmt::Error> {
     type HmacSha256 = Hmac<Sha256>;
 
-    let request_json = stable_json(request)?;
+    let request_json = stable_json(params.request)?;
     let request_b64 = base64url_encode(request_json.as_bytes());
     let hmac_input = [
-        realm,
-        method,
-        intent,
+        params.realm,
+        params.method,
+        params.intent,
         &request_b64,
-        expires.unwrap_or(""),
-        digest.unwrap_or(""),
-        opaque.unwrap_or(""),
+        params.expires.unwrap_or(""),
+        params.digest.unwrap_or(""),
+        params.opaque.unwrap_or(""),
     ]
     .join("|");
 
-    let mut mac =
-        HmacSha256::new_from_slice(secret_key.as_bytes()).expect("HMAC can take key of any size");
+    let mut mac = HmacSha256::new_from_slice(params.secret_key.as_bytes())
+        .expect("HMAC can take key of any size");
     mac.update(hmac_input.as_bytes());
     Ok(base64url_encode(&mac.finalize().into_bytes()))
 }
@@ -572,7 +578,7 @@ fn write_stable_json(output: &mut String, value: &Value) -> Result<(), std::fmt:
         }
         Value::Object(map) => {
             let mut entries = map.iter().collect::<Vec<_>>();
-            entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+            entries.sort_by_key(|(key, _)| *key);
 
             output.push('{');
             for (index, (key, item)) in entries.into_iter().enumerate() {
