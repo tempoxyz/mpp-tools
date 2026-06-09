@@ -50,11 +50,18 @@ type serverVerifyInput struct {
 	Request           map[string]any `json:"request"`
 	Expires           string         `json:"expires,omitempty"`
 	VerificationError string         `json:"verificationError,omitempty"`
-	Credential        mpp.Credential `json:"credential"`
+	Credential        credentialDTO  `json:"credential"`
+}
+
+type credentialDTO struct {
+	Challenge mpp.Challenge   `json:"challenge"`
+	Payload   map[string]any  `json:"payload"`
+	Source    json.RawMessage `json:"source,omitempty"`
 }
 
 type conformanceIntent struct {
 	name         string
+	method       string
 	errorMessage string
 }
 
@@ -70,7 +77,7 @@ func (i conformanceIntent) Verify(_ context.Context, _ *mpp.Credential, _ map[st
 		Status:    "success",
 		Timestamp: time.Date(2026, 1, 29, 12, 0, 0, 0, time.UTC),
 		Reference: "conformance-receipt",
-		Method:    "tempo",
+		Method:    i.method,
 	}, nil
 }
 
@@ -332,9 +339,10 @@ func handleServerVerify(raw json.RawMessage) {
 	}
 
 	result, err := server.VerifyOrChallenge(context.Background(), server.VerifyParams{
-		Authorization: input.Credential.ToAuthorization(),
+		Authorization: input.Credential.toCredential().ToAuthorization(),
 		Intent: conformanceIntent{
 			name:         input.Intent,
+			method:       input.Method,
 			errorMessage: input.VerificationError,
 		},
 		Request:   input.Request,
@@ -361,6 +369,17 @@ func handleServerVerify(raw json.RawMessage) {
 		"ok":      true,
 		"receipt": receiptToMap(result.Receipt),
 	}})
+}
+
+func (c credentialDTO) toCredential() *mpp.Credential {
+	payload := c.Payload
+	if payload == nil {
+		payload = map[string]any{}
+	}
+	return &mpp.Credential{
+		Challenge: c.Challenge.ToEcho(),
+		Payload:   payload,
+	}
 }
 
 func serverErrorType(err error) string {
