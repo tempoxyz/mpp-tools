@@ -74,6 +74,12 @@ runs:
         bundler-cache: ${{ inputs.ruby-bundler-cache }}
         working-directory: ${{ inputs.conformance-directory }}/adapters/ruby
 
+    - name: Setup Swift
+      if: inputs.adapter == 'swift' || inputs.adapter == 'all'
+      uses: swift-actions/setup-swift@v3
+      with:
+        swift-version: "6.2"
+
     - name: Install uv
       if: inputs.adapter == 'python' || inputs.adapter == 'all'
       uses: astral-sh/setup-uv@v7

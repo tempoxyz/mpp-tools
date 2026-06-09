@@ -120,6 +120,13 @@ jobs:
           ./gradlew --no-daemon dependencies --write-locks
           git diff --exit-code -- gradle.lockfile
 
+      - name: Check Swift package resolution
+        if: matrix.adapter == 'swift'
+        run: |
+          cd adapters/swift
+          swift package resolve
+          git diff --exit-code -- Package.resolved
+
       - name: Install adapter dependencies
         run: make ${{ matrix.install-target }}
 
@@ -174,6 +181,13 @@ jobs:
           cd adapters/java
           ./gradlew --no-daemon dependencies --write-locks
           git diff --exit-code -- gradle.lockfile
+
+      - name: Check Swift package resolution
+        if: matrix.adapter == 'swift'
+        run: |
+          cd adapters/swift
+          swift package resolve
+          git diff --exit-code -- Package.resolved
 
       - name: Install adapter dependencies
         if: matrix.adapter != 'typescript'

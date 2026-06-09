@@ -1,0 +1,14 @@
+{
+  "pins" : [
+    {
+      "identity" : "mpp-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tempoxyz/mpp-swift.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "142f7694f3dd78e21a61144b78ec93981f8dc347"
+      }
+    }
+  ],
+  "version" : 2
+}

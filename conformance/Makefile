@@ -1,7 +1,7 @@
 # Conformance Testing Makefile
 # Cross-SDK protocol compatibility testing for MPP implementations
 
-.PHONY: all update-locks update-java install install-runner install-java use-local-sdk test test-all test-sdk test-typescript test-rust test-python test-go test-ruby test-java test-json flow flow-sdk flow-typescript flow-rust flow-python flow-go flow-ruby flow-java update-flow-golden clean help
+.PHONY: all update-locks update-java update-swift install install-runner install-java install-swift use-local-sdk test test-all test-sdk test-typescript test-rust test-python test-go test-ruby test-java test-swift test-json flow flow-sdk flow-typescript flow-rust flow-python flow-go flow-ruby flow-java flow-swift update-flow-golden clean help
 
 RUBY ?= ruby
 BUNDLE ?= bundle
@@ -27,6 +27,7 @@ update-locks:
 	cd adapters/go && GOTOOLCHAIN=auto go get -u github.com/tempoxyz/mpp-go && GOTOOLCHAIN=auto go mod tidy
 	cd adapters/ruby && $(BUNDLE) lock --update mpp-rb sorbet-runtime
 	cd adapters/java && ./gradlew --no-daemon dependencies --write-locks
+	cd adapters/swift && swift package update mpp-swift
 
 # SDK pins live in package manager manifests and lockfiles:
 # - TypeScript: package.json/package-lock.json
@@ -35,12 +36,13 @@ update-locks:
 # - Go: adapters/go/go.mod/go.sum
 # - Ruby: adapters/ruby/Gemfile/Gemfile.lock
 # - Java: adapters/java/build.gradle/gradle.lockfile
+# - Swift: adapters/swift/Package.swift/Package.resolved
 
 #------------------------------------------------------------------------------
 # Installation
 #------------------------------------------------------------------------------
 
-install: install-ts install-rust install-python install-go install-ruby install-java install-scripts
+install: install-ts install-rust install-python install-go install-ruby install-java install-swift install-scripts
 	@echo "✓ All adapters installed"
 
 install-runner: install-ts install-scripts
@@ -78,6 +80,10 @@ install-ruby:
 install-java:
 	@echo "→ Building Java adapter..."
 	cd adapters/java && ./gradlew --no-daemon installDist
+
+install-swift:
+	@echo "→ Building Swift adapter..."
+	cd adapters/swift && swift build -c release --quiet
 
 #------------------------------------------------------------------------------
 # Testing
@@ -123,6 +129,10 @@ flow-java:
 	@echo "→ Running Java flow conformance tests..."
 	python3 scripts/flow_runner.py --adapter java
 
+flow-swift:
+	@echo "→ Running Swift flow conformance tests..."
+	python3 scripts/flow_runner.py --adapter swift
+
 update-flow-golden:
 	@echo "→ Updating flow golden results..."
 	python3 scripts/flow_runner.py --update-golden
@@ -155,6 +165,10 @@ test-java:
 	@echo "→ Testing Java adapter..."
 	python3 scripts/vector_runner.py --adapter java
 
+test-swift:
+	@echo "→ Testing Swift adapter..."
+	python3 scripts/vector_runner.py --adapter swift
+
 test-json:
 	@echo "→ Running conformance tests (JSON output)..."
 	python3 scripts/vector_runner.py --output json
@@ -182,6 +196,7 @@ clean:
 	rm -rf adapters/python/.venv adapters/python/__pycache__ adapters/python/*.egg-info
 	rm -rf adapters/ruby/.bundle adapters/ruby/vendor
 	rm -rf adapters/java/build adapters/java/.gradle
+	rm -rf adapters/swift/.build
 
 update-rust:
 	cd adapters/rust && cargo update -p mpp
@@ -191,6 +206,9 @@ update-python:
 
 update-java:
 	cd adapters/java && ./gradlew --no-daemon dependencies --write-locks
+
+update-swift:
+	cd adapters/swift && swift package update mpp-swift
 
 #------------------------------------------------------------------------------
 # Help
@@ -218,6 +236,7 @@ help:
 	@echo "  test-python      Test Python adapter only"
 	@echo "  test-go          Test Go adapter only"
 	@echo "  test-ruby        Test Ruby adapter only"
+	@echo "  test-swift       Test Swift adapter only"
 	@echo "  test-java        Test Java adapter only"
 	@echo "  flow-typescript  Run TypeScript flow conformance tests only"
 	@echo "  flow-rust        Run Rust flow conformance tests only"

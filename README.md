@@ -95,6 +95,7 @@ The harness validates the SDKs declared by the adapter manifests in `conformance
 | `mpp-go` | Go | [tempoxyz/mpp-go](https://github.com/tempoxyz/mpp-go) | [Go module](https://pkg.go.dev/github.com/tempoxyz/mpp-go) |
 | `mpp-rb` | Ruby | [stripe/mpp-rb](https://github.com/stripe/mpp-rb) | [RubyGems](https://rubygems.org/gems/mpp-rb) |
 | `mpp-java` | Java | [stripe/mpp-java](https://github.com/stripe/mpp-java) | JitPack Maven |
+| `mpp-swift` | Swift | [tempoxyz/mpp-swift](https://github.com/tempoxyz/mpp-swift) | SwiftPM |
 
 ## Updating SDK Pins
 
@@ -114,6 +115,7 @@ SDK versions are pinned in package-manager manifests and lockfiles:
 | Go | `github.com/tempoxyz/mpp-go` | `adapters/go/go.mod` / `go.sum` |
 | Ruby | `mpp-rb` | `adapters/ruby/Gemfile` / `Gemfile.lock` |
 | Java | `com.github.stripe:mpp-java` | `adapters/java/build.gradle` / `gradle.lockfile` |
+| Swift | `mpp-swift` | `adapters/swift/Package.swift` / `Package.resolved` |
 
 ## Protocol
 

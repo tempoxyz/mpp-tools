@@ -91,6 +91,20 @@ def java_version() -> str:
     return f"com.github.stripe:mpp-java@{match.group(1)}"
 
 
+def swift_version() -> str:
+    manifest = (ROOT / "adapters/swift/Package.swift").read_text(encoding="utf-8")
+    if ".package(path:" in manifest:
+        return "mpp-swift@local"
+
+    resolved = json.loads((ROOT / "adapters/swift/Package.resolved").read_text(encoding="utf-8"))
+    for pin in resolved.get("pins", []):
+        if pin.get("identity") == "mpp-swift":
+            revision = pin.get("state", {}).get("revision")
+            if revision:
+                return f"mpp-swift@{revision[:12]}"
+    raise RuntimeError("Could not find mpp-swift revision in adapters/swift/Package.resolved")
+
+
 VERSIONS = {
     "typescript": typescript_version,
     "rust": rust_version,
@@ -98,6 +112,7 @@ VERSIONS = {
     "go": go_version,
     "ruby": ruby_version,
     "java": java_version,
+    "swift": swift_version,
 }
 
 

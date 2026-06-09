@@ -108,6 +108,7 @@ Adapter locations:
 | Go | `adapters/go/` |
 | Ruby (`mpp-rb`) | `adapters/ruby/` |
 | Java (`mpp-java`) | `adapters/java/` |
+| Swift (`mpp-swift`) | `adapters/swift/` |
 
 ## SDK Versions
 
@@ -121,6 +122,7 @@ SDK pins live in package-manager manifests and lockfiles where the ecosystem sup
 | Go | `github.com/tempoxyz/mpp-go` | `adapters/go/go.mod` / `go.sum` |
 | Ruby | `mpp-rb` | `adapters/ruby/Gemfile` / `Gemfile.lock` |
 | Java | `com.github.stripe:mpp-java` | `adapters/java/build.gradle` / `gradle.lockfile` |
+| Swift | `mpp-swift` | `adapters/swift/Package.swift` / `Package.resolved` |
 
 Dependabot checks all configured package managers daily and opens PRs when updates are available. Every PR runs vector and flow conformance in CI, so dependency bump PRs are gated by the same compatibility suite.
 
@@ -136,6 +138,7 @@ make test-python
 make test-go
 make test-ruby
 make test-java
+make test-swift
 
 # Single vector file
 python3 scripts/vector_runner.py --vector www-authenticate
@@ -190,6 +193,7 @@ Use the matching adapter name in each SDK repository:
 | [`tempoxyz/mpp-go`](https://github.com/tempoxyz/mpp-go) | `go` |
 | [`tempoxyz/pympp`](https://github.com/tempoxyz/pympp) | `python` |
 | [`wevm/mppx`](https://github.com/wevm/mppx) | `typescript` |
+| [`tempoxyz/mpp-swift`](https://github.com/tempoxyz/mpp-swift) | `swift` |
 
 Then make the called `conformance` job a required branch-protection or ruleset
 check in the SDK repository.
@@ -263,4 +267,5 @@ make flow-sdk ADAPTER=rust
 - Go with toolchain auto-download enabled or Go ≥ 1.26 (for the Go adapter)
 - Ruby ≥ 3.3 + Bundler (for the `mpp-rb` adapter)
 - JDK 17 or newer (for the Java adapter; it builds Java 11 bytecode)
+- Swift ≥ 6.2 (for the Swift adapter)
 - `python3 -m pip install -r requirements.txt` (for the test runner)

@@ -1,0 +1,28 @@
+{
+  "$schema": "../../schemas/adapter-manifest.schema.json",
+  "schema": 1,
+  "name": "swift",
+  "language": "swift",
+  "command": [
+    ".build/release/swift-adapter"
+  ],
+  "build": [
+    "swift",
+    "build",
+    "-c",
+    "release",
+    "--quiet"
+  ],
+  "cwd": ".",
+  "capabilities": [
+    "challenge.parse",
+    "challenge.format",
+    "credential.parse",
+    "credential.format",
+    "receipt.parse",
+    "receipt.format",
+    "base64url.encode",
+    "base64url.decode",
+    "challenge.id"
+  ]
+}

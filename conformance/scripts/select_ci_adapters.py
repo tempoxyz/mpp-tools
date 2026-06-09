@@ -17,6 +17,7 @@ ADAPTER_TARGETS = {
     "go": "install-go",
     "ruby": "install-ruby",
     "java": "install-java",
+    "swift": "install-swift",
 }
 ADAPTER_ORDER = list(ADAPTER_TARGETS)
 
@@ -30,6 +31,7 @@ ADAPTER_PATTERNS = {
     "go": ["conformance/adapters/go/**"],
     "ruby": ["conformance/adapters/ruby/**"],
     "java": ["conformance/adapters/java/**"],
+    "swift": ["conformance/adapters/swift/**"],
 }
 
 FULL_PATTERNS = [

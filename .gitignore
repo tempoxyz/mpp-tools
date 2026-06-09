@@ -43,3 +43,4 @@ conformance/adapters/ruby/.bundle/
 conformance/adapters/ruby/vendor/
 conformance/adapters/java/.gradle/
 conformance/adapters/java/build/
+conformance/adapters/swift/.build/

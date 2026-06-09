@@ -96,11 +96,22 @@ def configure_typescript(conformance_dir: Path, sdk_path: Path) -> None:
     write_text(package_json, json.dumps(data, indent=2) + "\n")
 
 
+def configure_swift(conformance_dir: Path, sdk_path: Path) -> None:
+    manifest = conformance_dir / "adapters" / "swift" / "Package.swift"
+    replace_one(
+        manifest,
+        r'^(\s*)\.package\(url:\s*"https://github\.com/tempoxyz/mpp-swift\.git",\s*(?:branch|revision):\s*"[^"]+"\),\s*$',
+        rf'\1.package(path: {json_string(sdk_path)}),',
+        "Swift mpp-swift dependency",
+    )
+
+
 CONFIGURERS = {
     "go": configure_go,
     "python": configure_python,
     "ruby": configure_ruby,
     "rust": configure_rust,
+    "swift": configure_swift,
     "typescript": configure_typescript,
 }
 

@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       adapter:
-        description: SDK adapter to test, for example rust, ruby, go, python, or typescript. Java is tested by mpp-tools CI only because local SDK override support is not implemented.
+        description: SDK adapter to test, for example rust, ruby, go, python, swift, or typescript. Java is tested by mpp-tools CI only because local SDK override support is not implemented.
         required: true
         type: string
       conformance-ref:
@@ -47,7 +47,7 @@ jobs:
         run: |
           adapter=$(printf '%s' "$REQUESTED_ADAPTER" | tr '[:upper:]' '[:lower:]')
           case "$adapter" in
-            go|python|ruby|rust|typescript)
+            go|python|ruby|rust|swift|typescript)
               ;;
             *)
               echo "Unsupported adapter: $REQUESTED_ADAPTER" >&2
@@ -108,6 +108,10 @@ jobs:
             rust)
               cd adapters/rust
               cargo fetch
+              ;;
+            swift)
+              cd adapters/swift
+              swift package resolve
               ;;
             typescript)
               npm install
