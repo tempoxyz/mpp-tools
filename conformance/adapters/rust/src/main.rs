@@ -329,7 +329,7 @@ fn handle_generate_challenge_id(input: &str) {
             let digest = opt_str_field(&params, "digest");
             let opaque = opt_str_field(&params, "opaque");
 
-            let id = match generate_conformance_challenge_id(ChallengeIdParams {
+            let challenge_id_params = ChallengeIdParams {
                 secret_key,
                 realm: &realm,
                 method: &method,
@@ -338,7 +338,9 @@ fn handle_generate_challenge_id(input: &str) {
                 expires: expires.as_deref(),
                 digest: digest.as_deref(),
                 opaque: opaque.as_deref(),
-            }) {
+            };
+
+            let id = match generate_conformance_challenge_id(challenge_id_params) {
                 Ok(id) => id,
                 Err(e) => {
                     print_error(&e.to_string(), "generation_error");
@@ -576,7 +578,7 @@ fn write_stable_json(output: &mut String, value: &Value) -> Result<(), std::fmt:
         }
         Value::Object(map) => {
             let mut entries = map.iter().collect::<Vec<_>>();
-            entries.sort_by_key(|(left, _)| *left);
+            entries.sort_by_key(|(key, _)| *key);
 
             output.push('{');
             for (index, (key, item)) in entries.into_iter().enumerate() {
