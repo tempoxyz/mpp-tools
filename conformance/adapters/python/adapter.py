@@ -149,7 +149,7 @@ OP_TO_COMMAND = {
     "base64url.encode": "base64url-encode",
     "base64url.decode": "base64url-decode",
     "challenge.id": "generate-challenge-id",
-    "tempo.transaction.verify": "verify-tempo-transaction",
+    "tempo.receipt.verify": "verify-tempo-receipt",
 }
 
 
@@ -198,7 +198,7 @@ def response_value_for_operation(op: str, result):
     return result
 
 
-async def verify_tempo_transaction(input_value: dict):
+async def verify_tempo_receipt(input_value: dict):
     from mpp.methods.tempo.intents import ChargeIntent
     from mpp.server.intent import VerificationError
 
@@ -351,9 +351,9 @@ def main():
                 opaque=params.get("opaque"),
             )
             print(json.dumps(success(result)))
-        elif command == "verify-tempo-transaction":
+        elif command == "verify-tempo-receipt":
             params = json.loads(input_data)
-            print(json.dumps(asyncio.run(verify_tempo_transaction(params))))
+            print(json.dumps(asyncio.run(verify_tempo_receipt(params))))
         else:
             print(json.dumps(error(f"Unknown command: {command}")))
     except Exception as e:
@@ -365,7 +365,7 @@ def main():
             error_type = "encoding_error"
         elif command.startswith("generate-"):
             error_type = "generation_error"
-        elif command.startswith("verify-tempo-transaction"):
+        elif command.startswith("verify-tempo-receipt"):
             error_type = "verification_error"
         else:
             error_type = "unknown_error"

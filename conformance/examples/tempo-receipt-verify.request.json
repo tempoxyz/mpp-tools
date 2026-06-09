@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "op": "tempo.transaction.verify",
+  "op": "tempo.receipt.verify",
   "input": {
     "credential": {
       "challenge": {

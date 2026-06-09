@@ -1,9 +1,9 @@
 {
   "version": "2.0.0",
-  "spec_ref": "MPP Tempo transaction credential verification",
-  "description": "Server-side Tempo transaction verification must require auto-generated attribution memos to bind to the credential challenge id and realm when no explicit server memo is configured.",
+  "spec_ref": "MPP Tempo receipt fixture verification",
+  "description": "Server-side Tempo receipt fixture verification must require auto-generated attribution memos to bind to the credential challenge id and realm when no explicit server memo is configured. This staged vector does not exercise signed transaction deserialization.",
   "commands": {
-    "operation": "tempo.transaction.verify"
+    "operation": "tempo.receipt.verify"
   },
   "scenarios": [
     {

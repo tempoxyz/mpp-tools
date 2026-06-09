@@ -16,7 +16,7 @@
         "base64url.decode",
         "challenge.id",
         "http.payment_request",
-        "tempo.transaction.verify"
+        "tempo.receipt.verify"
       ]
     },
     "ErrorType": {
@@ -187,7 +187,7 @@
         "body": { "type": "string" }
       }
     },
-    "TempoTransactionVerificationInput": {
+    "TempoReceiptVerificationInput": {
       "type": "object",
       "required": ["credential", "receipt"],
       "additionalProperties": false,
@@ -196,7 +196,7 @@
         "receipt": { "$ref": "#/$defs/JsonObject" }
       }
     },
-    "TempoTransactionVerificationOutput": {
+    "TempoReceiptVerificationOutput": {
       "type": "object",
       "required": ["status", "reference"],
       "additionalProperties": false,

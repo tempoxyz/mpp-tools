@@ -82,13 +82,13 @@
       "comparison": "http",
       "description": "Send one normalized HTTP request through the SDK payment-aware transport."
     },
-    "tempo.transaction.verify": {
+    "tempo.receipt.verify": {
       "category": "vector",
-      "inputRef": "protocol.schema.json#/$defs/TempoTransactionVerificationInput",
-      "successRef": "protocol.schema.json#/$defs/TempoTransactionVerificationOutput",
+      "inputRef": "protocol.schema.json#/$defs/TempoReceiptVerificationInput",
+      "successRef": "protocol.schema.json#/$defs/TempoReceiptVerificationOutput",
       "errorTypes": ["verification_error"],
       "comparison": "exact",
-      "description": "Verify a Tempo transaction credential against a supplied transaction receipt fixture."
+      "description": "Verify a Tempo transaction credential against a supplied receipt fixture. This is an optional staged capability until full signed transaction verification vectors are available."
     }
   }
 }
