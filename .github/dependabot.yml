@@ -55,15 +55,6 @@ updates:
         patterns:
           - "*"
 
-  - package-ecosystem: "swift"
-    directory: "/conformance/adapters/swift"
-    schedule:
-      interval: "weekly"
-    groups:
-      swift-dependencies:
-        patterns:
-          - "*"
-
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

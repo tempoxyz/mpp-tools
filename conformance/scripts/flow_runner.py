@@ -25,6 +25,7 @@ CONFORMANCE_DIR = SCRIPT_DIR.parent
 FLOW_DIR = CONFORMANCE_DIR / "flows"
 FLOW_CASES = FLOW_DIR / "flows.json"
 FLOW_RESULTS = FLOW_DIR / "golden-results.json"
+DEFAULT_FLOW_EXCLUDED_ADAPTERS = {"typescript", "swift"}
 
 
 def normalize_error_type(value: str | None) -> str | None:
@@ -481,7 +482,10 @@ def compare_results(
 
 def selected_adapters(name: str, adapters: dict[str, AdapterConfig]) -> list[str]:
     if name == "all":
-        return [adapter_name for adapter_name in sorted(adapters) if adapter_name != "typescript"]
+        return [
+            adapter_name for adapter_name in sorted(adapters)
+            if adapter_name not in DEFAULT_FLOW_EXCLUDED_ADAPTERS
+        ]
     return [name]
 
 

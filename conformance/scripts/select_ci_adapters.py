@@ -17,7 +17,6 @@ ADAPTER_TARGETS = {
     "go": "install-go",
     "ruby": "install-ruby",
     "java": "install-java",
-    "swift": "install-swift",
 }
 ADAPTER_ORDER = list(ADAPTER_TARGETS)
 
@@ -31,6 +30,9 @@ ADAPTER_PATTERNS = {
     "go": ["conformance/adapters/go/**"],
     "ruby": ["conformance/adapters/ruby/**"],
     "java": ["conformance/adapters/java/**"],
+}
+OPTIONAL_ADAPTER_PATTERNS = {
+    # Swift depends on private mpp-swift repository access until the SDK is public.
     "swift": ["conformance/adapters/swift/**"],
 }
 
@@ -101,6 +103,11 @@ def select_adapters(event_name: str, changed_files: list[str]) -> tuple[list[str
     ]
     if selected:
         return selected, "adapter-specific conformance files changed"
+    if any(
+        any(path_matches(path, pattern) for patterns in OPTIONAL_ADAPTER_PATTERNS.values() for pattern in patterns)
+        for path in changed_files
+    ):
+        return [], "optional adapter files changed; run targeted conformance outside public CI"
     return [], "no conformance-affecting files changed"
 
 

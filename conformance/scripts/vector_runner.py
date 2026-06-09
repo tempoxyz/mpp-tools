@@ -32,6 +32,7 @@ from harness import AdapterClient, AdapterConfig, build_adapter, discover_adapte
 
 
 SCRIPT_DIR = Path(__file__).parent
+DEFAULT_EXCLUDED_ADAPTERS = {"swift"}
 
 
 class DiffType(str, Enum):
@@ -515,7 +516,10 @@ class VectorRunner:
         """Run all conformance tests."""
         adapters = discover_adapters()
         if adapter_names is None:
-            adapter_names = list(adapters.keys())
+            adapter_names = [
+                name for name in adapters.keys()
+                if name not in DEFAULT_EXCLUDED_ADAPTERS
+            ]
         
         # Auto-discover vector files
         all_vectors = discover_vector_files()
@@ -670,7 +674,7 @@ def main():
         type=str,
         action="append",
         dest="adapters",
-        help="Run only specified adapter(s) - can be used multiple times (typescript, go, rust, python, ruby, java)",
+        help="Run only specified adapter(s) - can be used multiple times (typescript, go, rust, python, ruby, java, swift)",
     )
     parser.add_argument(
         "--vector",

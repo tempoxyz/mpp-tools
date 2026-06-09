@@ -27,7 +27,6 @@ update-locks:
 	cd adapters/go && GOTOOLCHAIN=auto go get -u github.com/tempoxyz/mpp-go && GOTOOLCHAIN=auto go mod tidy
 	cd adapters/ruby && $(BUNDLE) lock --update mpp-rb sorbet-runtime
 	cd adapters/java && ./gradlew --no-daemon dependencies --write-locks
-	cd adapters/swift && swift package update mpp-swift
 
 # SDK pins live in package manager manifests and lockfiles:
 # - TypeScript: package.json/package-lock.json
@@ -36,14 +35,14 @@ update-locks:
 # - Go: adapters/go/go.mod/go.sum
 # - Ruby: adapters/ruby/Gemfile/Gemfile.lock
 # - Java: adapters/java/build.gradle/gradle.lockfile
-# - Swift: adapters/swift/Package.swift/Package.resolved
+# - Swift: adapters/swift/Package.swift/Package.resolved (explicit/private preview)
 
 #------------------------------------------------------------------------------
 # Installation
 #------------------------------------------------------------------------------
 
-install: install-ts install-rust install-python install-go install-ruby install-java install-swift install-scripts
-	@echo "✓ All adapters installed"
+install: install-ts install-rust install-python install-go install-ruby install-java install-scripts
+	@echo "✓ Default adapters installed"
 
 install-runner: install-ts install-scripts
 	@echo "✓ Conformance runner installed"
@@ -138,7 +137,7 @@ update-flow-golden:
 	python3 scripts/flow_runner.py --update-golden
 
 test-all:
-	@echo "→ Running conformance tests for all adapters..."
+	@echo "→ Running conformance tests for default adapters..."
 	python3 scripts/vector_runner.py
 
 test-typescript:
@@ -220,13 +219,15 @@ help:
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Targets:"
-	@echo "  all              Install pinned SDK releases and run vectors + flows"
-	@echo "  update-locks     Update pinned SDK package locks"
+	@echo "  all              Install default public SDK releases and run vectors + flows"
+	@echo "  update-locks     Update default public SDK package locks"
 	@echo "  update-java      Update the Java adapter Gradle lockfile"
-	@echo "  install          Install all adapter dependencies"
+	@echo "  update-swift     Update the Swift adapter package resolution"
+	@echo "  install          Install default public adapter dependencies"
 	@echo "  install-runner   Install shared runner dependencies only"
+	@echo "  install-swift    Build the explicit Swift adapter"
 	@echo "  use-local-sdk    Point one adapter at SDK_PATH, e.g. ADAPTER=rust SDK_PATH=../mpp-rs"
-	@echo "  test             Run conformance tests for all adapters"
+	@echo "  test             Run conformance tests for default adapters"
 	@echo "  test-sdk         Run vector tests for ADAPTER"
 	@echo "  flow             Run flow conformance tests"
 	@echo "  flow-sdk         Run flow tests for ADAPTER"
@@ -254,3 +255,4 @@ help:
 	@echo "  Go:         github.com/tempoxyz/mpp-go (Go module)"
 	@echo "  Ruby:       mpp-rb (Bundler/RubyGems)"
 	@echo "  Java:       com.github.stripe:mpp-java (Gradle/JitPack)"
+	@echo "  Swift:      mpp-swift (SwiftPM, explicit/private preview)"

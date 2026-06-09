@@ -39,13 +39,13 @@ cd conformance
 make all
 ```
 
-This installs the pinned SDK releases, runs the vector suite, and runs the end-to-end 402 flow suite.
+This installs the default public SDK releases, runs the vector suite, and runs the end-to-end 402 flow suite.
 
 Run individual stages while developing:
 
 ```bash
-make install      # install pinned SDKs and adapter dependencies
-make test         # run vector conformance against all adapters
+make install      # install default public SDKs and adapter dependencies
+make test         # run vector conformance against default adapters
 make flow         # run end-to-end 402 flow conformance
 ```
 
@@ -95,7 +95,8 @@ The harness validates the SDKs declared by the adapter manifests in `conformance
 | `mpp-go` | Go | [tempoxyz/mpp-go](https://github.com/tempoxyz/mpp-go) | [Go module](https://pkg.go.dev/github.com/tempoxyz/mpp-go) |
 | `mpp-rb` | Ruby | [stripe/mpp-rb](https://github.com/stripe/mpp-rb) | [RubyGems](https://rubygems.org/gems/mpp-rb) |
 | `mpp-java` | Java | [stripe/mpp-java](https://github.com/stripe/mpp-java) | JitPack Maven |
-| `mpp-swift` | Swift | [tempoxyz/mpp-swift](https://github.com/tempoxyz/mpp-swift) | SwiftPM |
+
+The Swift adapter is checked in as an explicit private preview for maintainers with access to `tempoxyz/mpp-swift`. It can be run with `make test-swift` and `make flow-swift`, but it is not part of default public CI until the Swift SDK repository is public or CI has credentials.
 
 ## Updating SDK Pins
 
@@ -115,7 +116,8 @@ SDK versions are pinned in package-manager manifests and lockfiles:
 | Go | `github.com/tempoxyz/mpp-go` | `adapters/go/go.mod` / `go.sum` |
 | Ruby | `mpp-rb` | `adapters/ruby/Gemfile` / `Gemfile.lock` |
 | Java | `com.github.stripe:mpp-java` | `adapters/java/build.gradle` / `gradle.lockfile` |
-| Swift | `mpp-swift` | `adapters/swift/Package.swift` / `Package.resolved` |
+
+SwiftPM pins for `mpp-swift` live in `adapters/swift/Package.swift` and `Package.resolved`, and are updated explicitly with `make update-swift` while the SDK repository is private.
 
 ## Protocol
 

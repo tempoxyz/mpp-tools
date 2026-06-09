@@ -1,20 +1,20 @@
 # Conformance Test Suite
 
-Cross-SDK protocol compatibility testing for [MPP](https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/) implementations. Ensures the TypeScript golden fixtures plus Rust, Python, Go, Ruby, and Java SDKs produce **identical outputs** for the same inputs.
+Cross-SDK protocol compatibility testing for [MPP](https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/) implementations. Ensures the TypeScript golden fixtures plus Rust, Python, Go, Ruby, and Java SDKs produce **identical outputs** for the same inputs. A Swift adapter is also checked in as an explicit private preview while `tempoxyz/mpp-swift` remains private.
 
-The harness installs pinned SDK releases from each language package manager. Dependabot opens SDK bump PRs when newer releases are available, and conformance is the compatibility gate for those bumps.
+The harness installs pinned default public SDK releases from each language package manager. Dependabot opens SDK bump PRs when newer public releases are available, and conformance is the compatibility gate for those bumps.
 
 ## Quick Start
 
 ```bash
-make all          # install pinned SDKs, run vectors + flows
+make all          # install default public SDKs, run vectors + flows
 ```
 
 Or step by step:
 
 ```bash
 make install      # install the pinned TS/Rust/Python/Go/Ruby/Java releases
-make test         # run SDK adapters against all vectors
+make test         # run default SDK adapters against all vectors
 make flow         # run the end-to-end flow suite against golden results
 ```
 
@@ -28,7 +28,7 @@ Each SDK has a thin **adapter** CLI that wraps its library and exposes a uniform
 vectors/*.json ──► vector_runner.py ──► adapter (Rust/Python/Go/Ruby/Java) ──► pass/fail
 ```
 
-The TypeScript adapter remains the golden implementation for fixture maintenance and can be run explicitly with `make test-typescript`. Default vector runs skip it because the vector JSON files are the checked golden source of truth.
+The TypeScript adapter remains the golden implementation for fixture maintenance and can be run explicitly with `make test-typescript`. Default vector runs skip adapters that require private credentials.
 
 See [`HARNESS_SPEC.md`](./HARNESS_SPEC.md) for the schema-backed adapter ABI, manifest format, operation registry, migration plan, and language skeletons.
 
@@ -108,7 +108,7 @@ Adapter locations:
 | Go | `adapters/go/` |
 | Ruby (`mpp-rb`) | `adapters/ruby/` |
 | Java (`mpp-java`) | `adapters/java/` |
-| Swift (`mpp-swift`) | `adapters/swift/` |
+| Swift (`mpp-swift`) | `adapters/swift/` explicit/private preview |
 
 ## SDK Versions
 
@@ -122,11 +122,13 @@ SDK pins live in package-manager manifests and lockfiles where the ecosystem sup
 | Go | `github.com/tempoxyz/mpp-go` | `adapters/go/go.mod` / `go.sum` |
 | Ruby | `mpp-rb` | `adapters/ruby/Gemfile` / `Gemfile.lock` |
 | Java | `com.github.stripe:mpp-java` | `adapters/java/build.gradle` / `gradle.lockfile` |
-| Swift | `mpp-swift` | `adapters/swift/Package.swift` / `Package.resolved` |
+| Swift | `mpp-swift` | `adapters/swift/Package.swift` / `Package.resolved` explicit/private preview |
 
 Dependabot checks all configured package managers daily and opens PRs when updates are available. Every PR runs vector and flow conformance in CI, so dependency bump PRs are gated by the same compatibility suite.
 
 The Java adapter currently pins `mpp-java` to an exact JitPack commit because `mpp-java` does not publish versioned Maven releases yet. Update `adapters/java/build.gradle` manually and run `make update-java` when changing that pin.
+
+The Swift adapter depends on the private `tempoxyz/mpp-swift` repository for now. Run `make install-swift`, `make test-swift`, `make flow-swift`, or `make update-swift` only from an environment with access to that repository.
 
 ## Running Specific Tests
 
@@ -256,7 +258,7 @@ make flow-sdk ADAPTER=rust
 
 1. Edit the appropriate vector file in `vectors/`
 2. Add a new scenario object to the `scenarios` array
-3. Run `make test` to verify all adapters pass
+3. Run `make test` to verify default adapters pass, plus any explicit/private-preview adapter affected by the scenario
 4. Submit a PR
 
 ## Prerequisites
