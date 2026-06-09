@@ -255,17 +255,19 @@
         "payerPrivateKey": { "$ref": "#/$defs/HexValue" },
         "feePayerPrivateKey": { "$ref": "#/$defs/HexValue" },
         "feeToken": { "$ref": "#/$defs/HexValue" },
+        "challenge": { "$ref": "#/$defs/Challenge" },
         "request": { "$ref": "#/$defs/JsonObject" },
         "transaction": { "$ref": "#/$defs/TempoFeePayerTransaction" }
       }
     },
     "TempoFeePayerCosignOutput": {
       "type": "object",
-      "required": ["type", "feeToken", "accessListLength", "callCount"],
+      "required": ["type", "feeToken", "feePayerSignaturePresent", "accessListLength", "callCount"],
       "additionalProperties": false,
       "properties": {
         "type": { "type": "string", "const": "0x76" },
         "feeToken": { "$ref": "#/$defs/HexValue" },
+        "feePayerSignaturePresent": { "type": "boolean" },
         "accessListLength": { "type": "integer", "minimum": 0 },
         "callCount": { "type": "integer", "minimum": 0 }
       }

@@ -218,9 +218,13 @@ def decode_cosigned_fee_payer(raw_tx)
   raise "Expected 0x76 signed transaction" unless bytes.getbyte(0) == 0x76
 
   decoded = RLP.decode(bytes[1..])
+  fee_payer_signature = decoded[11]
   {
     type: "0x76",
     feeToken: "0x#{decoded[10].unpack1("H*")}",
+    feePayerSignaturePresent: fee_payer_signature.is_a?(Array) &&
+      fee_payer_signature.length == 3 &&
+      fee_payer_signature.all? { |part| part.is_a?(String) && !part.empty? },
     accessListLength: decoded[5].length,
     callCount: decoded[4].length
   }
@@ -231,8 +235,15 @@ def cosign_tempo_fee_payer(input)
   intent = Mpp::Methods::Tempo::ChargeIntent.new
   Mpp::Methods::Tempo.tempo(intents: {"charge" => intent}, fee_payer: fee_payer)
   request = Mpp::Methods::Tempo::Schemas::ChargeRequest.from_hash(input.fetch("request"))
+  challenge = input["challenge"] ? echo_from_challenge_h(input.fetch("challenge")) : nil
   raw_tx = build_fee_payer_envelope(input)
-  signed_raw = intent.send(:cosign_as_fee_payer, raw_tx, input.fetch("feeToken"), request: request)
+  signed_raw = intent.send(
+    :cosign_as_fee_payer,
+    raw_tx,
+    input.fetch("feeToken"),
+    request: request,
+    challenge: challenge
+  )
   success(decode_cosigned_fee_payer(signed_raw))
 rescue Mpp::VerificationError => e
   error(e.message, "verification_error")

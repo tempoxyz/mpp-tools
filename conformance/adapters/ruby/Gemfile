@@ -1,6 +1,6 @@
 source "https://rubygems.org"
 
-gem "mpp-rb", git: "https://github.com/mablr/mpp-rb.git", ref: "b6ec36955b4e560dc503b7e709248ab80093452f"
+gem "mpp-rb", git: "https://github.com/mablr/mpp-rb.git", ref: "9ea6166b9fa8bd470e70ceb7abe3dd59e0adb5fb"
 gem "eth", "~> 0.5"
 gem "rlp", "~> 0.7"
 gem "sorbet-runtime", "~> 0.6"

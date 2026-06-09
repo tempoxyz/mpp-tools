@@ -1,7 +1,7 @@
 GIT
   remote: https://github.com/mablr/mpp-rb.git
-  revision: b6ec36955b4e560dc503b7e709248ab80093452f
-  ref: b6ec36955b4e560dc503b7e709248ab80093452f
+  revision: 9ea6166b9fa8bd470e70ceb7abe3dd59e0adb5fb
+  ref: 9ea6166b9fa8bd470e70ceb7abe3dd59e0adb5fb
   specs:
     mpp-rb (0.1.2)
       base64 (~> 0.3)

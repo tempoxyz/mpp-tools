@@ -3,6 +3,7 @@
   "value": {
     "type": "0x76",
     "feeToken": "0x20c0000000000000000000000000000000000000",
+    "feePayerSignaturePresent": true,
     "accessListLength": 0,
     "callCount": 1
   }
