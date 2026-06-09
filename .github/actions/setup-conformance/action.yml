@@ -79,6 +79,7 @@ runs:
       uses: swift-actions/setup-swift@v3
       with:
         swift-version: "6.2"
+        skip-verify-signature: "true"
 
     - name: Install uv
       if: inputs.adapter == 'python' || inputs.adapter == 'all'
