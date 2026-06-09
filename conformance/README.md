@@ -57,6 +57,8 @@ Each vector file contains **scenarios** — individual test cases with a name, d
 }
 ```
 
+Scenarios may optionally include `adapters` to restrict an edge case to specific SDK adapters, and `maxDurationMs` or `maxDurationMsByAdapter` to assert bounded execution for parser stress cases. Long stress inputs can use `wire` as `{ "prefix": "...", "repeat": "...", "count": 123, "suffix": "..." }` to keep fixtures reviewable.
+
 ### Test Types
 
 | Test | What It Checks |

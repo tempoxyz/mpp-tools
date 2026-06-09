@@ -20,6 +20,7 @@ import argparse
 import base64
 import json
 import sys
+import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -146,13 +147,51 @@ class VectorRunner:
         return {"success": False, "error": message, "error_type": "unknown_error"}
 
     def run_adapter(
-        self, adapter: AdapterConfig, command: str, input_data: str
+        self, adapter: AdapterConfig, command: str, input_data: str, timeout: float = 30
     ) -> dict[str, Any]:
         """Run an adapter operation through the schema-backed JSON ABI."""
         try:
-            return AdapterClient(adapter).run_legacy_command(command, input_data)
+            return AdapterClient(adapter).run_legacy_command(command, input_data, timeout=timeout)
         except Exception as exc:
             return self._error_result(str(exc))
+
+    def run_adapter_timed(
+        self, adapter: AdapterConfig, command: str, input_data: str, timeout: float = 30
+    ) -> tuple[dict[str, Any], float]:
+        start = time.perf_counter()
+        result = self.run_adapter(adapter, command, input_data, timeout=timeout)
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        return result, elapsed_ms
+
+    def duration_limit_ms(self, scenario: dict[str, Any], adapter: AdapterConfig) -> int | None:
+        per_adapter = scenario.get("maxDurationMsByAdapter", {})
+        if isinstance(per_adapter, dict) and adapter.name in per_adapter:
+            return int(per_adapter[adapter.name])
+        value = scenario.get("maxDurationMs")
+        return int(value) if value is not None else None
+
+    def compare_duration(
+        self, limit_ms: int | None, elapsed_ms: float
+    ) -> tuple[bool, str | None]:
+        if limit_ms is None or elapsed_ms <= limit_ms:
+            return True, None
+        return False, f"duration exceeded: expected <= {limit_ms} ms, got {elapsed_ms:.1f} ms"
+
+    def command_timeout_seconds(self, duration_limit_ms: int | None) -> float:
+        if duration_limit_ms is None:
+            return 30.0
+        return max(1.0, (duration_limit_ms / 1000) + 1.0)
+
+    def scenario_wire(self, scenario: dict[str, Any]) -> str | None:
+        wire = scenario.get("wire")
+        if not isinstance(wire, dict):
+            return wire
+
+        prefix = wire.get("prefix", "")
+        repeat = wire.get("repeat", "")
+        count = int(wire.get("count", 0))
+        suffix = wire.get("suffix", "")
+        return f"{prefix}{repeat * count}{suffix}"
 
     def _compare_success_and_error_type(
         self, expected: dict[str, Any], actual: dict[str, Any]
@@ -323,17 +362,25 @@ class VectorRunner:
         is_challenge_id = generate_cmd is not None
 
         for scenario in vectors.get("scenarios", []):
+            scenario_adapters = scenario.get("adapters")
+            if scenario_adapters and adapter.name not in scenario_adapters:
+                continue
+
             if tag_filter and tag_filter not in scenario.get("tags", []):
                 continue
 
             name = scenario["name"]
             tests = scenario.get("tests", {})
+            duration_limit_ms = self.duration_limit_ms(scenario, adapter)
+            command_timeout = self.command_timeout_seconds(duration_limit_ms)
 
             if is_challenge_id:
                 input_data = json.dumps(scenario["input"])
-                result = self.run_adapter(adapter, generate_cmd, input_data)
+                result, elapsed_ms = self.run_adapter_timed(adapter, generate_cmd, input_data, timeout=command_timeout)
                 expected = {"success": True, "result": scenario["expected"]}
                 passed, error = self.compare_results(expected, result)
+                if passed:
+                    passed, error = self.compare_duration(duration_limit_ms, elapsed_ms)
                 self._record_result(
                     vector_file=vector_name,
                     test_type=TestType.GENERATE,
@@ -351,18 +398,20 @@ class VectorRunner:
                 wire = scenario.get("encoded")
             else:
                 obj = scenario.get("object")
-                wire = scenario.get("wire")
+                wire = self.scenario_wire(scenario)
 
             # Parse test
             parse_test = tests.get("parse")
             if parse_test is not None and parse_cmd and wire is not None:
-                result = self.run_adapter(adapter, parse_cmd, wire)
+                result, elapsed_ms = self.run_adapter_timed(adapter, parse_cmd, wire, timeout=command_timeout)
                 if parse_test is True:
                     expected = {"success": True, "result": obj}
                     passed, error = self.compare_parse_results_semantic(expected, result, parse_cmd)
                 else:
                     expected = parse_test
                     passed, error = self.compare_results(parse_test, result)
+                if passed:
+                    passed, error = self.compare_duration(duration_limit_ms, elapsed_ms)
                 self._record_result(
                     vector_file=vector_name,
                     test_type=TestType.PARSE,
@@ -380,9 +429,11 @@ class VectorRunner:
                     format_input = obj
                 else:
                     format_input = json.dumps(obj)
-                result = self.run_adapter(adapter, format_cmd, format_input)
+                result, elapsed_ms = self.run_adapter_timed(adapter, format_cmd, format_input, timeout=command_timeout)
                 expected_format = {"success": True, "result": wire}
                 passed, error = self.compare_format_results_semantic(adapter, expected_format, result, format_cmd, parse_cmd)
+                if passed:
+                    passed, error = self.compare_duration(duration_limit_ms, elapsed_ms)
                 self._record_result(
                     vector_file=vector_name,
                     test_type=TestType.FORMAT,
@@ -400,7 +451,7 @@ class VectorRunner:
                     format_input = obj
                 else:
                     format_input = json.dumps(obj)
-                format_result = self.run_adapter(adapter, format_cmd, format_input)
+                format_result = self.run_adapter(adapter, format_cmd, format_input, timeout=command_timeout)
 
                 if not format_result.get("success"):
                     self._record_result(
@@ -416,7 +467,7 @@ class VectorRunner:
                     continue
 
                 formatted = format_result["result"]
-                parse_result = self.run_adapter(adapter, parse_cmd, formatted)
+                parse_result = self.run_adapter(adapter, parse_cmd, formatted, timeout=command_timeout)
 
                 if not parse_result.get("success"):
                     self._record_result(

@@ -158,7 +158,7 @@ class AdapterClient:
     def __init__(self, adapter: AdapterConfig):
         self.adapter = adapter
 
-    def call(self, op: str, input_value: Any, context: dict[str, Any] | None = None, timeout: int = 30) -> dict[str, Any]:
+    def call(self, op: str, input_value: Any, context: dict[str, Any] | None = None, timeout: float = 30) -> dict[str, Any]:
         if op not in self.adapter.capabilities:
             return {
                 "ok": False,
@@ -222,7 +222,7 @@ class AdapterClient:
             }
         return response
 
-    def run_legacy_command(self, command: str, input_data: str) -> dict[str, Any]:
+    def run_legacy_command(self, command: str, input_data: str, timeout: float = 30) -> dict[str, Any]:
         op, input_value = request_input_for_command(command, input_data)
-        response = self.call(op, input_value)
+        response = self.call(op, input_value, timeout=timeout)
         return legacy_response_for_operation(op, response)
