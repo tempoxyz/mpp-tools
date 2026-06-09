@@ -81,6 +81,14 @@
       "errorTypes": ["http_error"],
       "comparison": "http",
       "description": "Send one normalized HTTP request through the SDK payment-aware transport."
+    },
+    "server.verify": {
+      "category": "server",
+      "inputRef": "protocol.schema.json#/$defs/ServerVerifyRequest",
+      "successRef": "protocol.schema.json#/$defs/ServerVerifyResult",
+      "errorTypes": ["verification_error"],
+      "comparison": "exact",
+      "description": "Verify one normalized server credential against route parameters and return the normalized verification outcome."
     }
   }
 }

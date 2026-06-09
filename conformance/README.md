@@ -16,6 +16,7 @@ Or step by step:
 make install      # install the pinned TS/Rust/Python/Go/Ruby/Java releases
 make test         # run SDK adapters against all vectors
 make flow         # run the end-to-end flow suite against golden results
+make server-verify # run SDK server verification ABI tests
 ```
 
 ## How It Works
@@ -78,6 +79,15 @@ The Python flow runner owns the HTTP state machine. It calls each adapter's exis
 
 Flow assertions compare adapter results against `flows/golden-results.json`, generated with the pinned TypeScript `mppx` package. Regenerate it with `make update-flow-golden` when the flow fixtures intentionally change.
 
+## Server Verification Tests
+
+Server verification cases live in `server-verification/`. These call the `server.verify` adapter operation directly so conformance can cover SDK server-side credential verification paths that are not observable through the client flow runner.
+
+```bash
+make server-verify
+make server-verify-go
+```
+
 ## Adapters
 
 Each adapter is a CLI binary that reads from stdin and writes JSON to stdout:
@@ -93,6 +103,7 @@ Each adapter is a CLI binary that reads from stdin and writes JSON to stdout:
 | `base64url-encode` | Plain string | Base64url encoded |
 | `base64url-decode` | Base64url string | Plain string |
 | `generate-challenge-id` | JSON params | Challenge ID string |
+| `server.verify` | Server route params plus credential object | Normalized verification result |
 
 All commands return `{"success": true, "result": <value>}` on success or `{"success": false, "error": "...", "error_type": "..."}` on failure.
 

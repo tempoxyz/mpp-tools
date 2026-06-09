@@ -15,7 +15,8 @@
         "base64url.encode",
         "base64url.decode",
         "challenge.id",
-        "http.payment_request"
+        "http.payment_request",
+        "server.verify"
       ]
     },
     "ErrorType": {
@@ -25,6 +26,7 @@
         "format_error",
         "encoding_error",
         "generation_error",
+        "verification_error",
         "http_error",
         "unsupported_operation",
         "unknown_error"
@@ -184,6 +186,62 @@
         },
         "body": { "type": "string" }
       }
+    },
+    "ServerVerifyRequest": {
+      "type": "object",
+      "required": ["realm", "secretKey", "method", "intent", "request", "credential"],
+      "additionalProperties": false,
+      "properties": {
+        "realm": { "type": "string" },
+        "secretKey": { "type": "string", "minLength": 1 },
+        "method": { "type": "string", "minLength": 1 },
+        "intent": { "type": "string", "minLength": 1 },
+        "request": { "$ref": "#/$defs/JsonObject" },
+        "expires": { "type": "string" },
+        "verificationError": { "type": "string" },
+        "credential": { "$ref": "#/$defs/Credential" }
+      }
+    },
+    "ServerVerifyResult": {
+      "type": "object",
+      "required": ["ok"],
+      "additionalProperties": false,
+      "properties": {
+        "ok": { "type": "boolean" },
+        "errorType": {
+          "type": "string",
+          "enum": [
+            "malformed_credential",
+            "invalid_challenge",
+            "payment_expired",
+            "verification_failed",
+            "unknown_error"
+          ]
+        },
+        "receipt": { "$ref": "#/$defs/Receipt" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "ok": { "const": true } },
+            "required": ["ok"]
+          },
+          "then": {
+            "required": ["receipt"],
+            "not": { "required": ["errorType"] }
+          }
+        },
+        {
+          "if": {
+            "properties": { "ok": { "const": false } },
+            "required": ["ok"]
+          },
+          "then": {
+            "required": ["errorType"],
+            "not": { "required": ["receipt"] }
+          }
+        }
+      ]
     }
   }
 }

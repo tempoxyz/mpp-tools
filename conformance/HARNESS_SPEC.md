@@ -66,7 +66,8 @@ against `schemas/adapter-manifest.schema.json`.
     "base64url.encode",
     "base64url.decode",
     "challenge.id",
-    "http.payment_request"
+    "http.payment_request",
+    "server.verify"
   ]
 }
 ```
@@ -181,6 +182,12 @@ Required for flow conformance:
 | `http.payment_request` | normalized HTTP request plus payment config | normalized HTTP response |
 
 The built-in flow runner owns the end-to-end 402 state machine and calls the vector operations above to parse challenges, format credentials, and parse receipts.
+
+Optional for server verification conformance:
+
+| Operation | Input | Output |
+|---|---|---|
+| `server.verify` | server route params plus a credential object | `{ "ok": boolean, "errorType"?: string, "receipt"?: Receipt }` |
 
 To add a new operation:
 
