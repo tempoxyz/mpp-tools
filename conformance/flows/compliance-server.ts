@@ -439,7 +439,19 @@ const handler: http.RequestListener = async (req, res) => {
       return
     }
 
+    if (flowCase.reject_authorization) {
+      headers.set('Content-Type', 'application/json')
+    }
     res.writeHead(402, Object.fromEntries(headers))
+    if (flowCase.reject_authorization) {
+      res.write(
+        JSON.stringify({
+          ok: false,
+          name: flowCase.name,
+          authorization_observed: false,
+        }),
+      )
+    }
     const body = await challenge.text()
     if (body) res.write(body)
     res.end()

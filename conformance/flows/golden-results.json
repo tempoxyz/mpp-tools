@@ -647,6 +647,15 @@
       "accept_payment_observed": "tempo/charge;q=0.9, stripe/charge;q=0.1"
     },
     {
+      "name": "same_origin_payment_request",
+      "outcome": {
+        "ok": true,
+        "status": 200
+      },
+      "ok": true,
+      "response_name": "same_origin_payment_request"
+    },
+    {
       "name": "cross_origin_redirect_before_402_rejected",
       "outcome": {
         "ok": true,

@@ -280,6 +280,9 @@ def run_client_http_flow_case(
         if flow_case.get("expect_no_authorization"):
             expected_error = flow_case.get("expect_error_type")
             actual_error = normalize_error_type(response.get("error", {}).get("type"))
+            actual_message = str(response.get("error", {}).get("message", ""))
+            expected_message = flow_case.get("expect_error_message_contains")
+            expected_response_name = flow_case.get("expect_response_name")
             if expected_error and actual_error != expected_error:
                 return {
                     "name": name,
@@ -287,6 +290,26 @@ def run_client_http_flow_case(
                         "ok": False,
                         "status": 0,
                         "error_type": actual_error,
+                    },
+                    "authorization_observed": False,
+                }
+            if expected_message and str(expected_message) not in actual_message:
+                return {
+                    "name": name,
+                    "outcome": {
+                        "ok": False,
+                        "status": 0,
+                        "error_type": "unexpected_error_message",
+                    },
+                    "authorization_observed": False,
+                }
+            if expected_response_name:
+                return {
+                    "name": name,
+                    "outcome": {
+                        "ok": False,
+                        "status": 0,
+                        "error_type": "missing_expected_response",
                     },
                     "authorization_observed": False,
                 }
@@ -321,12 +344,20 @@ def run_client_http_flow_case(
         if "name" in body:
             result["response_name"] = body["name"]
     if flow_case.get("expect_no_authorization"):
+        expected_response_name = flow_case.get("expect_response_name")
+        if expected_response_name and result.get("response_name") != expected_response_name:
+            result["outcome"]["ok"] = False
+            result.setdefault("authorization_observed", False)
+            return result
         if status == 402 and not result.get("authorization_observed"):
-            return {
+            expected_result = {
                 "name": name,
                 "outcome": {"ok": True, "status": 0},
                 "authorization_observed": False,
             }
+            if expected_response_name:
+                expected_result["response_name"] = expected_response_name
+            return expected_result
         result["outcome"]["ok"] = False
         result.setdefault("authorization_observed", False)
     return result

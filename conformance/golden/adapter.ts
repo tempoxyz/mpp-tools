@@ -26,7 +26,8 @@
 
 import { createHmac } from 'node:crypto'
 
-import { Challenge, Credential, Receipt } from 'mppx'
+import { Challenge, Credential, Method, Receipt, z } from 'mppx'
+import * as Client from 'mppx/client'
 
 interface SuccessResult<T> {
 	success: true
@@ -257,57 +258,66 @@ function headersToObject(headers: Headers): Record<string, string> {
 	return result
 }
 
+const httpPaymentMethod = Method.toClient(
+	Method.from({
+		name: 'tempo',
+		intent: 'charge',
+		schema: {
+			credential: {
+				payload: z.object({
+					type: z.literal('transaction'),
+					signature: z.string(),
+				}),
+			},
+			request: z.object({
+				amount: z.string(),
+				currency: z.string(),
+				recipient: z.string(),
+				expires: z.string(),
+				resource: z.optional(z.string()),
+			}),
+		},
+	}),
+	{
+		async createCredential({ challenge }) {
+			return Credential.serialize(
+				Credential.from({
+					challenge,
+					payload: currentHttpPayment?.payment.payload ?? {},
+					...(currentHttpPayment?.source === undefined ? {} : { source: currentHttpPayment.source }),
+				}),
+			)
+		},
+	},
+)
+
+let currentHttpPayment: { payment: HttpPaymentRequest['payment']; source?: string } | undefined
+
 async function runHttpPaymentRequest(input: HttpPaymentRequest): Promise<AdapterResponse> {
 	try {
-		const response = await fetch(input.url, {
+		currentHttpPayment = {
+			payment: input.payment,
+			source: typeof input.payment.source === 'string' ? input.payment.source : undefined,
+		}
+		const mppx = Client.Mppx.create({
+			methods: [httpPaymentMethod],
+			polyfill: false,
+			acceptPaymentPolicy: 'always',
+		})
+		const response = await mppx.fetch(input.url, {
 			method: input.method,
 			headers: input.headers,
 			body: input.body,
 		})
-
-		if (response.status !== 402) {
-			return adapterSuccess({
-				status: response.status,
-				headers: headersToObject(response.headers),
-				body: await response.text(),
-			})
-		}
-
-		const initialOrigin = new URL(input.url).origin
-		const challengeUrl = response.url ? new URL(response.url) : new URL(input.url)
-		if (challengeUrl.origin !== initialOrigin) {
-			return adapterError(
-				`Refusing to send payment credential across redirect from ${initialOrigin} to ${challengeUrl.origin}`,
-				'http_error',
-			)
-		}
-
-		const header = response.headers.get('www-authenticate')
-		if (!header) return adapterError('402 response missing WWW-Authenticate header', 'http_error')
-
-		const challenge = Challenge.deserialize(header)
-		const source = typeof input.payment.source === 'string' ? input.payment.source : undefined
-		const credential = Credential.serialize(
-			Credential.from({
-				challenge,
-				payload: input.payment.payload,
-				...(source === undefined ? {} : { source }),
-			}),
-		)
-		const retryHeaders = new Headers(input.headers)
-		retryHeaders.set('Authorization', credential)
-		const paymentResponse = await fetch(challengeUrl, {
-			method: input.method,
-			headers: retryHeaders,
-			body: input.body,
-		})
 		return adapterSuccess({
-			status: paymentResponse.status,
-			headers: headersToObject(paymentResponse.headers),
-			body: await paymentResponse.text(),
+			status: response.status,
+			headers: headersToObject(response.headers),
+			body: await response.text(),
 		})
 	} catch (err) {
 		return adapterError(err instanceof Error ? err.message : String(err), 'http_error')
+	} finally {
+		currentHttpPayment = undefined
 	}
 }
 
