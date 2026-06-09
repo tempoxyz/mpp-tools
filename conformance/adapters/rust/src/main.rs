@@ -329,7 +329,7 @@ fn handle_generate_challenge_id(input: &str) {
             let digest = opt_str_field(&params, "digest");
             let opaque = opt_str_field(&params, "opaque");
 
-            let id = match generate_conformance_challenge_id(ChallengeIdParts {
+            let challenge_id_params = ChallengeIdParams {
                 secret_key,
                 realm: &realm,
                 method: &method,
@@ -338,7 +338,9 @@ fn handle_generate_challenge_id(input: &str) {
                 expires: expires.as_deref(),
                 digest: digest.as_deref(),
                 opaque: opaque.as_deref(),
-            }) {
+            };
+
+            let id = match generate_conformance_challenge_id(challenge_id_params) {
                 Ok(id) => id,
                 Err(e) => {
                     print_error(&e.to_string(), "generation_error");
@@ -511,7 +513,7 @@ fn adapter_value_for_operation(op: &str, result: Value) -> Value {
     result
 }
 
-struct ChallengeIdParts<'a> {
+struct ChallengeIdParams<'a> {
     secret_key: &'a str,
     realm: &'a str,
     method: &'a str,
@@ -523,24 +525,24 @@ struct ChallengeIdParts<'a> {
 }
 
 fn generate_conformance_challenge_id(
-    parts: ChallengeIdParts<'_>,
+    params: ChallengeIdParams<'_>,
 ) -> Result<String, std::fmt::Error> {
     type HmacSha256 = Hmac<Sha256>;
 
-    let request_json = stable_json(parts.request)?;
+    let request_json = stable_json(params.request)?;
     let request_b64 = base64url_encode(request_json.as_bytes());
     let hmac_input = [
-        parts.realm,
-        parts.method,
-        parts.intent,
+        params.realm,
+        params.method,
+        params.intent,
         &request_b64,
-        parts.expires.unwrap_or(""),
-        parts.digest.unwrap_or(""),
-        parts.opaque.unwrap_or(""),
+        params.expires.unwrap_or(""),
+        params.digest.unwrap_or(""),
+        params.opaque.unwrap_or(""),
     ]
     .join("|");
 
-    let mut mac = HmacSha256::new_from_slice(parts.secret_key.as_bytes())
+    let mut mac = HmacSha256::new_from_slice(params.secret_key.as_bytes())
         .expect("HMAC can take key of any size");
     mac.update(hmac_input.as_bytes());
     Ok(base64url_encode(&mac.finalize().into_bytes()))
