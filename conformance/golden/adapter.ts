@@ -41,6 +41,7 @@ interface ErrorResult {
 		| 'format_error'
 		| 'encoding_error'
 		| 'generation_error'
+		| 'verification_error'
 		| 'unsupported_operation'
 		| 'unknown_error'
 }
@@ -124,6 +125,46 @@ function generateConformanceChallengeId(params: {
 	return createHmac('sha256', params.secretKey).update(payload).digest('base64url')
 }
 
+function verifyStripeExternalIdBinding(input: {
+	request: Record<string, unknown>
+	payload: Record<string, unknown>
+	paymentIntent: { id: string; status: string; replayed?: boolean }
+}): {
+	ok: true
+	receipt: {
+		status: string
+		method: string
+		timestamp: string
+		reference: string
+		externalId?: string
+	}
+} | { ok: false; errorType: 'invalid_challenge' | 'verification_failed' } {
+	const requestExternalId = input.request.externalId
+	const payloadExternalId = input.payload.externalId
+
+	if (typeof input.payload.spt !== 'string' || input.payload.spt.length === 0)
+		return { ok: false, errorType: 'verification_failed' }
+	if (input.paymentIntent.replayed || input.paymentIntent.status !== 'succeeded')
+		return { ok: false, errorType: 'verification_failed' }
+	if (payloadExternalId !== undefined && typeof payloadExternalId !== 'string')
+		return { ok: false, errorType: 'invalid_challenge' }
+	if (requestExternalId !== undefined && typeof requestExternalId !== 'string')
+		return { ok: false, errorType: 'invalid_challenge' }
+	if (requestExternalId !== undefined && payloadExternalId !== requestExternalId)
+		return { ok: false, errorType: 'invalid_challenge' }
+
+	return {
+		ok: true,
+		receipt: {
+			status: 'success',
+			method: 'stripe',
+			timestamp: '2026-01-29T12:00:30Z',
+			reference: input.paymentIntent.id,
+			...(requestExternalId ? { externalId: requestExternalId } : {}),
+		},
+	}
+}
+
 function hasDuplicateChallengeParameter(header: string): boolean {
 	const seen = new Set<string>()
 	for (const match of header.matchAll(/(?:^|,\s*)(\w+)=/g)) {
@@ -191,6 +232,11 @@ function runCommand(command: string, input: string): Result<unknown> {
 				return success(generateConformanceChallengeId(params))
 			}
 
+			case 'verify-stripe-external-id-binding': {
+				const params = JSON.parse(input)
+				return success(verifyStripeExternalIdBinding(params))
+			}
+
 			default:
 				return error(`Unknown command: ${command}`, 'unknown_error')
 		}
@@ -205,6 +251,8 @@ function runCommand(command: string, input: string): Result<unknown> {
 			return error(message, 'encoding_error')
 		} else if (command.startsWith('generate-')) {
 			return error(message, 'generation_error')
+		} else if (command.startsWith('verify-')) {
+			return error(message, 'verification_error')
 		} else {
 			return error(message, 'unknown_error')
 		}
@@ -221,6 +269,7 @@ const OP_TO_COMMAND: Record<string, string> = {
 	'base64url.encode': 'base64url-encode',
 	'base64url.decode': 'base64url-decode',
 	'challenge.id': 'generate-challenge-id',
+	'stripe.external_id_binding': 'verify-stripe-external-id-binding',
 }
 
 function commandInputForRequest(op: string, input: unknown): string {

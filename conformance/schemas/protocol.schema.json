@@ -15,6 +15,7 @@
         "base64url.encode",
         "base64url.decode",
         "challenge.id",
+        "stripe.external_id_binding",
         "http.payment_request"
       ]
     },
@@ -25,6 +26,7 @@
         "format_error",
         "encoding_error",
         "generation_error",
+        "verification_error",
         "http_error",
         "unsupported_operation",
         "unknown_error"
@@ -126,6 +128,47 @@
       "properties": {
         "id": { "type": "string", "minLength": 1 }
       }
+    },
+    "StripeExternalIdBindingInput": {
+      "type": "object",
+      "required": ["request", "payload", "paymentIntent"],
+      "additionalProperties": false,
+      "properties": {
+        "request": { "$ref": "#/$defs/JsonObject" },
+        "payload": { "$ref": "#/$defs/JsonObject" },
+        "paymentIntent": {
+          "type": "object",
+          "required": ["id", "status"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "status": { "type": "string", "minLength": 1 },
+            "replayed": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "StripeExternalIdBindingResult": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["ok", "receipt"],
+          "additionalProperties": false,
+          "properties": {
+            "ok": { "const": true },
+            "receipt": { "$ref": "#/$defs/Receipt" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["ok", "errorType"],
+          "additionalProperties": false,
+          "properties": {
+            "ok": { "const": false },
+            "errorType": { "enum": ["invalid_challenge", "verification_failed"] }
+          }
+        }
+      ]
     },
     "HttpPaymentMode": {
       "type": "string",

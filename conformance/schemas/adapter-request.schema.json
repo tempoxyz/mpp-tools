@@ -57,6 +57,10 @@
       "then": { "properties": { "input": { "$ref": "protocol.schema.json#/$defs/ChallengeIdInput" } } }
     },
     {
+      "if": { "properties": { "op": { "const": "stripe.external_id_binding" } }, "required": ["op"] },
+      "then": { "properties": { "input": { "$ref": "protocol.schema.json#/$defs/StripeExternalIdBindingInput" } } }
+    },
+    {
       "if": { "properties": { "op": { "const": "http.payment_request" } }, "required": ["op"] },
       "then": { "properties": { "input": { "$ref": "protocol.schema.json#/$defs/HttpPaymentRequest" } } }
     }
