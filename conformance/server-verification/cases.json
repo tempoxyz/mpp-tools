@@ -233,6 +233,82 @@
       }
     },
     {
+      "name": "method_mismatch_rejected",
+      "description": "Server verification rejects a credential whose echoed method does not match the route method.",
+      "input": {
+        "realm": "api.example.com",
+        "secretKey": "secret-key",
+        "method": "tempo",
+        "intent": "charge",
+        "request": {
+          "amount": "100",
+          "currency": "0xabc",
+          "recipient": "0xdef"
+        },
+        "expires": "2099-01-01T00:00:00Z",
+        "credential": {
+          "challenge": {
+            "id": "jaQHUf0f6kTVjuPg_oD_gSyOv-2krnql3h3Cpfc14xY",
+            "realm": "api.example.com",
+            "method": "other",
+            "intent": "charge",
+            "request": {
+              "amount": "100",
+              "currency": "0xabc",
+              "recipient": "0xdef"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          },
+          "payload": {
+            "type": "hash",
+            "hash": "0xabc123"
+          }
+        }
+      },
+      "expected": {
+        "ok": false,
+        "errorType": "invalid_challenge"
+      }
+    },
+    {
+      "name": "intent_mismatch_rejected",
+      "description": "Server verification rejects a credential whose echoed intent does not match the route intent.",
+      "input": {
+        "realm": "api.example.com",
+        "secretKey": "secret-key",
+        "method": "tempo",
+        "intent": "charge",
+        "request": {
+          "amount": "100",
+          "currency": "0xabc",
+          "recipient": "0xdef"
+        },
+        "expires": "2099-01-01T00:00:00Z",
+        "credential": {
+          "challenge": {
+            "id": "TfIuxbgpmyB4NtsN5A1RfTHjctirfo2oum8Q8gvca2A",
+            "realm": "api.example.com",
+            "method": "tempo",
+            "intent": "refund",
+            "request": {
+              "amount": "100",
+              "currency": "0xabc",
+              "recipient": "0xdef"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          },
+          "payload": {
+            "type": "hash",
+            "hash": "0xabc123"
+          }
+        }
+      },
+      "expected": {
+        "ok": false,
+        "errorType": "invalid_challenge"
+      }
+    },
+    {
       "name": "intent_verification_error_reported",
       "description": "Server verification reports a method-level verification failure after challenge checks pass.",
       "input": {

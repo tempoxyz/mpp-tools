@@ -338,8 +338,14 @@ func handleServerVerify(raw json.RawMessage) {
 		return
 	}
 
+	credential, err := input.Credential.toCredential()
+	if err != nil {
+		printJSON(adapterResponse{OK: false, Error: &adapterError{Type: "verification_error", Message: err.Error()}})
+		return
+	}
+
 	result, err := server.VerifyOrChallenge(context.Background(), server.VerifyParams{
-		Authorization: input.Credential.toCredential().ToAuthorization(),
+		Authorization: credential.ToAuthorization(),
 		Intent: conformanceIntent{
 			name:         input.Intent,
 			method:       input.Method,
@@ -371,15 +377,22 @@ func handleServerVerify(raw json.RawMessage) {
 	}})
 }
 
-func (c credentialDTO) toCredential() *mpp.Credential {
+func (c credentialDTO) toCredential() (*mpp.Credential, error) {
 	payload := c.Payload
 	if payload == nil {
 		payload = map[string]any{}
 	}
+	source := ""
+	if len(c.Source) > 0 && string(c.Source) != "null" {
+		if err := json.Unmarshal(c.Source, &source); err != nil {
+			return nil, fmt.Errorf("unsupported credential source shape")
+		}
+	}
 	return &mpp.Credential{
 		Challenge: c.Challenge.ToEcho(),
 		Payload:   payload,
-	}
+		Source:    source,
+	}, nil
 }
 
 func serverErrorType(err error) string {
