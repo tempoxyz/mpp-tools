@@ -35,6 +35,52 @@ class VectorRunnerHelperTest(unittest.TestCase):
         self.assertFalse(passed)
         self.assertEqual(error, "duration exceeded: expected <= 5000 ms, got 5000.1 ms")
 
+    def test_compare_adapter_response_checks_error_message_substring(self) -> None:
+        expected = {
+            "ok": False,
+            "error": {
+                "type": "verification_error",
+                "messageContains": "sponsor policy",
+            },
+        }
+        actual = {
+            "ok": False,
+            "error": {
+                "type": "verification_error",
+                "message": "Invalid transaction: gas limit exceeds sponsor policy",
+            },
+        }
+
+        passed, error = self.runner.compare_adapter_response(expected, actual)
+
+        self.assertTrue(passed)
+        self.assertIsNone(error)
+
+    def test_compare_adapter_response_rejects_wrong_error_message(self) -> None:
+        expected = {
+            "ok": False,
+            "error": {
+                "type": "verification_error",
+                "messageContains": "access list",
+            },
+        }
+        actual = {
+            "ok": False,
+            "error": {
+                "type": "verification_error",
+                "message": "Invalid transaction: gas limit exceeds sponsor policy",
+            },
+        }
+
+        passed, error = self.runner.compare_adapter_response(expected, actual)
+
+        self.assertFalse(passed)
+        self.assertEqual(
+            error,
+            "error.message mismatch: expected to contain 'access list', "
+            "got 'Invalid transaction: gas limit exceeds sponsor policy'",
+        )
+
     def test_scenario_wire_expands_repeat_shorthand(self) -> None:
         scenario = {
             "wire": {

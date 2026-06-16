@@ -270,10 +270,20 @@ class VectorRunner:
             return False, f"ok mismatch: expected {expected_ok}, got {actual_ok}"
 
         if expected_ok is False:
-            expected_type = expected.get("error", {}).get("type")
-            actual_type = actual.get("error", {}).get("type")
+            expected_error = expected.get("error", {})
+            actual_error = actual.get("error", {})
+            expected_type = expected_error.get("type")
+            actual_type = actual_error.get("type")
             if expected_type != actual_type:
                 return False, f"error.type mismatch: expected {expected_type}, got {actual_type}"
+            expected_message = expected_error.get("messageContains")
+            if expected_message is not None:
+                actual_message = str(actual_error.get("message", ""))
+                if expected_message not in actual_message:
+                    return False, (
+                        "error.message mismatch: "
+                        f"expected to contain {expected_message!r}, got {actual_message!r}"
+                    )
             return True, None
 
         expected_value = expected.get("value")
