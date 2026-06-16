@@ -1,7 +1,7 @@
 {
   "version": "2.0.0",
   "spec_ref": "MPP Tempo receipt fixture verification",
-  "description": "Server-side Tempo receipt fixture verification must require auto-generated attribution memos to bind to the credential challenge id and realm when no explicit server memo is configured. This staged vector does not exercise signed transaction deserialization.",
+  "description": "Server-side Tempo receipt fixture verification must require auto-generated attribution memos to bind to the credential challenge id and realm when no explicit server memo is configured. This staged vector uses a transaction-hash credential and does not exercise signed transaction deserialization.",
   "commands": {
     "operation": "tempo.receipt.verify"
   },
@@ -29,12 +29,12 @@
             }
           },
           "payload": {
-            "type": "transaction",
-            "signature": "0xabcdef1234567890"
+            "type": "hash",
+            "hash": "0x1111111111111111111111111111111111111111111111111111111111111111"
           }
         },
         "receipt": {
-          "transactionHash": "0xtxhash123",
+          "transactionHash": "0x1111111111111111111111111111111111111111111111111111111111111111",
           "status": "0x1",
           "logs": [
             {
@@ -54,7 +54,7 @@
         "ok": true,
         "value": {
           "status": "success",
-          "reference": "0xtxhash123"
+          "reference": "0x1111111111111111111111111111111111111111111111111111111111111111"
         }
       }
     },
@@ -82,12 +82,12 @@
             }
           },
           "payload": {
-            "type": "transaction",
-            "signature": "0xabcdef1234567890"
+            "type": "hash",
+            "hash": "0x1111111111111111111111111111111111111111111111111111111111111111"
           }
         },
         "receipt": {
-          "transactionHash": "0xtxhash123",
+          "transactionHash": "0x1111111111111111111111111111111111111111111111111111111111111111",
           "status": "0x1",
           "logs": [
             {
@@ -133,12 +133,12 @@
             }
           },
           "payload": {
-            "type": "transaction",
-            "signature": "0xabcdef1234567890"
+            "type": "hash",
+            "hash": "0x1111111111111111111111111111111111111111111111111111111111111111"
           }
         },
         "receipt": {
-          "transactionHash": "0xtxhash123",
+          "transactionHash": "0x1111111111111111111111111111111111111111111111111111111111111111",
           "status": "0x1",
           "logs": [
             {
@@ -185,12 +185,12 @@
             }
           },
           "payload": {
-            "type": "transaction",
-            "signature": "0xabcdef1234567890"
+            "type": "hash",
+            "hash": "0x1111111111111111111111111111111111111111111111111111111111111111"
           }
         },
         "receipt": {
-          "transactionHash": "0xtxhash123",
+          "transactionHash": "0x1111111111111111111111111111111111111111111111111111111111111111",
           "status": "0x1",
           "logs": [
             {
@@ -237,12 +237,12 @@
             }
           },
           "payload": {
-            "type": "transaction",
-            "signature": "0xabcdef1234567890"
+            "type": "hash",
+            "hash": "0x1111111111111111111111111111111111111111111111111111111111111111"
           }
         },
         "receipt": {
-          "transactionHash": "0xtxhash123",
+          "transactionHash": "0x1111111111111111111111111111111111111111111111111111111111111111",
           "status": "0x1",
           "logs": [
             {

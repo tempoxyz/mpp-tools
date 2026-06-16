@@ -88,7 +88,7 @@
       "successRef": "protocol.schema.json#/$defs/TempoReceiptVerificationOutput",
       "errorTypes": ["verification_error"],
       "comparison": "exact",
-      "description": "Verify a Tempo transaction credential against a supplied receipt fixture. This is an optional staged capability until full signed transaction verification vectors are available."
+      "description": "Verify a Tempo credential against a supplied receipt fixture. This is an optional staged capability until full signed transaction verification vectors are available."
     }
   }
 }

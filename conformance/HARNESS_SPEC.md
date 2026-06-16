@@ -174,7 +174,7 @@ Required for vector conformance:
 | `base64url.encode` | `{ "text": string }` | `{ "text": string }` |
 | `base64url.decode` | `{ "text": string }` | `{ "text": string }` |
 | `challenge.id` | challenge id params | `{ "id": string }` |
-| `tempo.receipt.verify` | transaction credential plus receipt fixture | `{ "status": "success", "reference": string }` |
+| `tempo.receipt.verify` | Tempo credential plus receipt fixture | `{ "status": "success", "reference": string }` |
 
 `tempo.receipt.verify` is an optional staged vector capability. Adapters that do
 not advertise it are skipped; passing it demonstrates conformance for supplied

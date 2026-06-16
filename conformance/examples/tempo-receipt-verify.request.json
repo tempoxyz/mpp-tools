@@ -16,12 +16,12 @@
         }
       },
       "payload": {
-        "type": "transaction",
-        "signature": "0xabcdef1234567890"
+        "type": "hash",
+        "hash": "0x1111111111111111111111111111111111111111111111111111111111111111"
       }
     },
     "receipt": {
-      "transactionHash": "0xtxhash123",
+      "transactionHash": "0x1111111111111111111111111111111111111111111111111111111111111111",
       "status": "0x1",
       "logs": [
         {
