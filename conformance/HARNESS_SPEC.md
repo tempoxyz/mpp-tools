@@ -114,6 +114,7 @@ type AdapterResponse =
           | 'format_error'
           | 'encoding_error'
           | 'generation_error'
+          | 'verification_error'
           | 'http_error'
           | 'unsupported_operation'
           | 'unknown_error'
