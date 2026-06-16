@@ -224,7 +224,8 @@ def decode_cosigned_fee_payer(raw_tx)
     feeToken: "0x#{decoded[10].unpack1("H*")}",
     feePayerSignaturePresent: fee_payer_signature.is_a?(Array) &&
       fee_payer_signature.length == 3 &&
-      fee_payer_signature.all? { |part| part.is_a?(String) && !part.empty? },
+      fee_payer_signature.all? { |part| part.is_a?(String) } &&
+      fee_payer_signature[1..].all? { |part| !part.empty? },
     accessListLength: decoded[5].length,
     callCount: decoded[4].length
   }
@@ -237,7 +238,7 @@ def cosign_tempo_fee_payer(input)
   request = Mpp::Methods::Tempo::Schemas::ChargeRequest.from_hash(input.fetch("request"))
   challenge = input["challenge"] ? echo_from_challenge_h(input.fetch("challenge")) : nil
   raw_tx = build_fee_payer_envelope(input)
-  signed_raw = intent.send(
+  signed_raw, = intent.send(
     :cosign_as_fee_payer,
     raw_tx,
     input.fetch("feeToken"),

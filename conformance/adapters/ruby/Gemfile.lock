@@ -1,11 +1,3 @@
-GIT
-  remote: https://github.com/mablr/mpp-rb.git
-  revision: 9ea6166b9fa8bd470e70ceb7abe3dd59e0adb5fb
-  ref: 9ea6166b9fa8bd470e70ceb7abe3dd59e0adb5fb
-  specs:
-    mpp-rb (0.1.2)
-      base64 (~> 0.3)
-
 GEM
   remote: https://rubygems.org/
   specs:
@@ -42,6 +34,8 @@ GEM
     keccak (1.3.3)
     konstructor (1.0.2)
     mini_portile2 (2.8.9)
+    mpp-rb (0.1.3)
+      base64 (~> 0.3)
     openssl (3.3.3)
     pkg-config (1.6.5)
     rake (13.4.2)
@@ -64,7 +58,7 @@ PLATFORMS
 
 DEPENDENCIES
   eth (~> 0.5)
-  mpp-rb!
+  mpp-rb (= 0.1.3)
   rlp (~> 0.7)
   sorbet-runtime (~> 0.6)
 
@@ -86,7 +80,7 @@ CHECKSUMS
   keccak (1.3.3) sha256=970dcb1e78b8c3129ba2baff8a5baa5cebf391136db1f4018e8ccc9130794557
   konstructor (1.0.2) sha256=fd6ac9eb1dadc1e520e06042aa2ef0122d6a070e06cde86db5a54c0c7bfe2e31
   mini_portile2 (2.8.9) sha256=0cd7c7f824e010c072e33f68bc02d85a00aeb6fce05bb4819c03dfd3c140c289
-  mpp-rb (0.1.2)
+  mpp-rb (0.1.3) sha256=7293528c9ab4bb833853968ba2c32636c6e23a1248898ce32d1c77f9f50dfade
   openssl (3.3.3) sha256=d46902138f2987c13122fab826030a11c2bb9b8a16394215cbfc5062c5e2d335
   pkg-config (1.6.5) sha256=33f9f81c5322983d22b439b8b672f27777b406fea23bfec74ff14bbeb42ec733
   rake (13.4.2) sha256=cb825b2bd5f1f8e91ca37bddb4b9aaf345551b4731da62949be002fa89283701

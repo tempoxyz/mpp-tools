@@ -17,7 +17,7 @@
     "build:all": "make install"
   },
   "dependencies": {
-    "mppx": "0.6.29"
+    "mppx": "0.7.0"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
