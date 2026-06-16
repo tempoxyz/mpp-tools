@@ -85,10 +85,11 @@ def ruby_version() -> str:
 
 def java_version() -> str:
     text = (ROOT / "adapters/java/build.gradle").read_text(encoding="utf-8")
-    match = re.search(r"com\.github\.stripe:mpp-java:([^'\"]+)", text)
+    match = re.search(r"com\.(stripe|github\.stripe):mpp-java:([^'\"]+)", text)
     if not match:
         raise RuntimeError("Could not find mpp-java dependency in adapters/java/build.gradle")
-    return f"com.github.stripe:mpp-java@{match.group(1)}"
+    group = f"com.{match.group(1)}:mpp-java"
+    return f"{group}@{match.group(2)}"
 
 
 VERSIONS = {
