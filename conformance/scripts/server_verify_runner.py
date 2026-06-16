@@ -47,11 +47,14 @@ def compute_diff(expected: Any, actual: Any) -> str:
 def selected_adapters(name: str, adapters: dict[str, AdapterConfig]) -> list[str]:
     if name != "all":
         return [name]
-    return [
+    selected = [
         adapter_name
         for adapter_name, adapter in sorted(adapters.items())
         if "server.verify" in adapter.capabilities
     ]
+    if not selected:
+        raise RuntimeError("No adapters declare server.verify")
+    return selected
 
 
 def run_adapter(adapter: AdapterConfig, cases: list[dict[str, Any]]) -> list[RunResult]:
@@ -94,7 +97,13 @@ def main() -> int:
     cases = load_cases()
     results: list[RunResult] = []
 
-    for adapter_name in selected_adapters(args.adapter, adapters):
+    try:
+        adapter_names = selected_adapters(args.adapter, adapters)
+    except Exception as exc:
+        results.append(RunResult(adapter=args.adapter, name="adapter-selection", passed=False, error=str(exc)))
+        adapter_names = []
+
+    for adapter_name in adapter_names:
         adapter = adapters.get(adapter_name)
         if adapter is None:
             results.append(RunResult(adapter=adapter_name, name="adapter-run", passed=False, error="Unknown adapter"))

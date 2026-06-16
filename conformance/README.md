@@ -105,9 +105,14 @@ Each adapter is a CLI binary that reads from stdin and writes JSON to stdout:
 | `base64url-encode` | Plain string | Base64url encoded |
 | `base64url-decode` | Base64url string | Plain string |
 | `generate-challenge-id` | JSON params | Challenge ID string |
-| `server.verify` | Server route params plus credential object | Normalized verification result |
 
 All commands return `{"success": true, "result": <value>}` on success or `{"success": false, "error": "...", "error_type": "..."}` on failure.
+
+Schema-backed adapter operations use the JSON ABI from `HARNESS_SPEC.md`: requests are
+`{"schema": 1, "op": "<operation>", "input": <value>}` and responses are
+`{"ok": true, "value": <value>}` or `{"ok": false, "error": <value>}`.
+`server.verify` is exposed only through that JSON ABI and accepts server route
+params plus a credential object, returning a normalized verification result.
 
 Adapter locations:
 

@@ -205,12 +205,39 @@ jobs:
             conformance/flow-${{ matrix.adapter }}.log
           if-no-files-found: warn
 
+  server_verify:
+    name: server verification conformance
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.run_conformance == 'true'
+    defaults:
+      run:
+        working-directory: conformance
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup conformance adapter
+        uses: ./.github/actions/setup-conformance
+        with:
+          adapter: go
+
+      - name: Install runner dependencies
+        run: python3 -m pip install -q -r requirements.txt
+
+      - name: Install Go adapter dependencies
+        run: make install-go
+
+      - name: Run server verification conformance
+        run: python3 scripts/server_verify_runner.py --adapter go
+
   conformance:
     runs-on: ubuntu-latest
     needs:
       - changes
       - vectors
       - flow
+      - server_verify
     if: always()
     outputs:
       status: ${{ steps.overall.outputs.status }}
@@ -267,7 +294,7 @@ jobs:
         run: |
           if [ "${{ needs.changes.outputs.run_conformance }}" != "true" ]; then
             echo "status=pass" >> "$GITHUB_OUTPUT"
-          elif [ "${{ needs.vectors.result }}" = "success" ] && [ "${{ needs.flow.result }}" = "success" ] && [ "${{ steps.vectors.outputs.status }}" = "pass" ] && [ "${{ steps.flows.outputs.status }}" = "pass" ]; then
+          elif [ "${{ needs.vectors.result }}" = "success" ] && [ "${{ needs.flow.result }}" = "success" ] && [ "${{ needs.server_verify.result }}" = "success" ] && [ "${{ steps.vectors.outputs.status }}" = "pass" ] && [ "${{ steps.flows.outputs.status }}" = "pass" ]; then
             echo "status=pass" >> "$GITHUB_OUTPUT"
           else
             echo "status=fail" >> "$GITHUB_OUTPUT"
@@ -282,6 +309,7 @@ jobs:
             echo "- Adapters: \`${{ needs.changes.outputs.adapters_csv || 'none' }}\`"
             echo "- Vector results: ${{ steps.vectors.outputs.passed }} passed, ${{ steps.vectors.outputs.failed }} failed, ${{ steps.vectors.outputs.total }} total"
             echo "- Flow results: \`${{ steps.flows.outputs.status }}\`"
+            echo "- Server verification: \`${{ needs.server_verify.result }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fail workflow if tests failed
