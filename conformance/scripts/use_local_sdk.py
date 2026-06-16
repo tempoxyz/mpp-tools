@@ -96,8 +96,58 @@ def configure_typescript(conformance_dir: Path, sdk_path: Path) -> None:
     write_text(package_json, json.dumps(data, indent=2) + "\n")
 
 
+def configure_java(conformance_dir: Path, sdk_path: Path) -> None:
+    """Point the Java adapter at a pre-built local SDK jar.
+
+    Unlike other adapters that can reference a source checkout directly via
+    their package manager (e.g. `gem ... path:`, `go mod edit -replace`),
+    Gradle composite builds fail here due to version incompatibility between
+    the adapter's Gradle (9.x) and the SDK's plugins. Instead we:
+      1. Require the caller to build the SDK jar first (./gradlew jar)
+      2. Replace the Maven Central dependency with a files() reference to that jar
+      3. Remove the Gradle lockfile which would reject the missing coordinate
+    """
+    adapter_dir = conformance_dir / "adapters" / "java"
+    build_gradle = adapter_dir / "build.gradle"
+    libs_dir = sdk_path / "build" / "libs"
+
+    if not libs_dir.exists():
+        raise RuntimeError(
+            f"SDK build/libs directory does not exist: {libs_dir}\n"
+            f"Build the SDK jar first: cd {sdk_path} && ./gradlew jar"
+        )
+
+    jars = [
+        f
+        for f in libs_dir.iterdir()
+        if f.suffix == ".jar"
+        and "-sources" not in f.name
+        and "-javadoc" not in f.name
+    ]
+    if not jars:
+        raise RuntimeError(
+            f"No SDK jar found in {libs_dir}\n"
+            f"Build the SDK jar first: cd {sdk_path} && ./gradlew jar"
+        )
+
+    sdk_jar = jars[0]
+    replace_one(
+        build_gradle,
+        r"^\s*implementation\s+['\"]com\.(stripe|github\.stripe):mpp-java:.*['\"]",
+        f"    implementation files('{sdk_jar}')",
+        "Java mpp-java dependency",
+    )
+
+    # The lockfile pins the Maven Central coordinate; remove it so Gradle
+    # doesn't reject the build when that coordinate is replaced with files().
+    lockfile = adapter_dir / "gradle.lockfile"
+    if lockfile.exists():
+        lockfile.unlink()
+
+
 CONFIGURERS = {
     "go": configure_go,
+    "java": configure_java,
     "python": configure_python,
     "ruby": configure_ruby,
     "rust": configure_rust,
