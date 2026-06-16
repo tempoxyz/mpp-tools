@@ -397,7 +397,24 @@
         "type": "transaction",
         "signature": "0xsameorigin"
       },
-      "expected_signature": "0xsameorigin"
+      "expected_signature": "0xsameorigin",
+      "expect_payment_receipt": true
+    },
+    {
+      "name": "plain_payment_request",
+      "path": "/charge/plain-payment-request",
+      "client_flow": true,
+      "mode": "plain",
+      "request": {
+        "amount": "2041",
+        "currency": "USD",
+        "recipient": "merchant",
+        "expires": "2099-01-01T00:00:00Z"
+      },
+      "payload": {
+        "type": "transaction",
+        "signature": "0xplain"
+      }
     },
     {
       "name": "cross_origin_redirect_before_402_rejected",

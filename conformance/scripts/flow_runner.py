@@ -229,6 +229,14 @@ def parse_receipt(client: AdapterClient, header: str | None) -> Any:
     return ordered
 
 
+def header_value(headers: dict[str, Any], name: str) -> Any:
+    lowered = name.lower()
+    for key, value in headers.items():
+        if str(key).lower() == lowered:
+            return value
+    return None
+
+
 def parse_json_body(body_bytes: bytes) -> Any:
     try:
         return json.loads(body_bytes.decode("utf-8"))
@@ -337,6 +345,12 @@ def run_client_http_flow_case(
         "name": name,
         "outcome": {"ok": 200 <= status < 300, "status": status},
     }
+    headers = value.get("headers")
+    if flow_case.get("expect_payment_receipt"):
+        result["payment_receipt_observed"] = bool(
+            isinstance(headers, dict) and header_value(headers, "payment-receipt")
+        )
+        result["outcome"]["ok"] = bool(result["outcome"]["ok"] and result["payment_receipt_observed"])
     if isinstance(body, dict):
         for key in ["authorization_observed", "ok"]:
             if key in body:
@@ -349,7 +363,12 @@ def run_client_http_flow_case(
             result["outcome"]["ok"] = False
             result.setdefault("authorization_observed", False)
             return result
-        if status == 402 and not result.get("authorization_observed"):
+        explicit_error_expected = bool(
+            flow_case.get("expect_error_type")
+            or flow_case.get("expect_error_message_contains")
+            or expected_response_name
+        )
+        if status == 402 and not result.get("authorization_observed") and not explicit_error_expected:
             expected_result = {
                 "name": name,
                 "outcome": {"ok": True, "status": 0},

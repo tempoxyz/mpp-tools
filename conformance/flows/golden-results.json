@@ -653,7 +653,15 @@
         "status": 200
       },
       "ok": true,
-      "response_name": "same_origin_payment_request"
+      "response_name": "same_origin_payment_request",
+      "payment_receipt_observed": true
+    },
+    {
+      "name": "plain_payment_request",
+      "outcome": {
+        "ok": false,
+        "status": 402
+      }
     },
     {
       "name": "cross_origin_redirect_before_402_rejected",

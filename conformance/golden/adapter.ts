@@ -295,6 +295,21 @@ let currentHttpPayment: { payment: HttpPaymentRequest['payment']; source?: strin
 
 async function runHttpPaymentRequest(input: HttpPaymentRequest): Promise<AdapterResponse> {
 	try {
+		if (input.mode === 'plain') {
+			const response = await fetch(input.url, {
+				method: input.method,
+				headers: input.headers,
+				body: input.body,
+			})
+			return adapterSuccess({
+				status: response.status,
+				headers: headersToObject(response.headers),
+				body: await response.text(),
+			})
+		}
+		if (input.mode !== 'payment' && input.mode !== 'invalid_payload') {
+			return adapterError(`Unsupported http.payment_request mode: ${input.mode}`, 'unsupported_mode')
+		}
 		currentHttpPayment = {
 			payment: input.payment,
 			source: typeof input.payment.source === 'string' ? input.payment.source : undefined,
