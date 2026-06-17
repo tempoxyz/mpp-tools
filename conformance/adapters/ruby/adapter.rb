@@ -290,7 +290,7 @@ def verify_stripe_external_id_binding(input)
   require "mpp/methods/stripe"
   require "mpp/server"
 
-  secret_key = "conformance-stripe-secret"
+  secret_key = "conformance-stripe-secret-key-32"
   realm = "conformance.local"
   expires = "2099-01-29T12:05:30Z"
   challenge = Mpp::Challenge.create(
