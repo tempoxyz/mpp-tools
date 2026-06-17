@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "value": {
+    "ok": true,
+    "receipt": {
+      "status": "success",
+      "timestamp": "2026-01-29T12:00:00Z",
+      "reference": "conformance-receipt",
+      "method": "tempo"
+    }
+  }
+}

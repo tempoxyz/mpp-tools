@@ -1,7 +1,7 @@
 # Conformance Testing Makefile
 # Cross-SDK protocol compatibility testing for MPP implementations
 
-.PHONY: all update-locks update-java install install-runner install-java use-local-sdk test test-all test-sdk test-typescript test-rust test-python test-go test-ruby test-java test-json flow flow-sdk flow-typescript flow-rust flow-python flow-go flow-ruby flow-java update-flow-golden clean help
+.PHONY: all update-locks update-java install install-runner install-java use-local-sdk test test-all test-sdk test-typescript test-rust test-python test-go test-ruby test-java test-json flow flow-sdk flow-typescript flow-rust flow-python flow-go flow-ruby flow-java server-verify server-verify-sdk server-verify-go update-flow-golden clean help
 
 RUBY ?= ruby
 BUNDLE ?= bundle
@@ -13,6 +13,7 @@ all: install
 	@status=0; \
 	$(MAKE) test || status=$$?; \
 	$(MAKE) flow || status=$$?; \
+	$(MAKE) server-verify || status=$$?; \
 	exit $$status
 
 #------------------------------------------------------------------------------
@@ -98,6 +99,19 @@ flow-sdk:
 	@test -n "$(ADAPTER)" || (echo "ADAPTER is required, e.g. ADAPTER=rust" >&2; exit 2)
 	@echo "→ Running $(ADAPTER) flow conformance tests..."
 	python3 scripts/flow_runner.py --adapter "$(ADAPTER)"
+
+server-verify:
+	@echo "→ Running server verification conformance tests..."
+	python3 scripts/server_verify_runner.py
+
+server-verify-sdk:
+	@test -n "$(ADAPTER)" || (echo "ADAPTER is required, e.g. ADAPTER=go" >&2; exit 2)
+	@echo "→ Running $(ADAPTER) server verification conformance tests..."
+	python3 scripts/server_verify_runner.py --adapter "$(ADAPTER)"
+
+server-verify-go:
+	@echo "→ Running Go server verification conformance tests..."
+	python3 scripts/server_verify_runner.py --adapter go
 
 flow-typescript:
 	@echo "→ Running TypeScript flow conformance tests..."
@@ -212,6 +226,8 @@ help:
 	@echo "  test-sdk         Run vector tests for ADAPTER"
 	@echo "  flow             Run flow conformance tests"
 	@echo "  flow-sdk         Run flow tests for ADAPTER"
+	@echo "  server-verify    Run server verification conformance tests"
+	@echo "  server-verify-sdk  Run server verification tests for ADAPTER"
 	@echo "  update-flow-golden  Regenerate flow golden results"
 	@echo "  test-typescript  Test TypeScript adapter only"
 	@echo "  test-rust        Test Rust adapter only"

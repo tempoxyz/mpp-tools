@@ -16,6 +16,7 @@ Or step by step:
 make install      # install the pinned TS/Rust/Python/Go/Ruby/Java releases
 make test         # run SDK adapters against all vectors
 make flow         # run the end-to-end flow suite against golden results
+make server-verify # run SDK server verification ABI tests
 ```
 
 ## How It Works
@@ -57,6 +58,8 @@ Each vector file contains **scenarios** — individual test cases with a name, d
 }
 ```
 
+Scenarios may optionally include `adapters` to restrict an edge case to specific SDK adapters, and `maxDurationMs` or `maxDurationMsByAdapter` to assert bounded execution for parser stress cases. Long stress inputs can use `wire` as `{ "prefix": "...", "repeat": "...", "count": 123, "suffix": "..." }` to keep fixtures reviewable.
+
 ### Test Types
 
 | Test | What It Checks |
@@ -78,6 +81,15 @@ The Python flow runner owns the HTTP state machine. It calls each adapter's exis
 
 Flow assertions compare adapter results against `flows/golden-results.json`, generated with the pinned TypeScript `mppx` package. Regenerate it with `make update-flow-golden` when the flow fixtures intentionally change.
 
+## Server Verification Tests
+
+Server verification cases live in `server-verification/`. These call the `server.verify` adapter operation directly so conformance can cover SDK server-side credential verification paths that are not observable through the client flow runner.
+
+```bash
+make server-verify
+make server-verify-go
+```
+
 ## Adapters
 
 Each adapter is a CLI binary that reads from stdin and writes JSON to stdout:
@@ -95,6 +107,12 @@ Each adapter is a CLI binary that reads from stdin and writes JSON to stdout:
 | `generate-challenge-id` | JSON params | Challenge ID string |
 
 All commands return `{"success": true, "result": <value>}` on success or `{"success": false, "error": "...", "error_type": "..."}` on failure.
+
+Schema-backed adapter operations use the JSON ABI from `HARNESS_SPEC.md`: requests are
+`{"schema": 1, "op": "<operation>", "input": <value>}` and responses are
+`{"ok": true, "value": <value>}` or `{"ok": false, "error": <value>}`.
+`server.verify` is exposed only through that JSON ABI and accepts server route
+params plus a credential object, returning a normalized verification result.
 
 Adapter locations:
 
@@ -146,7 +164,14 @@ python3 scripts/vector_runner.py --verbose
 
 # JSON output (for CI)
 python3 scripts/vector_runner.py --output json
+
+# Flow JSON output
+python3 scripts/flow_runner.py --output json
 ```
+
+JSON output includes a `checks` array. Each check has a stable `id`, `name`,
+`description`, `status`, `timestamp`, `specReferences`, `details`, and
+`errorMessage`.
 
 ## Gating SDK Repositories
 

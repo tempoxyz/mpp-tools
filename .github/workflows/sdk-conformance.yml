@@ -131,6 +131,12 @@ jobs:
         env:
           ADAPTER: ${{ steps.resolve.outputs.adapter }}
 
+      - name: Run server verification conformance
+        if: steps.resolve.outputs.adapter == 'go'
+        run: python3 scripts/server_verify_runner.py --adapter "$ADAPTER"
+        env:
+          ADAPTER: ${{ steps.resolve.outputs.adapter }}
+
       - name: Write summary
         if: always()
         run: |
@@ -140,6 +146,7 @@ jobs:
             echo "- Adapter: \`$ADAPTER\`"
             echo "- SDK checkout: \`$SDK_PATH\`"
             echo "- Flow tests: \`${{ inputs.run-flows }}\`"
+            echo "- Server verification: \`${{ steps.resolve.outputs.adapter == 'go' }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
         env:
           ADAPTER: ${{ steps.resolve.outputs.adapter }}

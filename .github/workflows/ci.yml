@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  script-tests:
+    name: Python script tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: conformance
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: conformance/requirements.txt
+
+      - name: Install runner dependencies
+        run: python3 -m pip install -q -r requirements.txt
+
+      - name: Run script tests
+        run: python3 -m unittest discover -s scripts -p "test_*.py"

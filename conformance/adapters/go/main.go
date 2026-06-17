@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/tempoxyz/mpp-go/pkg/mpp"
+	"github.com/tempoxyz/mpp-go/pkg/server"
 )
 
 type commandResponse struct {
@@ -38,6 +40,45 @@ type adapterResponse struct {
 type adapterError struct {
 	Type    string `json:"type"`
 	Message string `json:"message"`
+}
+
+type serverVerifyInput struct {
+	Realm             string         `json:"realm"`
+	SecretKey         string         `json:"secretKey"`
+	Method            string         `json:"method"`
+	Intent            string         `json:"intent"`
+	Request           map[string]any `json:"request"`
+	Expires           string         `json:"expires,omitempty"`
+	VerificationError string         `json:"verificationError,omitempty"`
+	Credential        credentialDTO  `json:"credential"`
+}
+
+type credentialDTO struct {
+	Challenge mpp.Challenge   `json:"challenge"`
+	Payload   map[string]any  `json:"payload"`
+	Source    json.RawMessage `json:"source,omitempty"`
+}
+
+type conformanceIntent struct {
+	name         string
+	method       string
+	errorMessage string
+}
+
+func (i conformanceIntent) Name() string {
+	return i.name
+}
+
+func (i conformanceIntent) Verify(_ context.Context, _ *mpp.Credential, _ map[string]any) (*mpp.Receipt, error) {
+	if i.errorMessage != "" {
+		return nil, fmt.Errorf("%s", i.errorMessage)
+	}
+	return &mpp.Receipt{
+		Status:    "success",
+		Timestamp: time.Date(2026, 1, 29, 12, 0, 0, 0, time.UTC),
+		Reference: "conformance-receipt",
+		Method:    i.method,
+	}, nil
 }
 
 func main() {
@@ -205,6 +246,11 @@ func handleAdapterRequest() {
 		return
 	}
 
+	if request.Op == "server.verify" {
+		handleServerVerify(request.Input)
+		return
+	}
+
 	command, ok := legacyCommandForOperation(request.Op)
 	if !ok {
 		printJSON(adapterResponse{OK: false, Error: &adapterError{Type: "unsupported_operation", Message: fmt.Sprintf("Unknown operation: %s", request.Op)}})
@@ -288,6 +334,89 @@ func runLegacyCommand(command string, input string, env map[string]string) comma
 		return commandResponse{Success: false, Error: err.Error(), ErrorType: "unknown_error"}
 	}
 	return result
+}
+
+func handleServerVerify(raw json.RawMessage) {
+	var input serverVerifyInput
+	if err := json.Unmarshal(raw, &input); err != nil {
+		printJSON(adapterResponse{OK: false, Error: &adapterError{Type: "verification_error", Message: err.Error()}})
+		return
+	}
+
+	credential, err := input.Credential.toCredential()
+	if err != nil {
+		printJSON(adapterResponse{OK: false, Error: &adapterError{Type: "verification_error", Message: err.Error()}})
+		return
+	}
+
+	result, err := server.VerifyOrChallenge(context.Background(), server.VerifyParams{
+		Authorization: credential.ToAuthorization(),
+		Intent: conformanceIntent{
+			name:         input.Intent,
+			method:       input.Method,
+			errorMessage: input.VerificationError,
+		},
+		Request:   input.Request,
+		Realm:     input.Realm,
+		SecretKey: input.SecretKey,
+		Method:    input.Method,
+		Expires:   input.Expires,
+	})
+	if err != nil {
+		printJSON(adapterResponse{OK: true, Value: map[string]any{
+			"ok":        false,
+			"errorType": serverErrorType(err),
+		}})
+		return
+	}
+	if result == nil || result.Receipt == nil {
+		printJSON(adapterResponse{OK: true, Value: map[string]any{
+			"ok":        false,
+			"errorType": "unknown_error",
+		}})
+		return
+	}
+	printJSON(adapterResponse{OK: true, Value: map[string]any{
+		"ok":      true,
+		"receipt": receiptToMap(result.Receipt),
+	}})
+}
+
+func (c credentialDTO) toCredential() (*mpp.Credential, error) {
+	payload := c.Payload
+	if payload == nil {
+		payload = map[string]any{}
+	}
+	source := ""
+	if len(c.Source) > 0 && string(c.Source) != "null" {
+		if err := json.Unmarshal(c.Source, &source); err != nil {
+			return nil, fmt.Errorf("unsupported credential source shape")
+		}
+	}
+	return &mpp.Credential{
+		Challenge: c.Challenge.ToEcho(),
+		Payload:   payload,
+		Source:    source,
+	}, nil
+}
+
+func serverErrorType(err error) string {
+	paymentErr, ok := err.(*mpp.PaymentError)
+	if !ok {
+		return "unknown_error"
+	}
+	switch paymentErr.Type {
+	case mpp.ErrorTypeMalformedCredential:
+		return "malformed_credential"
+	case mpp.ErrorTypeInvalidChallenge:
+		return "invalid_challenge"
+	case mpp.ErrorTypePaymentExpired:
+		return "payment_expired"
+	case mpp.ErrorTypeVerificationFailed:
+		return "verification_failed"
+	default:
+		return "unknown_error"
+	}
 }
 
 func printAdapterFromLegacy(op string, result commandResponse) {

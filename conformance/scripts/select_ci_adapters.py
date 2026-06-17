@@ -44,6 +44,7 @@ FULL_PATTERNS = [
     "conformance/requirements.txt",
     "conformance/schemas/**",
     "conformance/scripts/**",
+    "conformance/server-verification/**",
     "conformance/tsconfig.json",
     "conformance/vectors/**",
 ]

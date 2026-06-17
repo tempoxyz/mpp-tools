@@ -17,6 +17,7 @@ from typing import Any
 
 from deepdiff import DeepDiff
 
+from conformance_checks import make_check
 from harness import AdapterClient, AdapterConfig, build_adapter, discover_adapters
 
 
@@ -60,12 +61,32 @@ class RunResult:
     passed: bool
     error: str | None = None
 
+    def to_check(self) -> dict[str, Any]:
+        return make_check(
+            id_parts=["flow", self.name, self.adapter],
+            name=f"{self.adapter} flow {self.name}",
+            description=f"End-to-end 402 payment flow conformance for {self.name}",
+            passed=self.passed,
+            spec_ref="draft-ietf-httpauth-payment",
+            details={
+                "adapter": self.adapter,
+                "flow": self.name,
+            },
+            error=self.error,
+        )
 
-def start_server(cmd: list[str], env: dict[str, str], verbose: bool) -> subprocess.Popen[str]:
+
+def start_server(
+    cmd: list[str],
+    env: dict[str, str],
+    verbose: bool,
+    output_format: str,
+) -> subprocess.Popen[str]:
+    output = sys.stderr if output_format == "json" else None
     return subprocess.Popen(
         cmd,
-        stdout=None if verbose else subprocess.DEVNULL,
-        stderr=None if verbose else subprocess.DEVNULL,
+        stdout=output if verbose else subprocess.DEVNULL,
+        stderr=output if verbose else subprocess.DEVNULL,
         text=True,
         cwd=CONFORMANCE_DIR,
         env=env,
@@ -192,6 +213,13 @@ def flow_error(name: str, status: int, error_type: str) -> dict[str, Any]:
     }
 
 
+def skipped_flow(name: str, capability: str) -> dict[str, Any]:
+    return {
+        "name": name,
+        "outcome": {"ok": True, "status": 0, "skipped": True, "requires": capability},
+    }
+
+
 def challenge_result(challenge: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": challenge.get("id"),
@@ -222,11 +250,157 @@ def parse_receipt(client: AdapterClient, header: str | None) -> Any:
     return ordered
 
 
+def header_value(headers: dict[str, Any], name: str) -> Any:
+    lowered = name.lower()
+    for key, value in headers.items():
+        if str(key).lower() == lowered:
+            return value
+    return None
+
+
 def parse_json_body(body_bytes: bytes) -> Any:
     try:
         return json.loads(body_bytes.decode("utf-8"))
     except Exception:
         return None
+
+
+def normalize_http_headers(headers: dict[str, Any]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    for key, value in headers.items():
+        if value is None:
+            continue
+        normalized[str(key)] = str(value)
+    return normalized
+
+
+def run_client_http_flow_case(
+    client: AdapterClient,
+    base_url: str,
+    flow_case: dict[str, Any],
+    verbose: bool,
+) -> dict[str, Any]:
+    name = str(flow_case.get("name"))
+    capability = "http.payment_request"
+    if capability not in client.adapter.capabilities:
+        return skipped_flow(name, capability)
+
+    url = flow_case_url(base_url, flow_case)
+    if verbose:
+        print(f"[{client.adapter.name}] {name}: client request {url}", file=sys.stderr)
+
+    response = client.call(
+        capability,
+        {
+            "url": url,
+            "method": flow_case.get("http_method", "GET"),
+            "headers": normalize_http_headers(flow_case.get("headers", {})),
+            "body": flow_case.get("body"),
+            "payment": {
+                "payload": flow_case.get("payload") or {},
+                "source": flow_case.get("source"),
+            },
+            "mode": flow_case.get("mode", "payment"),
+        },
+        context={"caseName": name, "timeoutMs": 10000},
+        timeout=15,
+    )
+    if not response.get("ok"):
+        if flow_case.get("expect_no_authorization"):
+            expected_error = flow_case.get("expect_error_type")
+            actual_error = normalize_error_type(response.get("error", {}).get("type"))
+            actual_message = str(response.get("error", {}).get("message", ""))
+            expected_message = flow_case.get("expect_error_message_contains")
+            expected_response_name = flow_case.get("expect_response_name")
+            if expected_error and actual_error != expected_error:
+                return {
+                    "name": name,
+                    "outcome": {
+                        "ok": False,
+                        "status": 0,
+                        "error_type": actual_error,
+                    },
+                    "authorization_observed": False,
+                }
+            if expected_message and str(expected_message) not in actual_message:
+                return {
+                    "name": name,
+                    "outcome": {
+                        "ok": False,
+                        "status": 0,
+                        "error_type": "unexpected_error_message",
+                    },
+                    "authorization_observed": False,
+                }
+            if expected_response_name:
+                return {
+                    "name": name,
+                    "outcome": {
+                        "ok": False,
+                        "status": 0,
+                        "error_type": "missing_expected_response",
+                    },
+                    "authorization_observed": False,
+                }
+            return {
+                "name": name,
+                "outcome": {"ok": True, "status": 0},
+                "authorization_observed": False,
+            }
+        return {
+            "name": name,
+            "outcome": {
+                "ok": False,
+                "status": 0,
+                "error_type": normalize_error_type(response.get("error", {}).get("type")),
+            },
+        }
+
+    value = response.get("value")
+    if not isinstance(value, dict):
+        return flow_error(name, 0, "invalid_http_response")
+
+    status = int(value.get("status", 0))
+    body = parse_json_body(str(value.get("body", "")).encode("utf-8"))
+    result = {
+        "name": name,
+        "outcome": {"ok": 200 <= status < 300, "status": status},
+    }
+    headers = value.get("headers")
+    if flow_case.get("expect_payment_receipt"):
+        result["payment_receipt_observed"] = bool(
+            isinstance(headers, dict) and header_value(headers, "payment-receipt")
+        )
+        result["outcome"]["ok"] = bool(result["outcome"]["ok"] and result["payment_receipt_observed"])
+    if isinstance(body, dict):
+        for key in ["authorization_observed", "ok"]:
+            if key in body:
+                result[key] = body[key]
+        if "name" in body:
+            result["response_name"] = body["name"]
+    if flow_case.get("expect_no_authorization"):
+        expected_response_name = flow_case.get("expect_response_name")
+        if expected_response_name and result.get("response_name") != expected_response_name:
+            result["outcome"]["ok"] = False
+            result.setdefault("authorization_observed", False)
+            return result
+        explicit_error_expected = bool(
+            flow_case.get("expect_error_type")
+            or flow_case.get("expect_error_message_contains")
+            or expected_response_name
+        )
+        if status == 402 and not result.get("authorization_observed") and not explicit_error_expected:
+            expected_result = {
+                "name": name,
+                "outcome": {"ok": True, "status": 0},
+                "authorization_observed": False,
+            }
+            if expected_response_name:
+                expected_result["response_name"] = expected_response_name
+            return expected_result
+        result["outcome"]["ok"] = False
+        result.setdefault("authorization_observed", False)
+    return result
 
 
 def run_discovery_flow_case(base_url: str, flow_case: dict[str, Any]) -> dict[str, Any]:
@@ -302,6 +476,8 @@ def run_flow_case(
         return run_discovery_flow_case(base_url, flow_case)
     if flow_case.get("json_rpc"):
         return run_json_rpc_flow_case(base_url, flow_case)
+    if flow_case.get("client_flow"):
+        return run_client_http_flow_case(client, base_url, flow_case, verbose)
     if verbose:
         print(f"[{client.adapter.name}] {name}: initial request {url}", file=sys.stderr)
 
@@ -341,6 +517,8 @@ def run_flow_case(
         challenge["request"] = {**request, "amount": "1"}
     if flow_case.get("invalid_challenge_id"):
         challenge["id"] = "invalid-challenge-id"
+    if flow_case.get("omit_challenge_expires"):
+        challenge.pop("expires", None)
 
     payload = flow_case.get("payload")
     credential = {"challenge": challenge, "payload": payload if payload is not None else {}}
@@ -442,7 +620,11 @@ def run_adapter_flows(adapter: AdapterConfig, base_url: str, verbose: bool) -> l
     client = AdapterClient(adapter)
     flow_cases = load_flow_cases()
     cases_by_path = {str(flow_case.get("path", "/")): flow_case for flow_case in flow_cases}
-    return [run_flow_case(client, base_url, flow_case, cases_by_path, verbose) for flow_case in flow_cases]
+    return [
+        run_flow_case(client, base_url, flow_case, cases_by_path, verbose)
+        for flow_case in flow_cases
+        if not flow_case.get("server_only")
+    ]
 
 
 def update_golden_results(adapters: dict[str, AdapterConfig], base_url: str, verbose: bool) -> list[dict[str, Any]]:
@@ -469,6 +651,10 @@ def compare_results(
             results.append(RunResult(adapter=adapter, name=str(name), passed=False, error="missing golden case"))
             continue
         golden = expected_map[name]
+        if entry.get("outcome", {}).get("skipped") and not golden.get("outcome", {}).get("skipped"):
+            results.append(RunResult(adapter=adapter, name=str(name), passed=True))
+            unmatched.discard(name)
+            continue
         diff = compute_diff(normalize_result(golden), normalize_result(entry))
         results.append(RunResult(adapter=adapter, name=str(name), passed=diff == "", error=diff or None))
         unmatched.discard(name)
@@ -483,12 +669,48 @@ def selected_adapters(name: str, adapters: dict[str, AdapterConfig]) -> list[str
     return [name]
 
 
+def log(message: str = "", output_format: str = "text", **kwargs: Any) -> None:
+    print(message, file=sys.stderr if output_format == "json" else sys.stdout, **kwargs)
+
+
+def output_json(results: list[RunResult], passed: int, failed: int, total: int) -> None:
+    errors = [
+        {
+            "adapter": result.adapter,
+            "flow": result.name,
+            "error": result.error,
+        }
+        for result in results
+        if not result.passed
+    ]
+    print(
+        json.dumps(
+            {
+                "status": "pass" if failed == 0 else "fail",
+                "num_checks": total,
+                "passed": passed,
+                "failed": failed,
+                "checks": [result.to_check() for result in results],
+                "errors": errors,
+            },
+            indent=2,
+        )
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run flow conformance tests")
     parser.add_argument("--adapter", default="all")
     parser.add_argument("--port", type=int, default=43999)
     parser.add_argument("--update-golden", action="store_true", help="Regenerate flow golden results only")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show adapter and server subprocess output")
+    parser.add_argument(
+        "--output",
+        "-o",
+        choices=["text", "json"],
+        default="text",
+        help="Output format: text (default) or json",
+    )
     args = parser.parse_args()
 
     adapters = discover_adapters()
@@ -497,17 +719,22 @@ def main() -> int:
     env["MPP_FLOW_PORT"] = str(args.port)
     env["MPP_FLOW_CASES"] = str(FLOW_CASES)
 
-    server = start_server(["npx", "tsx", str(FLOW_DIR / "compliance-server.ts")], env, args.verbose)
+    server = start_server(
+        ["npx", "tsx", str(FLOW_DIR / "compliance-server.ts")],
+        env,
+        args.verbose,
+        args.output,
+    )
     try:
-        print("Waiting for flow server...")
+        log("Waiting for flow server...", args.output)
         wait_for_server(base_url)
         if args.update_golden:
-            print("Updating TypeScript flow golden...")
+            log("Updating TypeScript flow golden...", args.output)
             update_golden_results(adapters, base_url, args.verbose)
-            print(f"Updated {FLOW_RESULTS}")
+            log(f"Updated {FLOW_RESULTS}", args.output)
             return 0
 
-        print("Loading flow golden...")
+        log("Loading flow golden...", args.output)
         golden = load_golden_results()
 
         results: list[RunResult] = []
@@ -516,19 +743,23 @@ def main() -> int:
             if adapter is None:
                 record_adapter_failure(results, adapter_name, RuntimeError(f"Unknown adapter: {adapter_name}"))
                 continue
-            print(f"Running {adapter_name} flow...", end="", flush=True)
+            log(f"Running {adapter_name} flow...", args.output, end="", flush=True)
             try:
                 adapter_results = compare_results(golden, run_adapter_flows(adapter, base_url, args.verbose), adapter_name)
                 results.extend(adapter_results)
                 failed = sum(1 for result in adapter_results if not result.passed)
-                print(" ok" if failed == 0 else " failed")
+                log(" ok" if failed == 0 else " failed", args.output)
             except Exception as exc:
-                print(" failed")
+                log(" failed", args.output)
                 record_adapter_failure(results, adapter_name, exc)
 
         passed = sum(1 for r in results if r.passed)
         failed = sum(1 for r in results if not r.passed)
         total = len(results)
+
+        if args.output == "json":
+            output_json(results, passed, failed, total)
+            return 0 if failed == 0 else 1
 
         print("")
         print("-" * 60)

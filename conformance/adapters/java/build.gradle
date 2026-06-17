@@ -17,13 +17,10 @@ tasks.withType(JavaCompile).configureEach {
 
 repositories {
     mavenCentral()
-    maven {
-        url = uri('https://jitpack.io')
-    }
 }
 
 dependencies {
-    implementation 'com.github.stripe:mpp-java:fdc37fd4b0fdbb57830d40edf61c12c4e09b4ae8'
+    implementation 'com.stripe:mpp-java:0.1.0'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.21.4'
 }
 

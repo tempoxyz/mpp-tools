@@ -66,7 +66,9 @@ against `schemas/adapter-manifest.schema.json`.
     "base64url.encode",
     "base64url.decode",
     "challenge.id",
-    "http.payment_request"
+    "http.payment_request",
+    "stripe.external_id_binding",
+    "server.verify"
   ]
 }
 ```
@@ -113,6 +115,7 @@ type AdapterResponse =
           | 'format_error'
           | 'encoding_error'
           | 'generation_error'
+          | 'verification_error'
           | 'http_error'
           | 'unsupported_operation'
           | 'unknown_error'
@@ -173,6 +176,13 @@ Required for vector conformance:
 | `base64url.encode` | `{ "text": string }` | `{ "text": string }` |
 | `base64url.decode` | `{ "text": string }` | `{ "text": string }` |
 | `challenge.id` | challenge id params | `{ "id": string }` |
+| `tempo.fee_payer.cosign` | fee-payer transaction params plus sponsor config | cosigned transaction summary |
+| `tempo.receipt.verify` | Tempo credential plus receipt fixture | `{ "status": "success", "reference": string }` |
+| `stripe.external_id_binding` | Stripe request, credential payload, and PaymentIntent fixture | verification outcome |
+
+`tempo.receipt.verify` is an optional staged vector capability. Adapters that do
+not advertise it are skipped; passing it demonstrates conformance for supplied
+receipt fixture verification, not full signed Tempo transaction verification.
 
 Required for flow conformance:
 
@@ -181,6 +191,12 @@ Required for flow conformance:
 | `http.payment_request` | normalized HTTP request plus payment config | normalized HTTP response |
 
 The built-in flow runner owns the end-to-end 402 state machine and calls the vector operations above to parse challenges, format credentials, and parse receipts.
+
+Optional for server verification conformance:
+
+| Operation | Input | Output |
+|---|---|---|
+| `server.verify` | server route params plus a credential object | `{ "ok": boolean, "errorType"?: string, "receipt"?: Receipt }` |
 
 To add a new operation:
 
