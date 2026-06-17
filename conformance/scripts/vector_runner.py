@@ -28,6 +28,7 @@ from typing import Any
 
 from deepdiff import DeepDiff
 
+from conformance_checks import make_check
 from harness import AdapterClient, AdapterConfig, build_adapter, discover_adapters
 
 
@@ -126,9 +127,42 @@ class TestResult:
     test_name: str
     adapter: str
     passed: bool
+    description: str | None = None
+    tags: list[str] | None = None
+    spec_ref: str | None = None
     expected: Any = None
     actual: Any = None
     error: str | None = None
+
+    def to_check(self) -> dict[str, Any]:
+        details: dict[str, Any] = {
+            "adapter": self.adapter,
+            "vector": self.vector_file,
+            "testType": self.test_type.value,
+            "scenario": self.test_name,
+        }
+        if self.tags:
+            details["tags"] = self.tags
+        if not self.passed:
+            details["expected"] = self.expected
+            details["actual"] = self.actual
+
+        return make_check(
+            id_parts=[
+                "vector",
+                self.vector_file,
+                self.test_name,
+                self.test_type.value,
+                self.adapter,
+            ],
+            name=f"{self.adapter} {self.vector_file} {self.test_name} {self.test_type.value}",
+            description=self.description
+            or f"{self.test_type.value} conformance for {self.test_name}",
+            passed=self.passed,
+            spec_ref=self.spec_ref,
+            details=details,
+            error=self.error,
+        )
 
 
 class VectorRunner:
@@ -244,6 +278,9 @@ class VectorRunner:
         expected: Any,
         actual: Any,
         error: str | None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        spec_ref: str | None = None,
     ) -> None:
         self.results.append(TestResult(
             vector_file=vector_file,
@@ -251,6 +288,9 @@ class VectorRunner:
             test_name=test_name,
             adapter=adapter,
             passed=passed,
+            description=description,
+            tags=tags,
+            spec_ref=spec_ref,
             expected=expected,
             actual=actual,
             error=error,
@@ -385,6 +425,7 @@ class VectorRunner:
             vectors = json.load(f)
 
         commands = vectors.get("commands", {})
+        spec_ref = vectors.get("spec_ref")
         parse_cmd = commands.get("parse")
         format_cmd = commands.get("format")
         generate_cmd = commands.get("generate")
@@ -414,6 +455,8 @@ class VectorRunner:
                 continue
 
             name = scenario["name"]
+            description = scenario.get("description")
+            tags = scenario.get("tags", [])
             tests = scenario.get("tests", {})
             duration_limit_ms = self.duration_limit_ms(scenario, adapter)
             command_timeout = self.command_timeout_seconds(duration_limit_ms)
@@ -455,6 +498,9 @@ class VectorRunner:
                     test_name=name,
                     adapter=adapter.name,
                     passed=passed,
+                    description=description,
+                    tags=tags,
+                    spec_ref=spec_ref,
                     expected=expected,
                     actual=result,
                     error=error,
@@ -486,6 +532,9 @@ class VectorRunner:
                     test_name=name,
                     adapter=adapter.name,
                     passed=passed,
+                    description=description,
+                    tags=tags,
+                    spec_ref=spec_ref,
                     expected=expected,
                     actual=result,
                     error=error,
@@ -508,6 +557,9 @@ class VectorRunner:
                     test_name=name,
                     adapter=adapter.name,
                     passed=passed,
+                    description=description,
+                    tags=tags,
+                    spec_ref=spec_ref,
                     expected=expected_format,
                     actual=result,
                     error=error,
@@ -528,6 +580,9 @@ class VectorRunner:
                         test_name=name,
                         adapter=adapter.name,
                         passed=False,
+                        description=description,
+                        tags=tags,
+                        spec_ref=spec_ref,
                         expected=obj,
                         actual=format_result,
                         error=f"format failed: {format_result.get('error')}",
@@ -544,6 +599,9 @@ class VectorRunner:
                         test_name=name,
                         adapter=adapter.name,
                         passed=False,
+                        description=description,
+                        tags=tags,
+                        spec_ref=spec_ref,
                         expected=obj,
                         actual=parse_result,
                         error=f"parse failed: {parse_result.get('error')}",
@@ -569,6 +627,9 @@ class VectorRunner:
                     test_name=name,
                     adapter=adapter.name,
                     passed=passed,
+                    description=description,
+                    tags=tags,
+                    spec_ref=spec_ref,
                     expected=obj_normalized,
                     actual=parsed,
                     error=error,
@@ -603,6 +664,7 @@ class VectorRunner:
                     test_name="unknown_adapter",
                     adapter=adapter_name,
                     passed=False,
+                    description="Requested adapter is registered before running conformance vectors",
                     expected=f"one of {sorted(adapters.keys())}",
                     actual=adapter_name,
                     error=f"Unknown adapter: {adapter_name}",
@@ -624,6 +686,7 @@ class VectorRunner:
                         test_name="build",
                         adapter=adapter.name,
                         passed=False,
+                        description="Adapter builds successfully before running conformance vectors",
                         expected="adapter builds successfully",
                         actual=None,
                         error=build_error,
@@ -640,6 +703,7 @@ class VectorRunner:
                         test_name="build",
                         adapter=adapter.name,
                         passed=False,
+                        description="Adapter builds successfully before running conformance vectors",
                         expected="adapter builds successfully",
                         actual=None,
                         error=build_error,
@@ -667,6 +731,7 @@ class VectorRunner:
                 test_name="no_checks",
                 adapter="runner",
                 passed=False,
+                description="Runner executes at least one conformance check",
                 expected="at least one conformance check",
                 actual=0,
                 error="No conformance checks were executed",
@@ -704,6 +769,7 @@ class VectorRunner:
             "num_checks": total,
             "passed": passed,
             "failed": failed,
+            "checks": [r.to_check() for r in self.results],
             "errors": errors,
         }
         print(json.dumps(output, indent=2))

@@ -66,6 +66,7 @@ against `schemas/adapter-manifest.schema.json`.
     "base64url.encode",
     "base64url.decode",
     "challenge.id",
+    "stripe.external_id_binding",
     "http.payment_request"
   ]
 }
@@ -113,8 +114,8 @@ type AdapterResponse =
           | 'format_error'
           | 'encoding_error'
           | 'generation_error'
-          | 'http_error'
           | 'verification_error'
+          | 'http_error'
           | 'unsupported_operation'
           | 'unknown_error'
         message: string
@@ -175,6 +176,7 @@ Required for vector conformance:
 | `base64url.decode` | `{ "text": string }` | `{ "text": string }` |
 | `challenge.id` | challenge id params | `{ "id": string }` |
 | `tempo.receipt.verify` | Tempo credential plus receipt fixture | `{ "status": "success", "reference": string }` |
+| `stripe.external_id_binding` | Stripe request, credential payload, and PaymentIntent fixture | verification outcome |
 
 `tempo.receipt.verify` is an optional staged vector capability. Adapters that do
 not advertise it are skipped; passing it demonstrates conformance for supplied

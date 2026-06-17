@@ -148,7 +148,14 @@ python3 scripts/vector_runner.py --verbose
 
 # JSON output (for CI)
 python3 scripts/vector_runner.py --output json
+
+# Flow JSON output
+python3 scripts/flow_runner.py --output json
 ```
+
+JSON output includes a `checks` array. Each check has a stable `id`, `name`,
+`description`, `status`, `timestamp`, `specReferences`, `details`, and
+`errorMessage`.
 
 ## Gating SDK Repositories
 
