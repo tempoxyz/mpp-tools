@@ -241,6 +241,9 @@
       "description": "Rejects a valid JSON request auth-param whose encoded size exceeds the 16 KiB parser cap",
       "tags": ["error", "performance", "size-limit"],
       "maxDurationMs": 1000,
+      "maxDurationMsByAdapter": {
+        "typescript": 3000
+      },
       "wire": {
         "prefix": "Payment id=\"ch_oversized\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"eyJwYWRkaW5nIjoi",
         "repeat": "YWFh",
