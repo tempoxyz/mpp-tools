@@ -18,6 +18,7 @@
     "receipt.format",
     "base64url.encode",
     "base64url.decode",
-    "challenge.id"
+    "challenge.id",
+    "stripe.external_id_binding"
   ]
 }

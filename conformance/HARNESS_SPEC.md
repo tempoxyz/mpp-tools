@@ -67,6 +67,7 @@ against `schemas/adapter-manifest.schema.json`.
     "base64url.decode",
     "challenge.id",
     "http.payment_request",
+    "stripe.external_id_binding",
     "server.verify"
   ]
 }
@@ -175,6 +176,7 @@ Required for vector conformance:
 | `base64url.encode` | `{ "text": string }` | `{ "text": string }` |
 | `base64url.decode` | `{ "text": string }` | `{ "text": string }` |
 | `challenge.id` | challenge id params | `{ "id": string }` |
+| `stripe.external_id_binding` | Stripe request, credential payload, and PaymentIntent fixture | verification outcome |
 
 Required for flow conformance:
 

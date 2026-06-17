@@ -74,6 +74,14 @@
       "comparison": "exact",
       "description": "Generate a deterministic challenge id from canonical challenge id parameters."
     },
+    "stripe.external_id_binding": {
+      "category": "vector",
+      "inputRef": "protocol.schema.json#/$defs/StripeExternalIdBindingInput",
+      "successRef": "protocol.schema.json#/$defs/StripeExternalIdBindingResult",
+      "errorTypes": ["verification_error"],
+      "comparison": "exact",
+      "description": "Verify Stripe charge receipt attribution uses only the server-bound request externalId and cannot be forged from credential payload."
+    },
     "http.payment_request": {
       "category": "flow",
       "inputRef": "protocol.schema.json#/$defs/HttpPaymentRequest",

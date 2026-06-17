@@ -139,6 +139,39 @@
       }
     },
     {
+      "name": "payment_keyword_in_quoted_realm",
+      "description": "The word 'Payment' inside a quoted parameter value must not be mistaken for a second auth scheme",
+      "tags": ["happy-path", "edge-case", "quoted-string", "scheme-boundary"],
+      "object": {
+        "id": "ch_qp_realm",
+        "intent": "charge",
+        "method": "tempo",
+        "realm": "contact Payment support",
+        "request": {}
+      },
+      "wire": "Payment id=\"ch_qp_realm\", realm=\"contact Payment support\", method=\"tempo\", intent=\"charge\", request=\"e30\"",
+      "tests": {
+        "parse": true
+      }
+    },
+    {
+      "name": "payment_keyword_in_quoted_description",
+      "description": "A quoted description containing 'Payment' is parsed as an opaque value, not a scheme boundary",
+      "tags": ["happy-path", "edge-case", "quoted-string", "scheme-boundary"],
+      "object": {
+        "description": "Pay with the Payment scheme",
+        "id": "ch_qp_desc",
+        "intent": "charge",
+        "method": "tempo",
+        "realm": "api.example.com",
+        "request": {}
+      },
+      "wire": "Payment id=\"ch_qp_desc\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\", description=\"Pay with the Payment scheme\"",
+      "tests": {
+        "parse": true
+      }
+    },
+    {
       "name": "adversarial_unclosed_quoted_extension",
       "description": "Malformed quoted extension auth-param with many escapes is ignored without pathological parser backtracking",
       "tags": ["happy-path", "edge-case", "quoted-string", "performance", "oss-319"],
