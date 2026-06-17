@@ -16,6 +16,7 @@
         "base64url.decode",
         "challenge.id",
         "tempo.fee_payer.cosign",
+        "tempo.receipt.verify",
         "http.payment_request",
         "stripe.external_id_binding"
       ]
@@ -312,6 +313,24 @@
         "feePayerSignaturePresent": { "type": "boolean" },
         "accessListLength": { "type": "integer", "minimum": 0 },
         "callCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "TempoReceiptVerificationInput": {
+      "type": "object",
+      "required": ["credential", "receipt"],
+      "additionalProperties": false,
+      "properties": {
+        "credential": { "$ref": "#/$defs/Credential" },
+        "receipt": { "$ref": "#/$defs/JsonObject" }
+      }
+    },
+    "TempoReceiptVerificationOutput": {
+      "type": "object",
+      "required": ["status", "reference"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "type": "string", "const": "success" },
+        "reference": { "type": "string", "minLength": 1 }
       }
     }
   }

@@ -176,7 +176,12 @@ Required for vector conformance:
 | `base64url.decode` | `{ "text": string }` | `{ "text": string }` |
 | `challenge.id` | challenge id params | `{ "id": string }` |
 | `tempo.fee_payer.cosign` | fee-payer transaction params plus sponsor config | cosigned transaction summary |
+| `tempo.receipt.verify` | Tempo credential plus receipt fixture | `{ "status": "success", "reference": string }` |
 | `stripe.external_id_binding` | Stripe request, credential payload, and PaymentIntent fixture | verification outcome |
+
+`tempo.receipt.verify` is an optional staged vector capability. Adapters that do
+not advertise it are skipped; passing it demonstrates conformance for supplied
+receipt fixture verification, not full signed Tempo transaction verification.
 
 Required for flow conformance:
 

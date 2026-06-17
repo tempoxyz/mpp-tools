@@ -7,6 +7,7 @@ import base64
 import hashlib
 import hmac
 import subprocess
+import asyncio
 
 from mpp import (
     Challenge,
@@ -148,7 +149,27 @@ OP_TO_COMMAND = {
     "base64url.encode": "base64url-encode",
     "base64url.decode": "base64url-decode",
     "challenge.id": "generate-challenge-id",
+    "tempo.receipt.verify": "verify-tempo-receipt",
 }
+
+
+class FakeRpcResponse:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self._payload
+
+
+class FakeRpcClient:
+    def __init__(self, receipt):
+        self._receipt = receipt
+
+    async def post(self, *args, **kwargs):
+        return FakeRpcResponse({"jsonrpc": "2.0", "result": self._receipt, "id": 1})
 
 
 def adapter_success(value):
@@ -175,6 +196,40 @@ def response_value_for_operation(op: str, result):
     if op == "challenge.id":
         return {"id": result}
     return result
+
+
+async def verify_tempo_receipt(input_value: dict):
+    from mpp.methods.tempo.intents import ChargeIntent
+    from mpp.server.intent import VerificationError
+
+    credential_data = input_value["credential"]
+    challenge_data = credential_data["challenge"]
+    request_json = json.dumps(challenge_data["request"], separators=(",", ":"))
+    request_b64 = base64url_encode(request_json)
+
+    credential = Credential(
+        challenge=ChallengeEcho(
+            id=challenge_data["id"],
+            realm=challenge_data.get("realm", ""),
+            method=challenge_data["method"],
+            intent=challenge_data["intent"],
+            request=request_b64,
+            expires=challenge_data.get("expires"),
+            digest=challenge_data.get("digest"),
+        ),
+        payload=credential_data["payload"],
+        source=credential_data.get("source"),
+    )
+
+    intent = ChargeIntent(rpc_url="https://rpc.test")
+    intent._http_client = FakeRpcClient(input_value["receipt"])
+
+    try:
+        receipt = await intent.verify(credential, challenge_data["request"])
+    except VerificationError as exc:
+        return error(str(exc), "verification_error")
+
+    return success({"status": receipt.status, "reference": receipt.reference})
 
 
 def run_legacy_subprocess(command: str, input_data: str = ""):
@@ -296,6 +351,9 @@ def main():
                 opaque=params.get("opaque"),
             )
             print(json.dumps(success(result)))
+        elif command == "verify-tempo-receipt":
+            params = json.loads(input_data)
+            print(json.dumps(asyncio.run(verify_tempo_receipt(params))))
         else:
             print(json.dumps(error(f"Unknown command: {command}")))
     except Exception as e:
@@ -307,6 +365,8 @@ def main():
             error_type = "encoding_error"
         elif command.startswith("generate-"):
             error_type = "generation_error"
+        elif command.startswith("verify-tempo-receipt"):
+            error_type = "verification_error"
         else:
             error_type = "unknown_error"
         print(json.dumps(error(str(e), error_type)))

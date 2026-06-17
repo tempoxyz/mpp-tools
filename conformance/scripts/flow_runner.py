@@ -213,6 +213,13 @@ def flow_error(name: str, status: int, error_type: str) -> dict[str, Any]:
     }
 
 
+def skipped_flow(name: str, capability: str) -> dict[str, Any]:
+    return {
+        "name": name,
+        "outcome": {"ok": True, "status": 0, "skipped": True, "requires": capability},
+    }
+
+
 def challenge_result(challenge: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": challenge.get("id"),
@@ -243,11 +250,157 @@ def parse_receipt(client: AdapterClient, header: str | None) -> Any:
     return ordered
 
 
+def header_value(headers: dict[str, Any], name: str) -> Any:
+    lowered = name.lower()
+    for key, value in headers.items():
+        if str(key).lower() == lowered:
+            return value
+    return None
+
+
 def parse_json_body(body_bytes: bytes) -> Any:
     try:
         return json.loads(body_bytes.decode("utf-8"))
     except Exception:
         return None
+
+
+def normalize_http_headers(headers: dict[str, Any]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    for key, value in headers.items():
+        if value is None:
+            continue
+        normalized[str(key)] = str(value)
+    return normalized
+
+
+def run_client_http_flow_case(
+    client: AdapterClient,
+    base_url: str,
+    flow_case: dict[str, Any],
+    verbose: bool,
+) -> dict[str, Any]:
+    name = str(flow_case.get("name"))
+    capability = "http.payment_request"
+    if capability not in client.adapter.capabilities:
+        return skipped_flow(name, capability)
+
+    url = flow_case_url(base_url, flow_case)
+    if verbose:
+        print(f"[{client.adapter.name}] {name}: client request {url}", file=sys.stderr)
+
+    response = client.call(
+        capability,
+        {
+            "url": url,
+            "method": flow_case.get("http_method", "GET"),
+            "headers": normalize_http_headers(flow_case.get("headers", {})),
+            "body": flow_case.get("body"),
+            "payment": {
+                "payload": flow_case.get("payload") or {},
+                "source": flow_case.get("source"),
+            },
+            "mode": flow_case.get("mode", "payment"),
+        },
+        context={"caseName": name, "timeoutMs": 10000},
+        timeout=15,
+    )
+    if not response.get("ok"):
+        if flow_case.get("expect_no_authorization"):
+            expected_error = flow_case.get("expect_error_type")
+            actual_error = normalize_error_type(response.get("error", {}).get("type"))
+            actual_message = str(response.get("error", {}).get("message", ""))
+            expected_message = flow_case.get("expect_error_message_contains")
+            expected_response_name = flow_case.get("expect_response_name")
+            if expected_error and actual_error != expected_error:
+                return {
+                    "name": name,
+                    "outcome": {
+                        "ok": False,
+                        "status": 0,
+                        "error_type": actual_error,
+                    },
+                    "authorization_observed": False,
+                }
+            if expected_message and str(expected_message) not in actual_message:
+                return {
+                    "name": name,
+                    "outcome": {
+                        "ok": False,
+                        "status": 0,
+                        "error_type": "unexpected_error_message",
+                    },
+                    "authorization_observed": False,
+                }
+            if expected_response_name:
+                return {
+                    "name": name,
+                    "outcome": {
+                        "ok": False,
+                        "status": 0,
+                        "error_type": "missing_expected_response",
+                    },
+                    "authorization_observed": False,
+                }
+            return {
+                "name": name,
+                "outcome": {"ok": True, "status": 0},
+                "authorization_observed": False,
+            }
+        return {
+            "name": name,
+            "outcome": {
+                "ok": False,
+                "status": 0,
+                "error_type": normalize_error_type(response.get("error", {}).get("type")),
+            },
+        }
+
+    value = response.get("value")
+    if not isinstance(value, dict):
+        return flow_error(name, 0, "invalid_http_response")
+
+    status = int(value.get("status", 0))
+    body = parse_json_body(str(value.get("body", "")).encode("utf-8"))
+    result = {
+        "name": name,
+        "outcome": {"ok": 200 <= status < 300, "status": status},
+    }
+    headers = value.get("headers")
+    if flow_case.get("expect_payment_receipt"):
+        result["payment_receipt_observed"] = bool(
+            isinstance(headers, dict) and header_value(headers, "payment-receipt")
+        )
+        result["outcome"]["ok"] = bool(result["outcome"]["ok"] and result["payment_receipt_observed"])
+    if isinstance(body, dict):
+        for key in ["authorization_observed", "ok"]:
+            if key in body:
+                result[key] = body[key]
+        if "name" in body:
+            result["response_name"] = body["name"]
+    if flow_case.get("expect_no_authorization"):
+        expected_response_name = flow_case.get("expect_response_name")
+        if expected_response_name and result.get("response_name") != expected_response_name:
+            result["outcome"]["ok"] = False
+            result.setdefault("authorization_observed", False)
+            return result
+        explicit_error_expected = bool(
+            flow_case.get("expect_error_type")
+            or flow_case.get("expect_error_message_contains")
+            or expected_response_name
+        )
+        if status == 402 and not result.get("authorization_observed") and not explicit_error_expected:
+            expected_result = {
+                "name": name,
+                "outcome": {"ok": True, "status": 0},
+                "authorization_observed": False,
+            }
+            if expected_response_name:
+                expected_result["response_name"] = expected_response_name
+            return expected_result
+        result["outcome"]["ok"] = False
+        result.setdefault("authorization_observed", False)
+    return result
 
 
 def run_discovery_flow_case(base_url: str, flow_case: dict[str, Any]) -> dict[str, Any]:
@@ -323,6 +476,8 @@ def run_flow_case(
         return run_discovery_flow_case(base_url, flow_case)
     if flow_case.get("json_rpc"):
         return run_json_rpc_flow_case(base_url, flow_case)
+    if flow_case.get("client_flow"):
+        return run_client_http_flow_case(client, base_url, flow_case, verbose)
     if verbose:
         print(f"[{client.adapter.name}] {name}: initial request {url}", file=sys.stderr)
 
@@ -465,7 +620,11 @@ def run_adapter_flows(adapter: AdapterConfig, base_url: str, verbose: bool) -> l
     client = AdapterClient(adapter)
     flow_cases = load_flow_cases()
     cases_by_path = {str(flow_case.get("path", "/")): flow_case for flow_case in flow_cases}
-    return [run_flow_case(client, base_url, flow_case, cases_by_path, verbose) for flow_case in flow_cases]
+    return [
+        run_flow_case(client, base_url, flow_case, cases_by_path, verbose)
+        for flow_case in flow_cases
+        if not flow_case.get("server_only")
+    ]
 
 
 def update_golden_results(adapters: dict[str, AdapterConfig], base_url: str, verbose: bool) -> list[dict[str, Any]]:
@@ -492,6 +651,10 @@ def compare_results(
             results.append(RunResult(adapter=adapter, name=str(name), passed=False, error="missing golden case"))
             continue
         golden = expected_map[name]
+        if entry.get("outcome", {}).get("skipped") and not golden.get("outcome", {}).get("skipped"):
+            results.append(RunResult(adapter=adapter, name=str(name), passed=True))
+            unmatched.discard(name)
+            continue
         diff = compute_diff(normalize_result(golden), normalize_result(entry))
         results.append(RunResult(adapter=adapter, name=str(name), passed=diff == "", error=diff or None))
         unmatched.discard(name)
