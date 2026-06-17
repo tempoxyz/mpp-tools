@@ -16,6 +16,7 @@
     "base64url.encode",
     "base64url.decode",
     "challenge.id",
+    "stripe.external_id_binding",
     "http.payment_request"
   ]
 }

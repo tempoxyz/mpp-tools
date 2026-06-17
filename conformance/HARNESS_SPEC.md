@@ -66,6 +66,7 @@ against `schemas/adapter-manifest.schema.json`.
     "base64url.encode",
     "base64url.decode",
     "challenge.id",
+    "stripe.external_id_binding",
     "http.payment_request"
   ]
 }
@@ -113,6 +114,7 @@ type AdapterResponse =
           | 'format_error'
           | 'encoding_error'
           | 'generation_error'
+          | 'verification_error'
           | 'http_error'
           | 'unsupported_operation'
           | 'unknown_error'
@@ -173,6 +175,7 @@ Required for vector conformance:
 | `base64url.encode` | `{ "text": string }` | `{ "text": string }` |
 | `base64url.decode` | `{ "text": string }` | `{ "text": string }` |
 | `challenge.id` | challenge id params | `{ "id": string }` |
+| `stripe.external_id_binding` | Stripe request, credential payload, and PaymentIntent fixture | verification outcome |
 
 Required for flow conformance:
 

@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "value": {
+    "ok": true,
+    "receipt": {
+      "status": "success",
+      "method": "stripe",
+      "timestamp": "2026-01-29T12:00:30Z",
+      "reference": "pi_conformance_123",
+      "externalId": "server-order-123"
+    }
+  }
+}
