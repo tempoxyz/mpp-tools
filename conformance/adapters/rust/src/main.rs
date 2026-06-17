@@ -524,12 +524,18 @@ struct ChallengeIdParams<'a> {
     opaque: Option<&'a str>,
 }
 
-fn generate_conformance_challenge_id(
-    params: ChallengeIdParams<'_>,
-) -> Result<String, std::fmt::Error> {
+fn generate_conformance_challenge_id(params: ChallengeIdParams<'_>) -> Result<String, String> {
+    const MINIMUM_SECRET_KEY_BYTES: usize = 32;
     type HmacSha256 = Hmac<Sha256>;
 
-    let request_json = stable_json(params.request)?;
+    if params.secret_key.as_bytes().len() < MINIMUM_SECRET_KEY_BYTES {
+        return Err(format!(
+            "secretKey must be at least {} bytes",
+            MINIMUM_SECRET_KEY_BYTES
+        ));
+    }
+
+    let request_json = stable_json(params.request).map_err(|e| e.to_string())?;
     let request_b64 = base64url_encode(request_json.as_bytes());
     let hmac_input = [
         params.realm,

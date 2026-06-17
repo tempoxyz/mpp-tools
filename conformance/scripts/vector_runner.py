@@ -498,7 +498,11 @@ class VectorRunner:
             if is_challenge_id:
                 input_data = json.dumps(scenario["input"])
                 result, elapsed_ms = self.run_adapter_timed(adapter, generate_cmd, input_data, timeout=command_timeout)
-                expected = {"success": True, "result": scenario["expected"]}
+                generate_test = tests.get("generate")
+                if generate_test is not None and generate_test is not True:
+                    expected = generate_test
+                else:
+                    expected = {"success": True, "result": scenario["expected"]}
                 passed, error = self.compare_results(expected, result)
                 if passed:
                     passed, error = self.compare_duration(duration_limit_ms, elapsed_ms)

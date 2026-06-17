@@ -29,6 +29,8 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
 public final class Adapter {
+    private static final int MINIMUM_SECRET_KEY_BYTES = 32;
+
     private static final Pattern AUTH_PARAM = Pattern.compile(
         "(\\w+)=(?:\"([^\"\\\\]*(?:\\\\.[^\"\\\\]*)*)\"|([^\\s,]+))"
     );
@@ -320,6 +322,10 @@ public final class Adapter {
 
     private static String generateChallengeId(Map<String, Object> data) throws AdapterFailure {
         String secretKey = requiredString(data, "secretKey", "generation_error", false);
+        if (secretKey.getBytes(StandardCharsets.UTF_8).length < MINIMUM_SECRET_KEY_BYTES) {
+            throw new AdapterFailure("generation_error", "secretKey must be at least " + MINIMUM_SECRET_KEY_BYTES + " bytes");
+        }
+
         Map<String, Object> request = requireMap(data.get("request"), "request", "generation_error");
         String expires = optionalString(data, "expires", "generation_error");
         String digest = optionalString(data, "digest", "generation_error");
