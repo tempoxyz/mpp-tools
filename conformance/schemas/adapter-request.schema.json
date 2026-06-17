@@ -67,6 +67,14 @@
     {
       "if": { "properties": { "op": { "const": "server.verify" } }, "required": ["op"] },
       "then": { "properties": { "input": { "$ref": "protocol.schema.json#/$defs/ServerVerifyRequest" } } }
+    },
+    {
+      "if": { "properties": { "op": { "const": "tempo.fee_payer.cosign" } }, "required": ["op"] },
+      "then": { "properties": { "input": { "$ref": "protocol.schema.json#/$defs/TempoFeePayerCosignInput" } } }
+    },
+    {
+      "if": { "properties": { "op": { "const": "tempo.receipt.verify" } }, "required": ["op"] },
+      "then": { "properties": { "input": { "$ref": "protocol.schema.json#/$defs/TempoReceiptVerificationInput" } } }
     }
   ]
 }

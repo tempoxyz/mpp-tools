@@ -52,6 +52,7 @@ class TestType(str, Enum):
     FORMAT = "format"
     ROUNDTRIP = "roundtrip"
     GENERATE = "generate"
+    OPERATION = "operation"
 
 
 def base64url_decode(s: str) -> bytes:
@@ -197,6 +198,22 @@ class VectorRunner:
         elapsed_ms = (time.perf_counter() - start) * 1000
         return result, elapsed_ms
 
+    def run_operation_timed(
+        self,
+        adapter: AdapterConfig,
+        operation: str,
+        input_value: Any,
+        context: dict[str, Any] | None = None,
+        timeout: float = 30,
+    ) -> tuple[dict[str, Any], float]:
+        start = time.perf_counter()
+        try:
+            result = AdapterClient(adapter).call(operation, input_value, context=context, timeout=timeout)
+        except Exception as exc:
+            result = {"ok": False, "error": {"type": "unknown_error", "message": str(exc)}}
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        return result, elapsed_ms
+
     def duration_limit_ms(self, scenario: dict[str, Any], adapter: AdapterConfig) -> int | None:
         per_adapter = scenario.get("maxDurationMsByAdapter", {})
         if isinstance(per_adapter, dict) and adapter.name in per_adapter:
@@ -300,6 +317,37 @@ class VectorRunner:
 
         return True, None
 
+    def compare_adapter_response(
+        self, expected: dict[str, Any], actual: dict[str, Any]
+    ) -> tuple[bool, str | None]:
+        expected_ok = expected.get("ok")
+        actual_ok = actual.get("ok")
+        if expected_ok != actual_ok:
+            return False, f"ok mismatch: expected {expected_ok}, got {actual_ok}"
+
+        if expected_ok is False:
+            expected_error = expected.get("error", {})
+            actual_error = actual.get("error", {})
+            expected_type = expected_error.get("type")
+            actual_type = actual_error.get("type")
+            if expected_type != actual_type:
+                return False, f"error.type mismatch: expected {expected_type}, got {actual_type}"
+            expected_message = expected_error.get("messageContains")
+            if expected_message is not None:
+                actual_message = str(actual_error.get("message", ""))
+                if expected_message not in actual_message:
+                    return False, (
+                        "error.message mismatch: "
+                        f"expected to contain {expected_message!r}, got {actual_message!r}"
+                    )
+            return True, None
+
+        expected_value = expected.get("value")
+        actual_value = actual.get("value")
+        if expected_value != actual_value:
+            return False, format_mismatch_error(expected_value, actual_value, "value")
+        return True, None
+
     def normalize_credential_result(self, result: dict[str, Any]) -> dict[str, Any]:
         """Normalize a credential result for semantic comparison.
         
@@ -391,8 +439,14 @@ class VectorRunner:
         parse_cmd = commands.get("parse")
         format_cmd = commands.get("format")
         generate_cmd = commands.get("generate")
+        operation = commands.get("operation")
 
-        if not parse_cmd and not format_cmd and not generate_cmd:
+        if operation:
+            if operation not in adapter.capabilities:
+                if self.verbose:
+                    print(f"  {vector_name}.json SKIPPED ({adapter.name} lacks {operation})")
+                return
+        elif not parse_cmd and not format_cmd and not generate_cmd:
             print(f"  ⚠ No commands defined in {vector_name}.json")
             return
 
@@ -416,6 +470,30 @@ class VectorRunner:
             tests = scenario.get("tests", {})
             duration_limit_ms = self.duration_limit_ms(scenario, adapter)
             command_timeout = self.command_timeout_seconds(duration_limit_ms)
+
+            if operation:
+                result, elapsed_ms = self.run_operation_timed(
+                    adapter,
+                    operation,
+                    scenario["input"],
+                    context={"caseName": name, "vectorName": vector_name},
+                    timeout=command_timeout,
+                )
+                expected = scenario["expected"]
+                passed, error = self.compare_adapter_response(expected, result)
+                if passed:
+                    passed, error = self.compare_duration(duration_limit_ms, elapsed_ms)
+                self._record_result(
+                    vector_file=vector_name,
+                    test_type=TestType.OPERATION,
+                    test_name=name,
+                    adapter=adapter.name,
+                    passed=passed,
+                    expected=expected,
+                    actual=result,
+                    error=error,
+                )
+                continue
 
             if is_challenge_id:
                 input_data = json.dumps(scenario["input"])

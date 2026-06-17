@@ -26,7 +26,8 @@
 
 import { createHmac } from 'node:crypto'
 
-import { Challenge, Credential, Receipt } from 'mppx'
+import { Challenge, Credential, Method, Receipt, z } from 'mppx'
+import * as Client from 'mppx/client'
 import { Mppx, stripe } from 'mppx/server'
 
 interface SuccessResult<T> {
@@ -42,6 +43,7 @@ interface ErrorResult {
 		| 'format_error'
 		| 'encoding_error'
 		| 'generation_error'
+		| 'http_error'
 		| 'verification_error'
 		| 'unsupported_operation'
 		| 'unknown_error'
@@ -329,10 +331,106 @@ function responseValueForOperation(op: string, result: unknown): unknown {
 	return result
 }
 
-async function runAdapterRequest(request: { op: string; input: unknown }): Promise<AdapterResponse> {
-	if (request.op === 'http.payment_request') {
-		return adapterError('http.payment_request is not implemented by this adapter yet', 'unsupported_operation')
+type HttpPaymentRequest = {
+	url: string
+	method: string
+	headers: Record<string, string>
+	body: string | null
+	payment: {
+		payload: Record<string, unknown>
+		source?: Record<string, unknown> | string | null
 	}
+	mode: string
+}
+
+function headersToObject(headers: Headers): Record<string, string> {
+	const result: Record<string, string> = {}
+	headers.forEach((value, key) => {
+		result[key] = value
+	})
+	return result
+}
+
+const httpPaymentMethod = Method.toClient(
+	Method.from({
+		name: 'tempo',
+		intent: 'charge',
+		schema: {
+			credential: {
+				payload: z.object({
+					type: z.literal('transaction'),
+					signature: z.string(),
+				}),
+			},
+			request: z.object({
+				amount: z.string(),
+				currency: z.string(),
+				recipient: z.string(),
+				expires: z.string(),
+				resource: z.optional(z.string()),
+			}),
+		},
+	}),
+	{
+		async createCredential({ challenge }) {
+			return Credential.serialize(
+				Credential.from({
+					challenge,
+					payload: currentHttpPayment?.payment.payload ?? {},
+					...(currentHttpPayment?.source === undefined ? {} : { source: currentHttpPayment.source }),
+				}),
+			)
+		},
+	},
+)
+
+let currentHttpPayment: { payment: HttpPaymentRequest['payment']; source?: string } | undefined
+
+async function runHttpPaymentRequest(input: HttpPaymentRequest): Promise<AdapterResponse> {
+	try {
+		if (input.mode === 'plain') {
+			const response = await fetch(input.url, {
+				method: input.method,
+				headers: input.headers,
+				body: input.body,
+			})
+			return adapterSuccess({
+				status: response.status,
+				headers: headersToObject(response.headers),
+				body: await response.text(),
+			})
+		}
+		if (input.mode !== 'payment' && input.mode !== 'invalid_payload') {
+			return adapterError(`Unsupported http.payment_request mode: ${input.mode}`, 'unsupported_operation')
+		}
+		currentHttpPayment = {
+			payment: input.payment,
+			source: typeof input.payment.source === 'string' ? input.payment.source : undefined,
+		}
+		const mppx = Client.Mppx.create({
+			methods: [httpPaymentMethod],
+			polyfill: false,
+			acceptPaymentPolicy: 'always',
+		})
+		const response = await mppx.fetch(input.url, {
+			method: input.method,
+			headers: input.headers,
+			body: input.body,
+		})
+		return adapterSuccess({
+			status: response.status,
+			headers: headersToObject(response.headers),
+			body: await response.text(),
+		})
+	} catch (err) {
+		return adapterError(err instanceof Error ? err.message : String(err), 'http_error')
+	} finally {
+		currentHttpPayment = undefined
+	}
+}
+
+async function runAdapterRequest(request: { op: string; input: unknown }): Promise<AdapterResponse> {
+	if (request.op === 'http.payment_request') return runHttpPaymentRequest(request.input as HttpPaymentRequest)
 	const command = OP_TO_COMMAND[request.op]
 	if (!command) return adapterError(`Unknown operation: ${request.op}`, 'unsupported_operation')
 	const result = await runCommand(command, commandInputForRequest(request.op, request.input))

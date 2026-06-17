@@ -97,6 +97,22 @@
       "errorTypes": ["verification_error"],
       "comparison": "exact",
       "description": "Verify one normalized server credential against route parameters and return the normalized verification outcome."
+    },
+    "tempo.fee_payer.cosign": {
+      "category": "vector",
+      "inputRef": "protocol.schema.json#/$defs/TempoFeePayerCosignInput",
+      "successRef": "protocol.schema.json#/$defs/TempoFeePayerCosignOutput",
+      "errorTypes": ["verification_error"],
+      "comparison": "exact",
+      "description": "Co-sign a Tempo fee-payer envelope with a sponsor and enforce sponsor policy."
+    },
+    "tempo.receipt.verify": {
+      "category": "vector",
+      "inputRef": "protocol.schema.json#/$defs/TempoReceiptVerificationInput",
+      "successRef": "protocol.schema.json#/$defs/TempoReceiptVerificationOutput",
+      "errorTypes": ["verification_error"],
+      "comparison": "exact",
+      "description": "Verify a Tempo credential against a supplied receipt fixture. This is an optional staged capability until full signed transaction verification vectors are available."
     }
   }
 }

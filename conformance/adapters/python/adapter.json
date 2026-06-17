@@ -22,6 +22,7 @@
     "receipt.format",
     "base64url.encode",
     "base64url.decode",
-    "challenge.id"
+    "challenge.id",
+    "tempo.receipt.verify"
   ]
 }

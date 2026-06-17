@@ -23,6 +23,7 @@
     "base64url.encode",
     "base64url.decode",
     "challenge.id",
+    "tempo.fee_payer.cosign",
     "stripe.external_id_binding"
   ]
 }

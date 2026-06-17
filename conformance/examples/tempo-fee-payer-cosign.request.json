@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "op": "tempo.fee_payer.cosign",
+  "input": {
+    "payerPrivateKey": "0x1111111111111111111111111111111111111111111111111111111111111111",
+    "feePayerPrivateKey": "0x2222222222222222222222222222222222222222222222222222222222222222",
+    "feeToken": "0x20c0000000000000000000000000000000000000",
+    "challenge": {
+      "id": "challenge-123",
+      "realm": "api.example.com",
+      "method": "tempo",
+      "intent": "charge",
+      "request": {}
+    },
+    "request": {
+      "amount": "1000000",
+      "currency": "0x20c0000000000000000000000000000000000000",
+      "recipient": "0x742d35Cc6634c0532925a3b844bC9e7595F8fE00",
+      "methodDetails": {
+        "feePayer": true,
+        "chainId": 42431
+      }
+    },
+    "transaction": {
+      "chainId": 42431,
+      "maxPriorityFeePerGas": 1,
+      "maxFeePerGas": 1,
+      "gasLimit": 1000000,
+      "calls": [
+        {
+          "to": "0x20c0000000000000000000000000000000000000",
+          "value": 0,
+          "data": "0x95777d59000000000000000000000000742d35cc6634c0532925a3b844bc9e7595f8fe0000000000000000000000000000000000000000000000000000000000000f4240ef1ed712011ece072f76bd8b82350e00000000000000000000eb18f2d4402269"
+        }
+      ],
+      "accessList": [],
+      "nonceKey": "max",
+      "nonce": 0,
+      "validBefore": "now+60",
+      "feeToken": null
+    }
+  }
+}

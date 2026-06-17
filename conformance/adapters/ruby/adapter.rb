@@ -4,9 +4,11 @@
 require "base64"
 require "json"
 require "openssl"
+require "rlp"
 require "time"
 
 require "mpp-rb"
+require "mpp/methods/tempo"
 
 def success(result)
   {success: true, result: result}
@@ -155,6 +157,7 @@ OP_TO_COMMAND = {
   "base64url.encode" => "base64url-encode",
   "base64url.decode" => "base64url-decode",
   "challenge.id" => "generate-challenge-id",
+  "tempo.fee_payer.cosign" => "cosign-tempo-fee-payer",
   "stripe.external_id_binding" => "verify-stripe-external-id-binding"
 }.freeze
 
@@ -171,6 +174,82 @@ def response_value_for_operation(op, result)
   return {id: result} if op == "challenge.id"
 
   result
+end
+
+def uint_value(value)
+  return (1 << 256) - 1 if value == "max"
+  return Time.now.to_i + Integer(value.delete_prefix("now+")) if value.to_s.start_with?("now+")
+  Integer(value)
+end
+
+def build_tempo_call(data)
+  Mpp::Methods::Tempo::Transaction::Call.new(
+    to: data.fetch("to"),
+    value: uint_value(data.fetch("value")),
+    data: data.fetch("data")
+  )
+end
+
+def build_fee_payer_envelope(input)
+  payer = Mpp::Methods::Tempo::Account.from_key(input.fetch("payerPrivateKey"))
+  tx_data = input.fetch("transaction")
+  tx = Mpp::Methods::Tempo::Transaction::SignedTransaction.new(
+    chain_id: uint_value(tx_data.fetch("chainId")),
+    max_priority_fee_per_gas: uint_value(tx_data.fetch("maxPriorityFeePerGas")),
+    max_fee_per_gas: uint_value(tx_data.fetch("maxFeePerGas")),
+    gas_limit: uint_value(tx_data.fetch("gasLimit")),
+    calls: tx_data.fetch("calls").map { |call| build_tempo_call(call) },
+    access_list: tx_data.fetch("accessList"),
+    nonce_key: uint_value(tx_data.fetch("nonceKey")),
+    nonce: uint_value(tx_data.fetch("nonce")),
+    valid_before: uint_value(tx_data.fetch("validBefore")),
+    valid_after: nil,
+    fee_token: tx_data["feeToken"],
+    sender_signature: nil,
+    fee_payer_signature: Mpp::Methods::Tempo::Transaction::EMPTY_SIGNATURE,
+    sender_address: payer.address,
+    tempo_authorization_list: [],
+    key_authorization: nil
+  )
+  sender_signature = payer.sign_hash(tx.signature_hash)
+  "0x#{Mpp::Methods::Tempo::FeePayer.encode(tx.with(sender_signature: sender_signature)).unpack1("H*")}"
+end
+
+def decode_cosigned_fee_payer(raw_tx)
+  bytes = [raw_tx.delete_prefix("0x")].pack("H*")
+  raise "Expected 0x76 signed transaction" unless bytes.getbyte(0) == 0x76
+
+  decoded = RLP.decode(bytes[1..])
+  fee_payer_signature = decoded[11]
+  {
+    type: "0x76",
+    feeToken: "0x#{decoded[10].unpack1("H*")}",
+    feePayerSignaturePresent: fee_payer_signature.is_a?(Array) &&
+      fee_payer_signature.length == 3 &&
+      fee_payer_signature.all? { |part| part.is_a?(String) } &&
+      fee_payer_signature[1..].all? { |part| !part.empty? },
+    accessListLength: decoded[5].length,
+    callCount: decoded[4].length
+  }
+end
+
+def cosign_tempo_fee_payer(input)
+  fee_payer = Mpp::Methods::Tempo::Account.from_key(input.fetch("feePayerPrivateKey"))
+  intent = Mpp::Methods::Tempo::ChargeIntent.new
+  Mpp::Methods::Tempo.tempo(intents: {"charge" => intent}, fee_payer: fee_payer)
+  request = Mpp::Methods::Tempo::Schemas::ChargeRequest.from_hash(input.fetch("request"))
+  challenge = input["challenge"] ? echo_from_challenge_h(input.fetch("challenge")) : nil
+  raw_tx = build_fee_payer_envelope(input)
+  signed_raw, = intent.send(
+    :cosign_as_fee_payer,
+    raw_tx,
+    input.fetch("feeToken"),
+    request: request,
+    challenge: challenge
+  )
+  success(decode_cosigned_fee_payer(signed_raw))
+rescue Mpp::VerificationError => e
+  error(e.message, "verification_error")
 end
 
 class ConformanceStripeClient
@@ -317,6 +396,8 @@ def run_command(command, input)
     success(base64url_decode(input).force_encoding("UTF-8"))
   when "generate-challenge-id"
     success(generate_conformance_challenge_id(JSON.parse(input)))
+  when "cosign-tempo-fee-payer"
+    cosign_tempo_fee_payer(JSON.parse(input))
   when "verify-stripe-external-id-binding"
     success(verify_stripe_external_id_binding(JSON.parse(input)))
   else

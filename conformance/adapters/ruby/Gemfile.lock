@@ -2,9 +2,52 @@ GEM
   remote: https://rubygems.org/
   specs:
     base64 (0.3.0)
-    bigdecimal (4.1.2)
+    bigdecimal (3.3.1)
+    bls12-381 (0.3.1)
+      bigdecimal
+      h2c (>= 0.2.1, < 0.3)
+    ecdsa (1.2.0)
+    eth (0.5.17)
+      base64 (~> 0.1)
+      bigdecimal (~> 3.1)
+      bls12-381 (~> 0.3)
+      forwardable (~> 1.3)
+      httpx (~> 1.6)
+      keccak (~> 1.3)
+      konstructor (~> 1.0)
+      openssl (~> 3.3)
+      rbsecp256k1 (~> 6.0)
+      scrypt (~> 3.0)
+    ffi (1.17.4)
+    ffi (1.17.4-aarch64-linux-gnu)
+    ffi (1.17.4-arm64-darwin)
+    ffi (1.17.4-x86_64-linux-gnu)
+    ffi-compiler (1.4.2)
+      ffi (>= 1.15.5)
+      rake
+    forwardable (1.4.0)
+    h2c (0.2.1)
+      ecdsa (~> 1.2.0)
+    http-2 (1.1.3)
+    httpx (1.7.8)
+      http-2 (>= 1.1.3)
+    keccak (1.3.3)
+    konstructor (1.0.2)
+    mini_portile2 (2.8.9)
     mpp-rb (0.1.3)
       base64 (~> 0.3)
+    openssl (3.3.3)
+    pkg-config (1.6.5)
+    rake (13.4.2)
+    rbsecp256k1 (6.0.0)
+      mini_portile2 (~> 2.8)
+      pkg-config (~> 1.5)
+      rubyzip (~> 2.3)
+    rlp (0.7.3)
+    rubyzip (2.4.1)
+    scrypt (3.1.0)
+      ffi-compiler (>= 1.0, < 2.0)
+      rake (~> 13)
     sorbet-runtime (0.6.13266)
 
 PLATFORMS
@@ -15,13 +58,37 @@ PLATFORMS
 
 DEPENDENCIES
   bigdecimal
+  eth (~> 0.5)
   mpp-rb (= 0.1.3)
+  rlp (~> 0.7)
   sorbet-runtime (~> 0.6)
 
 CHECKSUMS
   base64 (0.3.0) sha256=27337aeabad6ffae05c265c450490628ef3ebd4b67be58257393227588f5a97b
-  bigdecimal (4.1.2) sha256=53d217666027eab4280346fba98e7d5b66baaae1b9c3c1c0ffe89d48188a3fbd
+  bigdecimal (3.3.1) sha256=eaa01e228be54c4f9f53bf3cc34fe3d5e845c31963e7fcc5bedb05a4e7d52218
+  bls12-381 (0.3.1) sha256=d1525cd319c53f14178d54f355dfe1b4c572fbf5625965c1afccdc425b9896dc
+  ecdsa (1.2.0) sha256=b8f7c9541b6c587cbe37e705a1b76be6dc1e85336aa23ac3cf2f07b038bcec55
+  eth (0.5.17) sha256=5be9caa85b0643613010ae33c92e746a02ce376a35245e6eb5f491e80531f137
+  ffi (1.17.4) sha256=bcd1642e06f0d16fc9e09ac6d49c3a7298b9789bcb58127302f934e437d60acf
+  ffi (1.17.4-aarch64-linux-gnu) sha256=b208f06f91ffd8f5e1193da3cae3d2ccfc27fc36fba577baf698d26d91c080df
+  ffi (1.17.4-arm64-darwin) sha256=19071aaf1419251b0a46852abf960e77330a3b334d13a4ab51d58b31a937001b
+  ffi (1.17.4-x86_64-linux-gnu) sha256=9d3db14c2eae074b382fa9c083fe95aec6e0a1451da249eab096c34002bc752d
+  ffi-compiler (1.4.2) sha256=a9d69d5d9ced6f64776ddafa535867ad90e5740ad37bed7afb4de6e450da126e
+  forwardable (1.4.0) sha256=f1cd40cc9812937980e1c76f1aa053660990a7c9b6a98fc37d945468afcce838
+  h2c (0.2.1) sha256=a53b7dfeb95660c97b615235ea1b29ec8e1856edc571845685682d94b6e8e227
+  http-2 (1.1.3) sha256=1b2f379d35a11dbae94f8a1a52c053d8c161eb4a0c98b5d1605ff1b2bf171c9c
+  httpx (1.7.8) sha256=6d769465ed608287a272ba0e4700fc22cee6f0335d80bd5c2effaf7fb7bd2a3a
+  keccak (1.3.3) sha256=970dcb1e78b8c3129ba2baff8a5baa5cebf391136db1f4018e8ccc9130794557
+  konstructor (1.0.2) sha256=fd6ac9eb1dadc1e520e06042aa2ef0122d6a070e06cde86db5a54c0c7bfe2e31
+  mini_portile2 (2.8.9) sha256=0cd7c7f824e010c072e33f68bc02d85a00aeb6fce05bb4819c03dfd3c140c289
   mpp-rb (0.1.3) sha256=7293528c9ab4bb833853968ba2c32636c6e23a1248898ce32d1c77f9f50dfade
+  openssl (3.3.3) sha256=d46902138f2987c13122fab826030a11c2bb9b8a16394215cbfc5062c5e2d335
+  pkg-config (1.6.5) sha256=33f9f81c5322983d22b439b8b672f27777b406fea23bfec74ff14bbeb42ec733
+  rake (13.4.2) sha256=cb825b2bd5f1f8e91ca37bddb4b9aaf345551b4731da62949be002fa89283701
+  rbsecp256k1 (6.0.0) sha256=d38f563bfc6bcf3ce20c336a4798cc6990427f291e74c6817360363a72f11669
+  rlp (0.7.3) sha256=a4f3ac65b1206ac84212811bc8f8590c136a49d848071ab2e60ae621bac8869f
+  rubyzip (2.4.1) sha256=8577c88edc1fde8935eb91064c5cb1aef9ad5494b940cf19c775ee833e075615
+  scrypt (3.1.0) sha256=67fde35bc7e3b7fe906c5be9c242acf95fe4a886c89572f405f6b11df30aa6af
   sorbet-runtime (0.6.13266) sha256=4a7123b62a9174d64a80ec5feae6abbf2d68553cc4c77315c0633b72c9823cc9
 
 BUNDLED WITH
