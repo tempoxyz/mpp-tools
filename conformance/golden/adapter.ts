@@ -27,6 +27,7 @@
 import { createHmac } from 'node:crypto'
 
 import { Challenge, Credential, Receipt } from 'mppx'
+import { Mppx, stripe } from 'mppx/server'
 
 interface SuccessResult<T> {
 	success: true
@@ -41,6 +42,7 @@ interface ErrorResult {
 		| 'format_error'
 		| 'encoding_error'
 		| 'generation_error'
+		| 'verification_error'
 		| 'unsupported_operation'
 		| 'unknown_error'
 }
@@ -124,6 +126,89 @@ function generateConformanceChallengeId(params: {
 	return createHmac('sha256', params.secretKey).update(payload).digest('base64url')
 }
 
+async function verifyStripeExternalIdBinding(input: {
+	request: Record<string, unknown>
+	payload: Record<string, unknown>
+	paymentIntent: { id: string; status: string; replayed?: boolean }
+}): Promise<
+	| {
+		ok: true
+		receipt: {
+			status: string
+			method: string
+			timestamp: string
+			reference: string
+			externalId?: string
+		}
+	}
+	| { ok: false; errorType: 'invalid_challenge' | 'verification_failed' }
+> {
+	const secretKey = 'conformance-stripe-secret'
+	const methodDetails =
+		typeof input.request.methodDetails === 'object' && input.request.methodDetails !== null
+			? (input.request.methodDetails as Record<string, unknown>)
+			: {}
+	const mppx = Mppx.create({
+		secretKey,
+		methods: [
+			stripe.charge({
+				amount: String(input.request.amount ?? '0'),
+				client: {
+					paymentIntents: {
+						async create(params: Record<string, unknown>) {
+							if (params.shared_payment_granted_token !== input.payload.spt) {
+								throw new Error('Unexpected shared_payment_granted_token')
+							}
+							return {
+								id: input.paymentIntent.id,
+								status: input.paymentIntent.status,
+								lastResponse: {
+									headers: {
+										...(input.paymentIntent.replayed
+											? { 'idempotent-replayed': 'true' }
+											: {}),
+									},
+								},
+							}
+						},
+					},
+				},
+				currency: String(input.request.currency ?? 'usd'),
+				decimals: 0,
+				networkId:
+					typeof methodDetails.networkId === 'string' ? methodDetails.networkId : 'conformance',
+				paymentMethodTypes: Array.isArray(methodDetails.paymentMethodTypes)
+					? methodDetails.paymentMethodTypes.map(String)
+					: ['card'],
+			}),
+		],
+	})
+	const challenge = Challenge.from({
+		secretKey,
+		realm: 'conformance.local',
+		method: 'stripe',
+		intent: 'charge',
+		request: input.request,
+		expires: '2099-01-29T12:05:30Z',
+	})
+	const credential = Credential.from({ challenge, payload: input.payload })
+
+	try {
+		const receipt = await mppx.verifyCredential(credential)
+		return {
+			ok: true,
+			receipt: {
+				...receipt,
+				timestamp: '2026-01-29T12:00:30Z',
+			},
+		}
+	} catch (err) {
+		if (err instanceof Error && err.name === 'InvalidChallengeError')
+			return { ok: false, errorType: 'invalid_challenge' }
+		return { ok: false, errorType: 'verification_failed' }
+	}
+}
+
 function hasDuplicateChallengeParameter(header: string): boolean {
 	const seen = new Set<string>()
 	for (const match of header.matchAll(/(?:^|,\s*)(\w+)=/g)) {
@@ -134,7 +219,7 @@ function hasDuplicateChallengeParameter(header: string): boolean {
 	return false
 }
 
-function runCommand(command: string, input: string): Result<unknown> {
+async function runCommand(command: string, input: string): Promise<Result<unknown>> {
 	try {
 		switch (command) {
 			case 'parse-www-authenticate': {
@@ -191,6 +276,11 @@ function runCommand(command: string, input: string): Result<unknown> {
 				return success(generateConformanceChallengeId(params))
 			}
 
+			case 'verify-stripe-external-id-binding': {
+				const params = JSON.parse(input)
+				return success(await verifyStripeExternalIdBinding(params))
+			}
+
 			default:
 				return error(`Unknown command: ${command}`, 'unknown_error')
 		}
@@ -205,6 +295,8 @@ function runCommand(command: string, input: string): Result<unknown> {
 			return error(message, 'encoding_error')
 		} else if (command.startsWith('generate-')) {
 			return error(message, 'generation_error')
+		} else if (command.startsWith('verify-')) {
+			return error(message, 'verification_error')
 		} else {
 			return error(message, 'unknown_error')
 		}
@@ -221,6 +313,7 @@ const OP_TO_COMMAND: Record<string, string> = {
 	'base64url.encode': 'base64url-encode',
 	'base64url.decode': 'base64url-decode',
 	'challenge.id': 'generate-challenge-id',
+	'stripe.external_id_binding': 'verify-stripe-external-id-binding',
 }
 
 function commandInputForRequest(op: string, input: unknown): string {
@@ -236,13 +329,13 @@ function responseValueForOperation(op: string, result: unknown): unknown {
 	return result
 }
 
-function runAdapterRequest(request: { op: string; input: unknown }): AdapterResponse {
+async function runAdapterRequest(request: { op: string; input: unknown }): Promise<AdapterResponse> {
 	if (request.op === 'http.payment_request') {
 		return adapterError('http.payment_request is not implemented by this adapter yet', 'unsupported_operation')
 	}
 	const command = OP_TO_COMMAND[request.op]
 	if (!command) return adapterError(`Unknown operation: ${request.op}`, 'unsupported_operation')
-	const result = runCommand(command, commandInputForRequest(request.op, request.input))
+	const result = await runCommand(command, commandInputForRequest(request.op, request.input))
 	if (!result.success) return adapterError(result.error, result.error_type)
 	return adapterSuccess(responseValueForOperation(request.op, result.result))
 }
@@ -253,12 +346,12 @@ async function main(): Promise<void> {
 	if (!command) {
 		const stdin = await readStdin()
 		const request = JSON.parse(stdin)
-		console.log(JSON.stringify(runAdapterRequest(request)))
+		console.log(JSON.stringify(await runAdapterRequest(request)))
 		return
 	}
 
 	const stdin = await readStdin()
-	const result = runCommand(command, stdin)
+	const result = await runCommand(command, stdin)
 	console.log(JSON.stringify(result))
 }
 

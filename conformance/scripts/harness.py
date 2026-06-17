@@ -26,6 +26,7 @@ COMMAND_TO_OPERATION = {
     "base64url-encode": "base64url.encode",
     "base64url-decode": "base64url.decode",
     "generate-challenge-id": "challenge.id",
+    "verify-stripe-external-id-binding": "stripe.external_id_binding",
 }
 
 
@@ -126,7 +127,13 @@ def request_input_for_command(command: str, input_data: str) -> tuple[str, Any]:
     op = COMMAND_TO_OPERATION[command]
     if op in {"challenge.parse", "credential.parse", "receipt.parse"}:
         return op, {"header": input_data}
-    if op in {"challenge.format", "credential.format", "receipt.format", "challenge.id"}:
+    if op in {
+        "challenge.format",
+        "credential.format",
+        "receipt.format",
+        "challenge.id",
+        "stripe.external_id_binding",
+    }:
         return op, json.loads(input_data)
     if op in {"base64url.encode", "base64url.decode"}:
         return op, {"text": input_data}

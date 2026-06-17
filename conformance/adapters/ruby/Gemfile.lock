@@ -57,6 +57,7 @@ PLATFORMS
   x86_64-linux
 
 DEPENDENCIES
+  bigdecimal
   eth (~> 0.5)
   mpp-rb (= 0.1.3)
   rlp (~> 0.7)

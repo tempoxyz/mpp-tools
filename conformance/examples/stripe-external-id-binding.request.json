@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "op": "stripe.external_id_binding",
+  "input": {
+    "request": {
+      "amount": "2500",
+      "currency": "USD",
+      "externalId": "server-order-123",
+      "methodDetails": {
+        "paymentMethodTypes": ["card"]
+      }
+    },
+    "payload": {
+      "spt": "spt_conformance_123",
+      "externalId": "server-order-123"
+    },
+    "paymentIntent": {
+      "id": "pi_conformance_123",
+      "status": "succeeded"
+    }
+  },
+  "context": {
+    "vectorName": "stripe-external-id-binding",
+    "caseName": "matching_external_id_returns_bound_receipt"
+  }
+}

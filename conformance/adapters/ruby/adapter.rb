@@ -4,6 +4,7 @@
 require "base64"
 require "json"
 require "openssl"
+require "rlp"
 require "time"
 
 require "mpp-rb"
@@ -156,7 +157,8 @@ OP_TO_COMMAND = {
   "base64url.encode" => "base64url-encode",
   "base64url.decode" => "base64url-decode",
   "challenge.id" => "generate-challenge-id",
-  "tempo.fee_payer.cosign" => "cosign-tempo-fee-payer"
+  "tempo.fee_payer.cosign" => "cosign-tempo-fee-payer",
+  "stripe.external_id_binding" => "verify-stripe-external-id-binding"
 }.freeze
 
 def command_input_for_request(op, input)
@@ -250,6 +252,82 @@ rescue Mpp::VerificationError => e
   error(e.message, "verification_error")
 end
 
+class ConformanceStripeClient
+  def initialize(input)
+    @input = input
+  end
+
+  def v1
+    Struct.new(:payment_intents).new(ConformancePaymentIntents.new(@input))
+  end
+end
+
+class ConformancePaymentIntents
+  def initialize(input)
+    @input = input
+  end
+
+  def create(params, _opts)
+    raise "Unexpected shared_payment_granted_token" unless params[:shared_payment_granted_token] == @input.fetch("payload").fetch("spt")
+
+    payment_intent = @input.fetch("paymentIntent")
+    headers = payment_intent["replayed"] ? {"idempotent-replayed" => "true"} : {}
+    last_response = Struct.new(:headers).new(headers)
+    Struct.new(:id, :status, :last_response).new(
+      payment_intent.fetch("id"),
+      payment_intent.fetch("status"),
+      last_response
+    )
+  end
+end
+
+def verify_stripe_external_id_binding(input)
+  require "mpp/methods/stripe"
+  require "mpp/server"
+
+  secret_key = "conformance-stripe-secret"
+  realm = "conformance.local"
+  expires = "2099-01-29T12:05:30Z"
+  challenge = Mpp::Challenge.create(
+    secret_key: secret_key,
+    realm: realm,
+    method: "stripe",
+    intent: "charge",
+    request: input.fetch("request"),
+    expires: expires
+  )
+  credential = Mpp::Credential.new(challenge: challenge.to_echo, payload: input.fetch("payload"))
+  intent = Mpp::Methods::Stripe::ChargeIntent.new(
+    secret_key: "sk_test_conformance",
+    client: ConformanceStripeClient.new(input)
+  )
+
+  verified = Mpp::Server::Verify.verify_or_challenge(
+    authorization: credential.to_authorization,
+    intent: intent,
+    request: input.fetch("request"),
+    realm: realm,
+    secret_key: secret_key,
+    method: "stripe",
+    expires: expires
+  )
+  return {ok: false, errorType: "invalid_challenge"} if verified.is_a?(Mpp::Challenge)
+
+  _credential, receipt = verified
+  receipt_payload = {
+    status: receipt.status,
+    method: receipt.method,
+    timestamp: "2026-01-29T12:00:30Z",
+    reference: receipt.reference
+  }
+  receipt_payload[:externalId] = receipt.external_id unless receipt.external_id.nil?
+  {ok: true, receipt: receipt_payload}
+rescue Mpp::InvalidChallengeError
+  {ok: false, errorType: "invalid_challenge"}
+rescue Mpp::VerificationError, Mpp::PaymentError, StandardError
+  {ok: false, errorType: "verification_failed"}
+end
+
 def run_adapter_request(request)
   op = request.fetch("op")
   input = request.fetch("input")
@@ -275,6 +353,8 @@ def error_type_for_command(command)
     "encoding_error"
   elsif command.start_with?("generate-")
     "generation_error"
+  elsif command.start_with?("verify-")
+    "verification_error"
   else
     "unknown_error"
   end
@@ -318,6 +398,8 @@ def run_command(command, input)
     success(generate_conformance_challenge_id(JSON.parse(input)))
   when "cosign-tempo-fee-payer"
     cosign_tempo_fee_payer(JSON.parse(input))
+  when "verify-stripe-external-id-binding"
+    success(verify_stripe_external_id_binding(JSON.parse(input)))
   else
     error("Unknown command: #{command}")
   end
