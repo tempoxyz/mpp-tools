@@ -20,7 +20,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.stripe:mpp-java:0.1.0'
+    implementation 'com.stripe:mpp-java:0.1.1'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.21.4'
 }
 

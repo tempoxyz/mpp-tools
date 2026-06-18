@@ -6,6 +6,6 @@ com.fasterxml.jackson.core:jackson-core:2.21.4=compileClasspath,runtimeClasspath
 com.fasterxml.jackson.core:jackson-databind:2.21.4=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 com.fasterxml.jackson:jackson-bom:2.21.4=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 com.google.code.gson:gson:2.10.1=runtimeClasspath,testRuntimeClasspath
-com.stripe:mpp-java:0.1.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+com.stripe:mpp-java:0.1.1=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 com.stripe:stripe-java:25.3.0=runtimeClasspath,testRuntimeClasspath
 empty=annotationProcessor,testAnnotationProcessor
