@@ -169,6 +169,7 @@
         "intent": "charge",
         "method": "tempo",
         "realm": "api.example.com",
+        "opaque": "trace-123",
         "request": {}
       },
       "tests": {
