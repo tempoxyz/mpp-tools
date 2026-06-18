@@ -179,21 +179,25 @@ public final class Adapter {
             null
         );
 
-        if (opaque == null) {
-            return challenge.toWwwAuthenticate();
-        }
+        try {
+            if (opaque == null) {
+                return challenge.toWwwAuthenticate();
+            }
 
-        List<String> parts = new ArrayList<>();
-        parts.add("id=" + quote(challenge.id()));
-        parts.add("realm=" + quote(challenge.realm()));
-        parts.add("method=" + quote(challenge.method()));
-        parts.add("intent=" + quote(challenge.intent()));
-        parts.add("request=" + quote(challenge.requestB64()));
-        if (challenge.expires() != null) parts.add("expires=" + quote(challenge.expires()));
-        if (challenge.digest() != null) parts.add("digest=" + quote(challenge.digest()));
-        if (challenge.description() != null) parts.add("description=" + quote(challenge.description()));
-        parts.add("opaque=" + quote(opaque));
-        return "Payment " + String.join(", ", parts);
+            List<String> parts = new ArrayList<>();
+            parts.add("id=" + quote(challenge.id()));
+            parts.add("realm=" + quote(challenge.realm()));
+            parts.add("method=" + quote(challenge.method()));
+            parts.add("intent=" + quote(challenge.intent()));
+            parts.add("request=" + quote(challenge.requestB64()));
+            if (challenge.expires() != null) parts.add("expires=" + quote(challenge.expires()));
+            if (challenge.digest() != null) parts.add("digest=" + quote(challenge.digest()));
+            if (challenge.description() != null) parts.add("description=" + quote(challenge.description()));
+            parts.add("opaque=" + quote(opaque));
+            return "Payment " + String.join(", ", parts);
+        } catch (RuntimeException exc) {
+            throw new AdapterFailure("format_error", exc.getMessage());
+        }
     }
 
     private static Map<String, Object> parseCredential(String header) throws AdapterFailure {
@@ -507,6 +511,9 @@ public final class Adapter {
     }
 
     private static String quote(String value) {
+        if (value.indexOf('\r') >= 0 || value.indexOf('\n') >= 0) {
+            throw new IllegalArgumentException("Header values must not contain CR or LF");
+        }
         return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 
