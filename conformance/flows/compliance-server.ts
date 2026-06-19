@@ -64,7 +64,7 @@ type FlowCase = {
   reject_authorization?: boolean
 }
 
-const secretKey = 'conformance-secret'
+const secretKey = 'conformance-secret-32-bytes-minimum'
 const realm = 'conformance'
 const port = Number(process.env.MPP_FLOW_PORT ?? 43999)
 const flowPath = process.env.MPP_FLOW_CASES

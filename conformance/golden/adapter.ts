@@ -145,7 +145,7 @@ async function verifyStripeExternalIdBinding(input: {
 	}
 	| { ok: false; errorType: 'invalid_challenge' | 'verification_failed' }
 > {
-	const secretKey = 'conformance-stripe-secret'
+	const secretKey = 'conformance-stripe-secret-32-bytes-min'
 	const methodDetails =
 		typeof input.request.methodDetails === 'object' && input.request.methodDetails !== null
 			? (input.request.methodDetails as Record<string, unknown>)
