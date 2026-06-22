@@ -48,7 +48,7 @@ GEM
     scrypt (3.1.0)
       ffi-compiler (>= 1.0, < 2.0)
       rake (~> 13)
-    sorbet-runtime (0.6.13305)
+    sorbet-runtime (0.6.13308)
 
 PLATFORMS
   aarch64-linux
@@ -89,7 +89,7 @@ CHECKSUMS
   rlp (0.7.3) sha256=a4f3ac65b1206ac84212811bc8f8590c136a49d848071ab2e60ae621bac8869f
   rubyzip (2.4.1) sha256=8577c88edc1fde8935eb91064c5cb1aef9ad5494b940cf19c775ee833e075615
   scrypt (3.1.0) sha256=67fde35bc7e3b7fe906c5be9c242acf95fe4a886c89572f405f6b11df30aa6af
-  sorbet-runtime (0.6.13305) sha256=b8fd642dde747a6297148637b5b8f7f6d37fbe5b00c0e8035b3f1784b93b065d
+  sorbet-runtime (0.6.13308) sha256=71d772cc345bcf38fb7dce78397ebd6c061fd531aa71d222f379f34f8930fe7a
 
 BUNDLED WITH
   4.0.9
