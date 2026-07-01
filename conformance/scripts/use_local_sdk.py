@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -72,6 +73,8 @@ def configure_python(conformance_dir: Path, sdk_path: Path) -> None:
 
 def configure_go(conformance_dir: Path, sdk_path: Path) -> None:
     adapter_dir = conformance_dir / "adapters" / "go"
+    go_env = os.environ.copy()
+    go_env.setdefault("GOTOOLCHAIN", "auto")
     result = subprocess.run(
         [
             "go",
@@ -81,12 +84,24 @@ def configure_go(conformance_dir: Path, sdk_path: Path) -> None:
             f"github.com/tempoxyz/mpp-go={sdk_path}",
         ],
         cwd=adapter_dir,
+        env=go_env,
         capture_output=True,
         text=True,
     )
     if result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip()
         raise RuntimeError(f"go mod edit failed: {detail}")
+
+    result = subprocess.run(
+        ["go", "mod", "tidy"],
+        cwd=adapter_dir,
+        env=go_env,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip()
+        raise RuntimeError(f"go mod tidy failed: {detail}")
 
 
 def configure_typescript(conformance_dir: Path, sdk_path: Path) -> None:
