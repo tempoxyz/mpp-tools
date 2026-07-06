@@ -34,7 +34,7 @@ jobs:
 
     steps:
       - name: Checkout SDK
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           path: sdk
 
@@ -60,7 +60,7 @@ jobs:
           echo "conformance_ref=$REQUESTED_CONFORMANCE_REF" >> "$GITHUB_OUTPUT"
 
       - name: Checkout conformance suite
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: tempoxyz/mpp-tools
           ref: ${{ steps.resolve.outputs.conformance_ref }}

@@ -53,7 +53,7 @@ jobs:
 
     steps:
       - name: Checkout policy scripts
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: tempoxyz/mpp-tools
           ref: ${{ inputs.default-conformance-ref }}
