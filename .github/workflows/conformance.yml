@@ -56,7 +56,7 @@ jobs:
       reason: ${{ steps.select.outputs.reason }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Collect changed files
         if: github.event_name == 'pull_request'
@@ -103,7 +103,7 @@ jobs:
         working-directory: conformance
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup conformance adapter
         uses: ./.github/actions/setup-conformance
@@ -157,7 +157,7 @@ jobs:
         working-directory: conformance
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup conformance adapter
         uses: ./.github/actions/setup-conformance
@@ -215,7 +215,7 @@ jobs:
         working-directory: conformance
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup conformance adapter
         uses: ./.github/actions/setup-conformance
@@ -253,7 +253,7 @@ jobs:
         working-directory: conformance
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Download vector results
         if: needs.changes.outputs.run_conformance == 'true'
