@@ -725,7 +725,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pympp", extras = ["tempo"], specifier = "==0.8.2" }]
+requires-dist = [{ name = "pympp", extras = ["tempo"], specifier = "==0.9.1" }]
 
 [[package]]
 name = "multidict"
@@ -1054,14 +1054,14 @@ wheels = [
 
 [[package]]
 name = "pympp"
-version = "0.8.2"
+version = "0.9.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/aa/51/6cf407f24ad3e798e4730e502b65d01083dfcb69b968640544aa2ac18803/pympp-0.8.2.tar.gz", hash = "sha256:be6f9eeb52f1688d934cafbb57d0cc1e2afd7dd02bbc09d38b03f21e2fb59a5c", size = 148171, upload-time = "2026-06-02T07:42:51.714Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/de/97/56cc4a49689cbcf597d9ec8f5e913645f4d038f51f84892f1f5e567ac9fb/pympp-0.9.1.tar.gz", hash = "sha256:c347e805015e3ad726ee4cfc4b62da51405e78edb442f52cbbbc0cd20899744b", size = 162972, upload-time = "2026-07-01T18:53:03.046Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/05/a6/9ed89bb93d80b79963e243e1bcf7831e3d92eeaf467cf904ec22493a6c8f/pympp-0.8.2-py3-none-any.whl", hash = "sha256:df28393460ffe8f9971e89ebf43e40e452c1dc648aba2fe86fa355c3858e7256", size = 87584, upload-time = "2026-06-02T07:42:50.598Z" },
+    { url = "https://files.pythonhosted.org/packages/d8/4d/502211c48fdd009ce64c1f148979587bf8f9ecb51a9518b9505923382b31/pympp-0.9.1-py3-none-any.whl", hash = "sha256:6e68bea69f7c2f547971d40c52e47e37d1643647b8d2593955ea7d65214f64e5", size = 92936, upload-time = "2026-07-01T18:53:01.751Z" },
 ]
 
 [package.optional-dependencies]
