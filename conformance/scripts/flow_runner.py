@@ -613,6 +613,28 @@ def run_flow_case(
     return result
 
 
+def run_flow_case_safely(
+    client: AdapterClient,
+    base_url: str,
+    flow_case: dict[str, Any],
+    cases_by_path: dict[str, dict[str, Any]],
+    verbose: bool,
+) -> dict[str, Any]:
+    """Contain per-case crashes so one bad response cannot void the whole suite.
+
+    AdapterClient.call raises (rather than returning an error response) when an
+    adapter's output fails schema validation; without this boundary that single
+    case would abort every remaining flow for the adapter.
+    """
+    name = str(flow_case.get("name"))
+    try:
+        return run_flow_case(client, base_url, flow_case, cases_by_path, verbose)
+    except Exception as exc:
+        if verbose:
+            print(f"[{client.adapter.name}] {name}: case error {exc}", file=sys.stderr)
+        return flow_error(name, 0, f"case_error: {exc}")
+
+
 def run_adapter_flows(adapter: AdapterConfig, base_url: str, verbose: bool) -> list[dict[str, Any]]:
     build_error = build_adapter(adapter)
     if build_error:
@@ -621,7 +643,7 @@ def run_adapter_flows(adapter: AdapterConfig, base_url: str, verbose: bool) -> l
     flow_cases = load_flow_cases()
     cases_by_path = {str(flow_case.get("path", "/")): flow_case for flow_case in flow_cases}
     return [
-        run_flow_case(client, base_url, flow_case, cases_by_path, verbose)
+        run_flow_case_safely(client, base_url, flow_case, cases_by_path, verbose)
         for flow_case in flow_cases
         if not flow_case.get("server_only")
     ]
@@ -788,6 +810,7 @@ def main() -> int:
             server.wait(timeout=5)
         except subprocess.TimeoutExpired:
             server.kill()
+            server.wait()
 
 
 if __name__ == "__main__":
