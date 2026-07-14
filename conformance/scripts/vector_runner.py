@@ -298,9 +298,9 @@ class VectorRunner:
 
         if self.verbose:
             status = "✓" if passed else "✗"
-            print(f"    {status} {test_name}")
+            self.log(f"    {status} {test_name}")
             if not passed and error:
-                print(f"      {error}")
+                self.log(f"      {error}")
 
     def compare_results(
         self, expected: dict[str, Any], actual: dict[str, Any]
@@ -428,7 +428,7 @@ class VectorRunner:
         """Run all tests from a single vector file (v2 scenario format)."""
         vector_name = vector_path.stem
         if not vector_path.exists():
-            print(f"  ⚠ Vector file not found: {vector_path}")
+            self.log(f"  ⚠ Vector file not found: {vector_path}")
             return
 
         with open(vector_path) as f:
@@ -444,14 +444,14 @@ class VectorRunner:
         if operation:
             if operation not in adapter.capabilities:
                 if self.verbose:
-                    print(f"  {vector_name}.json SKIPPED ({adapter.name} lacks {operation})")
+                    self.log(f"  {vector_name}.json SKIPPED ({adapter.name} lacks {operation})")
                 return
         elif not parse_cmd and not format_cmd and not generate_cmd:
-            print(f"  ⚠ No commands defined in {vector_name}.json")
+            self.log(f"  ⚠ No commands defined in {vector_name}.json")
             return
 
         if self.verbose:
-            print(f"  {vector_name}.json")
+            self.log(f"  {vector_name}.json")
 
         is_base64url = parse_cmd and parse_cmd.startswith("base64url-")
         is_challenge_id = generate_cmd is not None
@@ -730,7 +730,20 @@ class VectorRunner:
                     self.log(f"  {vector_name}: SKIPPED (not found)")
                     continue
                 before_count = len(self.results)
-                self.run_vector_file(adapter, all_vectors[vector_name], tag_filter=tag_filter)
+                try:
+                    self.run_vector_file(adapter, all_vectors[vector_name], tag_filter=tag_filter)
+                except Exception as exc:
+                    self._record_result(
+                        vector_file=vector_name,
+                        test_type=TestType.BUILD,
+                        test_name="vector_file_error",
+                        adapter=adapter.name,
+                        passed=False,
+                        description="Vector file loads and its scenarios run without crashing the runner",
+                        expected="vector file parses and runs",
+                        actual=None,
+                        error=f"{type(exc).__name__}: {exc}",
+                    )
                 # Print results for this vector file
                 for r in self.results[before_count:]:
                     status = "PASS" if r.passed else "FAIL"
