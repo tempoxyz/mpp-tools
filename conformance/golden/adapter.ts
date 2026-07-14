@@ -85,8 +85,12 @@ function stableStringify(value: unknown): string {
 	}
 
 	if (value && typeof value === 'object') {
+		// Sort by Unicode code point, never by locale: this string feeds the
+		// challenge-id HMAC, and localeCompare both diverges from the other
+		// SDKs (which sort by code point) and varies with the runtime's ICU
+		// data, making the reference id environment-dependent.
 		const entries = Object.entries(value as Record<string, unknown>).sort(([left], [right]) =>
-			left.localeCompare(right),
+			left < right ? -1 : left > right ? 1 : 0,
 		)
 		return `{${entries
 			.map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item)}`)
