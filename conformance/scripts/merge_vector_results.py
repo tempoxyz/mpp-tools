@@ -62,30 +62,53 @@ def main() -> int:
     errors = merged["errors"]
     assert isinstance(errors, list)
 
-    for adapter in adapters(args.adapters):
+    def record_runner_failure(adapter: str, message: str) -> None:
+        merged["failed"] = int(merged["failed"]) + 1
+        merged["num_checks"] = int(merged["num_checks"]) + 1
+        errors.append(
+            {
+                "adapter": adapter,
+                "vector": "runner",
+                "test_type": "build",
+                "test_name": "runner",
+                "error": message,
+            }
+        )
+
+    adapter_names = adapters(args.adapters)
+    for adapter in adapter_names:
         result_path = args.result_dir / f"results-{adapter}.json"
         stderr_path = args.result_dir / f"stderr-{adapter}.log"
         try:
             result = json.loads(result_path.read_text(encoding="utf-8"))
+            if not isinstance(result, dict):
+                raise ValueError("results payload is not a JSON object")
+            adapter_passed = int(result.get("passed", 0))
+            adapter_failed = int(result.get("failed", 0))
+            adapter_checks = int(result.get("num_checks", 0))
+            adapter_status = result.get("status")
         except Exception as exc:
             stderr = stderr_path.read_text(encoding="utf-8").strip() if stderr_path.exists() else ""
-            merged["failed"] = int(merged["failed"]) + 1
-            merged["num_checks"] = int(merged["num_checks"]) + 1
-            errors.append(
-                {
-                    "adapter": adapter,
-                    "vector": "runner",
-                    "test_type": "build",
-                    "test_name": "runner",
-                    "error": stderr or f"Could not read {result_path}: {exc}",
-                }
-            )
+            record_runner_failure(adapter, stderr or f"Could not read {result_path}: {exc}")
             continue
 
-        merged["passed"] = int(merged["passed"]) + int(result.get("passed", 0))
-        merged["failed"] = int(merged["failed"]) + int(result.get("failed", 0))
-        merged["num_checks"] = int(merged["num_checks"]) + int(result.get("num_checks", 0))
+        merged["passed"] = int(merged["passed"]) + adapter_passed
+        merged["failed"] = int(merged["failed"]) + adapter_failed
+        merged["num_checks"] = int(merged["num_checks"]) + adapter_checks
         errors.extend(result.get("errors", []))
+
+        # A readable artifact can still be vacuous or self-inconsistent; do not
+        # let it merge into an overall pass without contributing real checks.
+        if adapter_checks == 0:
+            record_runner_failure(adapter, f"{result_path} reported zero conformance checks")
+        elif adapter_status != "pass" and adapter_failed == 0:
+            record_runner_failure(
+                adapter,
+                f"{result_path} reported status {adapter_status!r} but no failing checks",
+            )
+
+    if not adapter_names:
+        record_runner_failure("runner", "No adapters were provided to merge")
 
     if int(merged["failed"]):
         merged["status"] = "fail"
