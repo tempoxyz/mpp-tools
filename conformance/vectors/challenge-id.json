@@ -450,6 +450,30 @@
           "error_type": "generation_error"
         }
       }
+    },
+    {
+      "name": "mixed_case_key_ordering",
+      "description": "Canonical request JSON must sort keys by Unicode code point (uppercase before lowercase), not locale collation",
+      "tags": [
+        "happy-path",
+        "canonicalization"
+      ],
+      "input": {
+        "secretKey": "case-sensitive-key-minimum-32-bytes",
+        "realm": "api.example.com",
+        "method": "tempo",
+        "intent": "charge",
+        "request": {
+          "amount": "1000000",
+          "Currency": "USD",
+          "ZONE": "eu-1",
+          "network": {
+            "chainId": 42431,
+            "Layer": "L2"
+          }
+        }
+      },
+      "expected": "oUJHedaukLx579-B6Apbsw_r17uJOqERHjQRjCVhP0M"
     }
   ]
 }
