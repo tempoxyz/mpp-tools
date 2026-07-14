@@ -3,7 +3,12 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from harness import AdapterConfig
 from vector_runner import VectorRunner
@@ -92,6 +97,61 @@ class VectorRunnerHelperTest(unittest.TestCase):
         }
 
         self.assertEqual(self.runner.scenario_wire(scenario), "abcbcbcd")
+
+
+class VectorRunnerJsonArtifactTest(unittest.TestCase):
+    """The json output format must stay machine-readable on stdout."""
+
+    def setUp(self) -> None:
+        self.runner = VectorRunner(output_format="json")
+        self.adapter = AdapterConfig(name="python", command=["python"], capabilities=[])
+
+    def run_vector_file_capturing_stdout(self, content: str) -> str:
+        with tempfile.TemporaryDirectory() as tmp:
+            vector_path = Path(tmp) / "sample.json"
+            vector_path.write_text(content, encoding="utf-8")
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                self.runner.run_vector_file(self.adapter, vector_path)
+            return stdout.getvalue()
+
+    def test_vector_without_commands_does_not_write_to_stdout(self) -> None:
+        printed = self.run_vector_file_capturing_stdout(json.dumps({"scenarios": []}))
+
+        self.assertEqual(printed, "")
+
+    def test_missing_vector_file_does_not_write_to_stdout(self) -> None:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            self.runner.run_vector_file(self.adapter, Path("/nonexistent/vectors/missing.json"))
+
+        self.assertEqual(stdout.getvalue(), "")
+
+    def test_malformed_vector_file_is_reported_not_fatal(self) -> None:
+        import vector_runner as vector_runner_module
+
+        fake_adapter = AdapterConfig(name="fake", command=["true"], capabilities=[])
+        with tempfile.TemporaryDirectory() as tmp:
+            vectors_dir = Path(tmp)
+            (vectors_dir / "broken.json").write_text("{not json", encoding="utf-8")
+
+            original_discover_vectors = vector_runner_module.discover_vector_files
+            original_discover_adapters = vector_runner_module.discover_adapters
+            vector_runner_module.discover_vector_files = lambda: {"broken": vectors_dir / "broken.json"}
+            vector_runner_module.discover_adapters = lambda: {"fake": fake_adapter}
+            try:
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout):
+                    success = self.runner.run(adapter_names=["fake"], vector_names=["broken"])
+            finally:
+                vector_runner_module.discover_vector_files = original_discover_vectors
+                vector_runner_module.discover_adapters = original_discover_adapters
+
+        self.assertFalse(success)
+        output = json.loads(stdout.getvalue())
+        self.assertEqual(output["status"], "fail")
+        failing = [check for check in output["checks"] if check["status"] == "FAILURE"]
+        self.assertTrue(any("vector-file-error" in check["id"] for check in failing))
 
 
 if __name__ == "__main__":
