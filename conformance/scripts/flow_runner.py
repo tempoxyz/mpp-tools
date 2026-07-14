@@ -637,6 +637,16 @@ def record_adapter_failure(results: list[RunResult], adapter: str, exc: Exceptio
     results.append(RunResult(adapter=adapter, name="adapter-run", passed=False, error=str(exc)))
 
 
+def guard_no_results(results: list[RunResult], adapter: str) -> None:
+    """An empty result set must fail: zero executed checks is not conformance."""
+    if not results:
+        record_adapter_failure(
+            results,
+            adapter,
+            RuntimeError("No flow conformance checks were executed"),
+        )
+
+
 def compare_results(
     expected: list[dict[str, Any]],
     actual: list[dict[str, Any]],
@@ -752,6 +762,8 @@ def main() -> int:
             except Exception as exc:
                 log(" failed", args.output)
                 record_adapter_failure(results, adapter_name, exc)
+
+        guard_no_results(results, args.adapter)
 
         passed = sum(1 for r in results if r.passed)
         failed = sum(1 for r in results if not r.passed)
