@@ -126,6 +126,30 @@
         "format": true,
         "roundtrip": true
       }
+    },
+    {
+      "name": "invalid_characters_rejected",
+      "description": "Characters outside the RFC4648 URL-safe alphabet are an encoding error, not silently dropped or ignored",
+      "tags": ["error-case"],
+      "encoded": "not-valid!!!",
+      "tests": {
+        "parse": {
+          "success": false,
+          "error_type": "encoding_error"
+        }
+      }
+    },
+    {
+      "name": "invalid_utf8_rejected",
+      "description": "Valid base64url whose bytes are not valid UTF-8 (0xFF) is an encoding error, not U+FFFD replacement output",
+      "tags": ["error-case"],
+      "encoded": "_w",
+      "tests": {
+        "parse": {
+          "success": false,
+          "error_type": "encoding_error"
+        }
+      }
     }
   ]
 }
