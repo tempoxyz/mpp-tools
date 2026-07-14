@@ -66,11 +66,22 @@ def run_adapter(adapter: AdapterConfig, cases: list[dict[str, Any]]) -> list[Run
     results: list[RunResult] = []
     for case in cases:
         name = str(case.get("name"))
-        response = client.call(
-            "server.verify",
-            case.get("input"),
-            context={"caseName": name},
-        )
+        try:
+            response = client.call(
+                "server.verify",
+                case.get("input"),
+                context={"caseName": name},
+            )
+        except Exception as exc:
+            # Schema-validation failures raise out of call(); keep them scoped
+            # to the case instead of aborting the adapter's remaining cases.
+            results.append(RunResult(
+                adapter=adapter.name,
+                name=name,
+                passed=False,
+                error=str(exc),
+            ))
+            continue
         if not response.get("ok"):
             error = response.get("error") or {}
             results.append(RunResult(
