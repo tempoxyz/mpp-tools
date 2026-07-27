@@ -1,11 +1,12 @@
 # This is a Gradle generated file for dependency locking.
 # Manual edits can break the build and are not advised.
 # This file is expected to be part of source control.
-com.fasterxml.jackson.core:jackson-annotations:2.21=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
-com.fasterxml.jackson.core:jackson-core:2.21.4=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
-com.fasterxml.jackson.core:jackson-databind:2.21.4=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
-com.fasterxml.jackson:jackson-bom:2.21.4=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+# To regenerate this file, run: ./gradlew :dependencies --write-locks
+com.fasterxml.jackson.core:jackson-annotations:2.22=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+com.fasterxml.jackson.core:jackson-core:2.22.1=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+com.fasterxml.jackson.core:jackson-databind:2.22.1=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+com.fasterxml.jackson:jackson-bom:2.22.1=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 com.google.code.gson:gson:2.10.1=runtimeClasspath,testRuntimeClasspath
-com.stripe:mpp-java:0.1.1=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+com.stripe:mpp-java:0.1.2=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 com.stripe:stripe-java:25.3.0=runtimeClasspath,testRuntimeClasspath
 empty=annotationProcessor,testAnnotationProcessor
