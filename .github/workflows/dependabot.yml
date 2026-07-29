@@ -2,7 +2,7 @@ name: Dependabot
 
 on:
   workflow_call:
-  pull_request_target:
+  pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
 
 permissions:
