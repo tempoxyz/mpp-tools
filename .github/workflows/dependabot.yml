@@ -1,0 +1,107 @@
+name: Dependabot
+
+on:
+  workflow_call:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  checks: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: dependabot-${{ github.repository }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  merge:
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3
+
+      - name: Wait for checks
+        if: >-
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          previous_signature=""
+          stable_passes=0
+
+          for _ in $(seq 1 180); do
+            current_head=$(gh pr view "$PR_URL" --json headRefOid --jq .headRefOid)
+            if [ "$current_head" != "$HEAD_SHA" ]; then
+              echo "Pull request head changed while checks were running"
+              exit 1
+            fi
+
+            set +e
+            checks=$(gh pr checks "$PR_URL" --json bucket,name,workflow)
+            check_status=$?
+            set -e
+            if [ "$check_status" -ne 0 ] && [ "$check_status" -ne 8 ]; then
+              exit "$check_status"
+            fi
+
+            relevant=$(jq '[.[] | select(.workflow != "Dependabot")]' <<<"$checks")
+            count=$(jq 'length' <<<"$relevant")
+            failures=$(jq '[.[] | select(.bucket == "fail" or .bucket == "cancel")] | length' <<<"$relevant")
+            pending=$(jq '[.[] | select(.bucket == "pending")] | length' <<<"$relevant")
+            signature=$(jq -r '[.[] | (.workflow + "/" + .name)] | sort | join("\n")' <<<"$relevant")
+
+            if [ "$failures" -gt 0 ]; then
+              echo "At least one pull request check failed or was cancelled"
+              jq . <<<"$relevant"
+              exit 1
+            fi
+
+            if [ "$count" -gt 0 ] && [ "$pending" -eq 0 ]; then
+              if [ "$signature" = "$previous_signature" ]; then
+                stable_passes=$((stable_passes + 1))
+              else
+                stable_passes=1
+              fi
+
+              if [ "$stable_passes" -ge 3 ]; then
+                jq . <<<"$relevant"
+                exit 0
+              fi
+            else
+              stable_passes=0
+            fi
+
+            previous_signature="$signature"
+            sleep 10
+          done
+
+          echo "Timed out waiting for pull request checks"
+          exit 1
+
+      - name: Approve update
+        if: >-
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr review "$PR_URL" --approve
+
+      - name: Merge update
+        if: >-
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge "$PR_URL" --squash --match-head-commit "$HEAD_SHA"

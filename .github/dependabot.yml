@@ -1,65 +1,45 @@
 version: 2
 
+multi-ecosystem-groups:
+  weekly-dependencies:
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Los_Angeles"
+
 updates:
   - package-ecosystem: "npm"
     directory: "/conformance"
-    schedule:
-      interval: "weekly"
-    groups:
-      npm-dependencies:
-        patterns:
-          - "*"
+    patterns: ["*"]
+    multi-ecosystem-group: "weekly-dependencies"
 
   - package-ecosystem: "cargo"
     directory: "/conformance/adapters/rust"
-    schedule:
-      interval: "weekly"
-    groups:
-      rust-dependencies:
-        patterns:
-          - "*"
+    patterns: ["*"]
+    multi-ecosystem-group: "weekly-dependencies"
 
   - package-ecosystem: "uv"
     directory: "/conformance/adapters/python"
-    schedule:
-      interval: "weekly"
-    groups:
-      python-dependencies:
-        patterns:
-          - "*"
+    patterns: ["*"]
+    multi-ecosystem-group: "weekly-dependencies"
 
   - package-ecosystem: "gomod"
     directory: "/conformance/adapters/go"
-    schedule:
-      interval: "weekly"
-    groups:
-      go-dependencies:
-        patterns:
-          - "*"
+    patterns: ["*"]
+    multi-ecosystem-group: "weekly-dependencies"
 
   - package-ecosystem: "bundler"
     directory: "/conformance/adapters/ruby"
-    schedule:
-      interval: "weekly"
-    groups:
-      ruby-dependencies:
-        patterns:
-          - "*"
+    patterns: ["*"]
+    multi-ecosystem-group: "weekly-dependencies"
 
   - package-ecosystem: "gradle"
     directory: "/conformance/adapters/java"
-    schedule:
-      interval: "weekly"
-    groups:
-      java-dependencies:
-        patterns:
-          - "*"
+    patterns: ["*"]
+    multi-ecosystem-group: "weekly-dependencies"
 
   - package-ecosystem: "github-actions"
     directory: "/"
-    schedule:
-      interval: "weekly"
-    groups:
-      github-actions:
-        patterns:
-          - "*"
+    patterns: ["*"]
+    multi-ecosystem-group: "weekly-dependencies"
