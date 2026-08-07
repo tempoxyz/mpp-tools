@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/tempoxyz/mpp-go/pkg/mpp"
 	"github.com/tempoxyz/mpp-go/pkg/server"
@@ -208,6 +209,12 @@ func handleBase64URLDecode(input string) {
 	decoded, err := base64.RawURLEncoding.DecodeString(input)
 	if err != nil {
 		printJSON(commandResponse{Success: false, Error: err.Error(), ErrorType: "encoding_error"})
+		return
+	}
+	// The decode ABI returns a UTF-8 JSON string; bytes that cannot be
+	// decoded must be an encoding_error, not U+FFFD replacements.
+	if !utf8.Valid(decoded) {
+		printJSON(commandResponse{Success: false, Error: "decoded value is not valid UTF-8", ErrorType: "encoding_error"})
 		return
 	}
 	printJSON(commandResponse{Success: true, Result: string(decoded)})

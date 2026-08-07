@@ -101,7 +101,14 @@ function base64UrlEncode(value: string): string {
 }
 
 function base64UrlDecode(value: string): string {
-	return Buffer.from(value, 'base64url').toString('utf8')
+	// Buffer.from(value, 'base64url') silently ignores characters outside the
+	// alphabet, which would make the reference adapter accept wire values every
+	// other adapter rejects. Validate explicitly, and decode UTF-8 fatally so
+	// undecodable bytes error instead of turning into U+FFFD.
+	if (!/^[A-Za-z0-9_-]*={0,2}$/.test(value)) {
+		throw new Error('Invalid base64url character')
+	}
+	return new TextDecoder('utf-8', { fatal: true }).decode(Buffer.from(value, 'base64url'))
 }
 
 function generateConformanceChallengeId(params: {

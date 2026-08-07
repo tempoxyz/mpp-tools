@@ -345,7 +345,7 @@ def run_adapter_request(request)
 end
 
 def error_type_for_command(command)
-  if command.start_with?("parse-") || command == "base64url-decode"
+  if command.start_with?("parse-")
     "parse_error"
   elsif command.start_with?("format-")
     "format_error"
@@ -393,7 +393,9 @@ def run_command(command, input)
   when "base64url-encode"
     success(base64url_encode(input))
   when "base64url-decode"
-    success(base64url_decode(input).force_encoding("UTF-8"))
+    decoded = base64url_decode(input).force_encoding("UTF-8")
+    raise ArgumentError, "decoded value is not valid UTF-8" unless decoded.valid_encoding?
+    success(decoded)
   when "generate-challenge-id"
     success(generate_conformance_challenge_id(JSON.parse(input)))
   when "cosign-tempo-fee-payer"

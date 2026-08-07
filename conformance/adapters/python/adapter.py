@@ -31,14 +31,21 @@ def base64url_encode(data: str) -> str:
 
 
 def base64url_decode(data: str) -> str:
-    """Decode a base64url string (with or without padding)."""
+    """Decode a base64url string (with or without padding).
+
+    Invalid input must be rejected, not repaired: silently dropping
+    out-of-alphabet characters would accept wire values every other
+    adapter refuses.
+    """
     import re
 
-    cleaned = re.sub(r"[^A-Za-z0-9_-]", "", data)
-    padding = 4 - (len(cleaned) % 4)
+    stripped = data.rstrip("=")
+    if re.search(r"[^A-Za-z0-9_-]", stripped):
+        raise ValueError("invalid base64url character")
+    padding = 4 - (len(stripped) % 4)
     if padding != 4:
-        cleaned += "=" * padding
-    decoded = base64.urlsafe_b64decode(cleaned)
+        stripped += "=" * padding
+    decoded = base64.urlsafe_b64decode(stripped)
     return decoded.decode("utf-8")
 
 
@@ -357,11 +364,11 @@ def main():
         else:
             print(json.dumps(error(f"Unknown command: {command}")))
     except Exception as e:
-        if command.startswith("parse-") or command == "base64url-decode":
+        if command.startswith("parse-"):
             error_type = "parse_error"
         elif command.startswith("format-"):
             error_type = "format_error"
-        elif command == "base64url-encode":
+        elif command.startswith("base64url-"):
             error_type = "encoding_error"
         elif command.startswith("generate-"):
             error_type = "generation_error"
