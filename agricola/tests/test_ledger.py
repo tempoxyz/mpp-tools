@@ -49,7 +49,7 @@ class LedgerTests(unittest.TestCase):
             decision = SkipDecision(
                 target="ruby",
                 decision=DecisionKind.SKIP,
-                by="brendanryan",
+                by="brendanjryan",
                 reason="TS only",
                 idempotency_key="comment:1",
                 at=datetime(2026, 8, 7, 14, 2, tzinfo=UTC),
@@ -71,14 +71,14 @@ class LedgerTests(unittest.TestCase):
             first = SkipDecision(
                 target="ruby",
                 decision=DecisionKind.SKIP,
-                by="brendanryan",
+                by="brendanjryan",
                 idempotency_key="same",
                 reason="one",
             )
             second = SkipDecision(
                 target="ruby",
                 decision=DecisionKind.SKIP,
-                by="brendanryan",
+                by="brendanjryan",
                 idempotency_key="same",
                 reason="two",
             )

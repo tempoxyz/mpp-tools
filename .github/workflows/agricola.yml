@@ -250,7 +250,6 @@ jobs:
           private-key: ${{ secrets.AGRICOLA_APP_PRIVATE_KEY }}
           owner: tempoxyz
           repositories: |
-            mpp-go
             mpp-rs
             pympp
           permission-contents: write

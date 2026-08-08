@@ -16,14 +16,14 @@ from agricola.models import (
 def manifest() -> Manifest:
     return Manifest(
         version=1,
-        maintainers=frozenset({"brendanryan", "maintainer"}),
+        maintainers=frozenset({"brendanjryan", "maintainer"}),
         canonical=Repository(repo="wevm/mppx"),
         spec=Repository(repo="tempoxyz/mpp-specs"),
         sdks={
             "go": SDK(
                 repo="tempoxyz/mpp-go",
                 automation=Automation.PR,
-                owners=("brendanryan",),
+                owners=("brendanjryan",),
                 changelog=Changelog.KEEP_A_CHANGELOG,
                 verify=("make test",),
             ),

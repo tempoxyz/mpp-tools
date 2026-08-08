@@ -14,7 +14,8 @@ class ManifestTests(unittest.TestCase):
     def test_repository_manifest_loads(self) -> None:
         manifest = load_manifest("sdks.yaml")
         self.assertEqual(manifest.canonical.repo, "wevm/mppx")
-        self.assertEqual(manifest.sdks["go"].automation, Automation.PR)
+        self.assertEqual(manifest.sdks["go"].automation, Automation.NOTIFY)
+        self.assertEqual(manifest.pr_targets(), ("rust", "python"))
         self.assertEqual(manifest.sdks["ruby"].automation, Automation.NOTIFY)
 
     def test_rejects_pr_target_without_verification(self) -> None:
