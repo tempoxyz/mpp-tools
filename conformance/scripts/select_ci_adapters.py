@@ -34,7 +34,7 @@ ADAPTER_PATTERNS = {
 
 AGRICOLA_PATTERNS = [
     ".github/agricola/**",
-    ".github/workflows/agricola.yml",
+    ".github/workflows/agricola*.yml",
     "agricola/**",
     "docs/**",
     "ledger/**",

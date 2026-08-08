@@ -319,6 +319,93 @@ class PendingIssueUpdate(FrozenModel):
     body: NonEmpty
 
 
+class AuditCheckStatus(StrEnum):
+    SUCCESS = "SUCCESS"
+    FAILURE = "FAILURE"
+
+
+class AuditObservation(FrozenModel):
+    fingerprint: NonEmpty
+    status: AuditCheckStatus
+    summary: NonEmpty
+    reference: str | None = None
+
+
+class AuditSnapshot(FrozenModel):
+    target: NonEmpty
+    repo: RepoName
+    sha: Sha
+    capabilities: frozenset[NonEmpty]
+    observations: tuple[AuditObservation, ...]
+    errors: tuple[NonEmpty, ...] = ()
+
+    @model_validator(mode="after")
+    def require_unique_observations(self) -> AuditSnapshot:
+        fingerprints = [item.fingerprint for item in self.observations]
+        if len(fingerprints) != len(set(fingerprints)):
+            raise ValueError("audit observation fingerprints must be unique")
+        return self
+
+
+class AuditFindingRecord(FrozenModel):
+    id: FindingId
+    fingerprint: NonEmpty
+    first_seen: datetime
+
+    @field_validator("first_seen")
+    @classmethod
+    def require_aware_timestamp(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("timestamp must include a timezone")
+        return value.astimezone(UTC)
+
+
+class AuditRegistry(FrozenModel):
+    version: Literal[1] = 1
+    findings: tuple[AuditFindingRecord, ...] = ()
+
+    @model_validator(mode="after")
+    def require_unique_findings(self) -> AuditRegistry:
+        ids = [finding.id for finding in self.findings]
+        fingerprints = [finding.fingerprint for finding in self.findings]
+        if len(ids) != len(set(ids)):
+            raise ValueError("audit finding IDs must be unique")
+        if len(fingerprints) != len(set(fingerprints)):
+            raise ValueError("audit finding fingerprints must be unique")
+        return self
+
+
+class AuditFinding(FrozenModel):
+    id: FindingId
+    fingerprint: NonEmpty
+    summary: NonEmpty
+    reference: str | None = None
+    affected: tuple[NonEmpty, ...] = Field(min_length=1)
+    clean: tuple[NonEmpty, ...] = ()
+    likely_origin: NonEmpty
+
+
+class AuditReport(FrozenModel):
+    generated_at: datetime
+    canonical: AuditSnapshot
+    targets: tuple[AuditSnapshot, ...]
+    findings: tuple[AuditFinding, ...]
+    errors: tuple[NonEmpty, ...] = ()
+
+    @field_validator("generated_at")
+    @classmethod
+    def require_aware_timestamp(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("timestamp must include a timezone")
+        return value.astimezone(UTC)
+
+
+class PendingAuditReport(FrozenModel):
+    title: NonEmpty
+    body: NonEmpty
+    healthy: bool
+
+
 class Cursor(FrozenModel):
     merged_at: datetime
 

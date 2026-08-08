@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from datetime import UTC, datetime, timedelta
 
-from agricola.ledger import CursorStore, DecisionLedger, LedgerError
+from agricola.ledger import AuditStore, CursorStore, DecisionLedger, LedgerError
 from agricola.models import Cursor, DecisionKind, SkipDecision
 from agricola.tests.helpers import change
 
@@ -125,6 +125,17 @@ class CursorStoreTests(unittest.TestCase):
             store.path.parent.mkdir(parents=True, exist_ok=True)
             store.path.write_text('{"merged_at": "yesterday"}\n')
             with self.assertRaisesRegex(LedgerError, "cannot read cursor"):
+                DecisionLedger(directory).validate_all()
+
+
+class AuditStoreTests(unittest.TestCase):
+    def test_validation_rejects_malformed_registry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = AuditStore(directory)
+            store.path.parent.mkdir(parents=True, exist_ok=True)
+            store.path.write_text('{"version": 2}\n')
+
+            with self.assertRaisesRegex(LedgerError, "cannot read audit registry"):
                 DecisionLedger(directory).validate_all()
 
 
