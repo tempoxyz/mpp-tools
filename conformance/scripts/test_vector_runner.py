@@ -16,7 +16,15 @@ from vector_runner import VectorRunner
 
 class VectorRunnerHelperTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.runner = VectorRunner(output_format="json")
+        self.resolved_adapters: list[str] = []
+
+        def resolve_version(adapter: str) -> str:
+            self.resolved_adapters.append(adapter)
+            return "0.9.1"
+
+        self.runner = VectorRunner(
+            output_format="json", sdk_version_resolver=resolve_version
+        )
         self.adapter = AdapterConfig(name="python", command=["python"], capabilities=[])
 
     def test_duration_limit_prefers_adapter_specific_value(self) -> None:
@@ -39,6 +47,76 @@ class VectorRunnerHelperTest(unittest.TestCase):
 
         self.assertFalse(passed)
         self.assertEqual(error, "duration exceeded: expected <= 5000 ms, got 5000.1 ms")
+
+    def test_scenario_version_constraint_applies_when_matching(self) -> None:
+        scenario = {"sdkVersions": {"python": ">0.9.0, <1.0.0"}}
+
+        applies, reason = self.runner.scenario_version_applies(scenario, self.adapter)
+
+        self.assertTrue(applies)
+        self.assertIsNone(reason)
+        self.assertEqual(self.resolved_adapters, ["python"])
+
+    def test_scenario_version_constraint_skips_when_not_matching(self) -> None:
+        scenario = {"sdkVersions": {"python": ">0.9.1"}}
+
+        applies, reason = self.runner.scenario_version_applies(scenario, self.adapter)
+
+        self.assertFalse(applies)
+        self.assertEqual(reason, "python@0.9.1 does not satisfy >0.9.1")
+
+    def test_scenario_version_constraint_ignores_unspecified_adapter(self) -> None:
+        scenario = {"sdkVersions": {"rust": ">=0.12.0"}}
+
+        applies, reason = self.runner.scenario_version_applies(scenario, self.adapter)
+
+        self.assertTrue(applies)
+        self.assertIsNone(reason)
+        self.assertEqual(self.resolved_adapters, [])
+
+    def test_scenario_version_resolver_is_cached_per_adapter(self) -> None:
+        scenario = {"sdkVersions": {"python": ">=0.9.0"}}
+
+        self.runner.scenario_version_applies(scenario, self.adapter)
+        self.runner.scenario_version_applies(scenario, self.adapter)
+
+        self.assertEqual(self.resolved_adapters, ["python"])
+
+    def test_scenario_version_constraints_require_an_object(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError, "sdkVersions must be an object keyed by adapter name"
+        ):
+            self.runner.scenario_version_applies(
+                {"sdkVersions": ">=0.9.0"}, self.adapter
+            )
+
+    def test_scenario_version_constraint_requires_a_string(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError, "sdkVersions.python must be a string"
+        ):
+            self.runner.scenario_version_applies(
+                {"sdkVersions": {"python": 0.9}}, self.adapter
+            )
+
+    def test_run_vector_file_skips_nonmatching_sdk_version(self) -> None:
+        vector = {
+            "commands": {"parse": "parse-www-authenticate"},
+            "scenarios": [
+                {
+                    "name": "future_rule",
+                    "wire": "unused",
+                    "tests": {"parse": True},
+                    "sdkVersions": {"python": ">0.9.1"},
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            vector_path = Path(tmp) / "sample.json"
+            vector_path.write_text(json.dumps(vector), encoding="utf-8")
+
+            self.runner.run_vector_file(self.adapter, vector_path)
+
+        self.assertEqual(self.runner.results, [])
 
     def test_compare_adapter_response_checks_error_message_substring(self) -> None:
         expected = {
