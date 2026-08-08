@@ -17,10 +17,6 @@ sdks:
     verify:
       - make test
       - make conformance
-    capabilities:
-      - auth.jws-detached
-      - intents
-      - refunds
 
   rust:
     repo: tempoxyz/mpp-rs
@@ -29,10 +25,6 @@ sdks:
     changelog: keep-a-changelog
     verify:
       - cargo test --all-features
-    capabilities:
-      - auth.jws-detached
-      - intents
-      - refunds
 
   python:
     repo: tempoxyz/pympp
@@ -41,10 +33,6 @@ sdks:
     changelog: keep-a-changelog
     verify:
       - uv run pytest
-    capabilities:
-      - auth.jws-detached
-      - intents
-      - refunds
 
   ruby:
     repo: stripe/mpp-rb
@@ -52,11 +40,9 @@ sdks:
     owners: []
     changelog: none
     verify: []
-    capabilities: []
   java:
     repo: stripe/mpp-java
     automation: notify
     owners: []
     changelog: none
     verify: []
-    capabilities: []

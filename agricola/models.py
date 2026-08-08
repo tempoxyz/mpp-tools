@@ -70,7 +70,6 @@ class SDK(FrozenModel):
     owners: tuple[Login, ...]
     changelog: Changelog
     verify: tuple[NonEmpty, ...]
-    capabilities: tuple[NonEmpty, ...]
 
     @model_validator(mode="after")
     def require_pr_verification(self) -> SDK:
@@ -114,6 +113,11 @@ class Manifest(FrozenModel):
             return self.sdks[name]
         except KeyError as exc:
             raise ValueError(f"unknown SDK target: {name}") from exc
+
+    def pr_targets(self) -> tuple[str, ...]:
+        return tuple(
+            name for name, sdk in self.sdks.items() if sdk.automation is Automation.PR
+        )
 
 
 class Source(FrozenModel):
@@ -209,13 +213,21 @@ class LabelEvent:
 class LabelResolution:
     labels: tuple[str, ...]
     targets: tuple[str, ...]
+    target_actors: tuple[tuple[str, str], ...] = ()
     disabled: bool = False
     errors: tuple[str, ...] = ()
     notes: tuple[str, ...] = ()
 
+    def actor_for(self, target: str) -> str:
+        try:
+            return dict(self.target_actors)[target]
+        except KeyError as exc:
+            raise ValueError(f"missing authorized actor for target: {target}") from exc
+
 
 class CommandVerb(StrEnum):
     PLAN = "plan"
+    PROPAGATE = "propagate"
     STATUS = "status"
     SKIP = "skip"
 
@@ -224,11 +236,57 @@ class CommandVerb(StrEnum):
 class Command:
     verb: CommandVerb
     target: str | None = None
+    targets: tuple[str, ...] = ()
+    all_targets: bool = False
     reason: str | None = None
     line: int = 1
 
 
+class PropagationRequest(FrozenModel):
+    source: Source
+    source_title: NonEmpty
+    source_url: NonEmpty
+    target: TargetName
+    target_repo: RepoName
+    target_base_sha: Sha
+    tracking_issue: PositiveInt
+    tracking_issue_url: NonEmpty
+    by: Login
+    idempotency_key: NonEmpty
+    branch: NonEmpty
+    verify: tuple[NonEmpty, ...]
+    changelog: Changelog
+    owners: tuple[Login, ...] = ()
+    plan: NonEmpty
+
+
+class PropagationResult(FrozenModel):
+    request: PropagationRequest
+    pr: PullRequestRef
+    url: NonEmpty
+    at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @field_validator("at")
+    @classmethod
+    def require_aware_timestamp(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("timestamp must include a timezone")
+        return value.astimezone(UTC)
+
+    @model_validator(mode="after")
+    def require_target_repository(self) -> PropagationResult:
+        repository = self.pr.rsplit("#", 1)[0]
+        if repository != self.request.target_repo:
+            raise ValueError(f"pr must belong to {self.request.target_repo}")
+        return self
+
+
 class PendingReply(FrozenModel):
+    issue_number: PositiveInt
+    body: NonEmpty
+
+
+class PendingIssueUpdate(FrozenModel):
     issue_number: PositiveInt
     body: NonEmpty
 

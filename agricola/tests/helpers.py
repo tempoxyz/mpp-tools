@@ -26,7 +26,6 @@ def manifest() -> Manifest:
                 owners=("brendanryan",),
                 changelog=Changelog.KEEP_A_CHANGELOG,
                 verify=("make test",),
-                capabilities=("intents",),
             ),
             "rust": SDK(
                 repo="tempoxyz/mpp-rs",
@@ -34,7 +33,6 @@ def manifest() -> Manifest:
                 owners=(),
                 changelog=Changelog.KEEP_A_CHANGELOG,
                 verify=("cargo test",),
-                capabilities=("intents",),
             ),
             "ruby": SDK(
                 repo="stripe/mpp-rb",
@@ -42,7 +40,6 @@ def manifest() -> Manifest:
                 owners=(),
                 changelog=Changelog.NONE,
                 verify=(),
-                capabilities=(),
             ),
         },
     )

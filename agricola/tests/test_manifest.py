@@ -31,7 +31,6 @@ sdks:
     owners: []
     changelog: keep-a-changelog
     verify: []
-    capabilities: []
 """,
             "verify must not be empty",
         )
@@ -63,7 +62,6 @@ sdks:
     owners: []
     changelog: none
     verify: []
-    capabilities: []
 """,
             "appears more than once",
         )
@@ -82,14 +80,12 @@ sdks:
     owners: []
     changelog: keep-a-changelog
     verify: [make test]
-    capabilities: []
   go:
     repo: example/mpp-go
     automation: notify
     owners: []
     changelog: none
     verify: []
-    capabilities: []
 """,
             "duplicate key: go",
         )

@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import unittest
-from dataclasses import replace
 
-from agricola.models import LabelResolution, Manifest, PullRequestFile
+from agricola.models import (
+    DecisionKind,
+    LabelResolution,
+    PropagateDecision,
+    PullRequestFile,
+    SkipDecision,
+)
 from agricola.planner import (
     FileCategory,
     build_tracking_issue,
@@ -34,9 +39,42 @@ class PlannerTests(unittest.TestCase):
         self.assertIn("Normative specification requirements", body)
         self.assertIn("Canonical behavior worth matching", body)
         self.assertIn("Incidental TypeScript", body)
-        self.assertIn("Agricola never writes", body)
-        self.assertIn("**ruby** (`stripe/mpp-rb`): notify only", body)
-        self.assertNotIn("@agricola propagate", body)
+        self.assertIn("creates draft downstream PRs only", body)
+        self.assertIn("Draft PR automation: `go`, `rust`", body)
+        self.assertIn("Notification only: `ruby`", body)
+        self.assertIn("@agricola propagate all", body)
+        self.assertIn("| `go` | pr | Queued | — |", body)
+        self.assertIn("| `rust` | pr | Awaiting decision | — |", body)
+        self.assertIn("| `ruby` | notify | Notification only | — |", body)
+
+    def test_plan_table_renders_recorded_decisions(self) -> None:
+        decisions = (
+            PropagateDecision(
+                target="go",
+                decision=DecisionKind.PROPAGATE,
+                by="maintainer",
+                pr="tempoxyz/mpp-go#88",
+                idempotency_key="propagate:mppx#412:go",
+            ),
+            SkipDecision(
+                target="rust",
+                decision=DecisionKind.SKIP,
+                by="maintainer",
+                reason="not | applicable",
+                idempotency_key="skip:mppx#412:rust",
+            ),
+        )
+
+        body = build_tracking_issue(
+            change(), LabelResolution((), ()), manifest(), decisions=decisions
+        )
+
+        self.assertIn(
+            "| `go` | pr | Recorded | "
+            "[tempoxyz/mpp-go#88](https://github.com/tempoxyz/mpp-go/pull/88) |",
+            body,
+        )
+        self.assertIn("| `rust` | pr | Skipped — not \\| applicable | — |", body)
 
     def test_plan_surfaces_label_errors(self) -> None:
         labels = LabelResolution(
@@ -44,27 +82,6 @@ class PlannerTests(unittest.TestCase):
         )
         body = build_tracking_issue(change(), labels, manifest())
         self.assertIn("Error: **unknown label: agricola:golang**", body)
-
-    def test_plan_determines_sdk_applicability_from_capabilities(self) -> None:
-        payload = manifest().model_dump(mode="json")
-        payload["sdks"]["go"]["capabilities"] = ["intents", "refunds"]
-        payload["sdks"]["rust"]["capabilities"] = ["intents"]
-        configured = Manifest.model_validate(payload)
-        source = replace(
-            change(),
-            files=(PullRequestFile("src/refunds.ts", additions=20),),
-        )
-
-        body = build_tracking_issue(source, LabelResolution((), ()), configured)
-
-        self.assertIn(
-            "**go** (`tempoxyz/mpp-go`): applicable: supports `refunds`",
-            body,
-        )
-        self.assertIn(
-            "**rust** (`tempoxyz/mpp-rs`): not applicable: missing declared `refunds`",
-            body,
-        )
 
     def test_title_is_stable(self) -> None:
         self.assertEqual(

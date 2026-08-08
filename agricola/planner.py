@@ -1,18 +1,21 @@
 from __future__ import annotations
 
-import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from enum import StrEnum
 from pathlib import PurePosixPath
 
 from .models import (
-    SDK,
     Automation,
     CanonicalChange,
+    Decision,
+    DecisionKind,
     LabelResolution,
     Manifest,
     PullRequestFile,
 )
+
+_PROPAGATION_TABLE_START = "<!-- agricola:propagation-table:start -->"
+_PROPAGATION_TABLE_END = "<!-- agricola:propagation-table:end -->"
 
 
 class FileCategory(StrEnum):
@@ -42,7 +45,6 @@ _INCIDENTAL_NAMES = {
     "eslint.config.mjs",
 }
 _INCIDENTAL_PREFIXES = (".github/", ".changeset/", "docs/site/", "scripts/release/")
-_WORD = re.compile(r"[a-z0-9]+")
 
 
 def classify_file(file: PullRequestFile) -> FileCategory:
@@ -73,63 +75,79 @@ def _section(title: str, files: Iterable[PullRequestFile], empty: str) -> list[s
     return lines
 
 
-def detected_capabilities(
-    change: CanonicalChange, manifest: Manifest
-) -> tuple[str, ...]:
-    change_words = _words(
-        " ".join((change.title, change.body, *(file.path for file in change.files)))
-    )
-    capabilities = {
-        capability for sdk in manifest.sdks.values() for capability in sdk.capabilities
+def _pull_request_link(reference: str) -> str:
+    repo, number = reference.rsplit("#", 1)
+    return f"[{reference}](https://github.com/{repo}/pull/{number})"
+
+
+def _table_row(target: str, mode: str, status: str, pull_request: str = "—") -> str:
+    return f"| `{target}` | {mode} | {status} | {pull_request} |"
+
+
+def _propagation_table(
+    manifest: Manifest,
+    selected_targets: Iterable[str],
+    decisions: Sequence[Decision],
+) -> list[str]:
+    selected = set(selected_targets)
+    by_target = {decision.target: decision for decision in decisions}
+    rows = [
+        _PROPAGATION_TABLE_START,
+        "| Target | Automation | Status | Pull request |",
+        "| --- | --- | --- | --- |",
+    ]
+    for target, sdk in manifest.sdks.items():
+        decision = by_target.get(target)
+        if decision is not None and decision.decision is DecisionKind.PROPAGATE:
+            assert decision.pr is not None
+            status = "Recorded"
+            pull_request = _pull_request_link(decision.pr)
+        elif decision is not None:
+            reason = decision.reason.replace("|", "\\|") if decision.reason else ""
+            status = f"Skipped — {reason}"
+            pull_request = "—"
+        elif target in selected:
+            status = "Queued"
+            pull_request = "—"
+        elif sdk.automation is Automation.NOTIFY:
+            status = "Notification only"
+            pull_request = "—"
+        else:
+            status = "Awaiting decision"
+            pull_request = "—"
+        rows.append(_table_row(target, sdk.automation.value, status, pull_request))
+    rows.append(_PROPAGATION_TABLE_END)
+    return rows
+
+
+def record_propagation_links(body: str, results: Iterable[tuple[str, str, str]]) -> str:
+    lines = body.splitlines()
+    replacements = {
+        target: _table_row(target, "pr", "Recorded", f"[{pr}]({url})")
+        for target, pr, url in results
     }
-    return tuple(
-        sorted(
-            capability
-            for capability in capabilities
-            if change_words & _words(capability)
-        )
-    )
-
-
-def _words(value: str) -> set[str]:
-    return {_singular(word) for word in _WORD.findall(value.lower())}
-
-
-def _singular(word: str) -> str:
-    return word[:-1] if len(word) > 4 and word.endswith("s") else word
-
-
-def _applicability(
-    sdk: SDK,
-    signals: tuple[str, ...],
-    *,
-    normative_change: bool,
-) -> str:
-    if sdk.automation is Automation.NOTIFY:
-        return "notify only"
-    if normative_change:
-        return "applicable: normative or conformance files changed"
-    if not signals:
-        return "applicability unknown: no declared capability signal detected"
-    missing = tuple(signal for signal in signals if signal not in sdk.capabilities)
-    if missing:
-        return "not applicable: missing declared " + ", ".join(
-            f"`{capability}`" for capability in missing
-        )
-    return "applicable: supports " + ", ".join(
-        f"`{capability}`" for capability in signals
-    )
+    if _PROPAGATION_TABLE_START not in lines or _PROPAGATION_TABLE_END not in lines:
+        return body
+    for index, line in enumerate(lines):
+        for target, replacement in replacements.items():
+            if line.startswith(f"| `{target}` |"):
+                lines[index] = replacement
+                break
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def build_tracking_issue(
-    change: CanonicalChange, labels: LabelResolution, manifest: Manifest
+    change: CanonicalChange,
+    labels: LabelResolution,
+    manifest: Manifest,
+    decisions: Sequence[Decision] = (),
+    queued_targets: Iterable[str] = (),
 ) -> str:
     categories: dict[FileCategory, list[PullRequestFile]] = {
         category: [] for category in FileCategory
     }
     for file in change.files:
         categories[classify_file(file)].append(file)
-    capability_signals = detected_capabilities(change, manifest)
 
     lines = [
         change.marker,
@@ -137,7 +155,7 @@ def build_tracking_issue(
         "",
         f"Canonical change: [{change.repo}#{change.number}]({change.url}) at `{change.sha}`.",
         "",
-        "> This is a dry-run plan. Agricola never writes to downstream SDK repositories.",
+        "> Agricola creates draft downstream PRs only for targets authorized by merge-time labels or maintainer commands.",
         "",
         "## Change classification",
         "",
@@ -179,29 +197,29 @@ def build_tracking_issue(
         lines.append(f"- Error: **{error}**")
     for note in labels.notes:
         lines.append(f"- Conflict resolution: {note}")
-    lines.extend(["", "## SDK applicability", ""])
-    lines.append(
-        "- Detected capability signals: "
-        + (", ".join(f"`{capability}`" for capability in capability_signals) or "none")
+    pr_targets = ", ".join(f"`{target}`" for target in manifest.pr_targets())
+    notify_targets = ", ".join(
+        f"`{name}`"
+        for name, sdk in manifest.sdks.items()
+        if sdk.automation is Automation.NOTIFY
     )
-    lines.append("")
-    for name, sdk in manifest.sdks.items():
-        disposition = _applicability(
-            sdk,
-            capability_signals,
-            normative_change=bool(categories[FileCategory.NORMATIVE]),
+    lines.extend(
+        [
+            "",
+            "## Target inventory",
+            "",
+            f"- Draft PR automation: {pr_targets or 'none'}.",
+            f"- Notification only: {notify_targets or 'none'}.",
+        ]
+    )
+    lines.extend(["", "## Downstream propagation", ""])
+    lines.extend(
+        _propagation_table(
+            manifest,
+            (*labels.targets, *queued_targets),
+            decisions,
         )
-        authorization = (
-            "selected by authorized label" if name in labels.targets else "not selected"
-        )
-        capabilities = (
-            ", ".join(f"`{capability}`" for capability in sdk.capabilities)
-            or "not declared"
-        )
-        lines.append(
-            f"- **{name}** (`{sdk.repo}`): {disposition}; {authorization}. "
-            f"Capabilities: {capabilities}."
-        )
+    )
     lines.extend(
         [
             "",
@@ -209,11 +227,13 @@ def build_tracking_issue(
             "",
             "```text",
             "@agricola plan",
+            "@agricola propagate <sdk> [<sdk> ...]",
+            "@agricola propagate all",
             "@agricola status",
             '@agricola skip <sdk> reason="..."',
             "```",
             "",
-            "Propagation and revision commands are intentionally unavailable.",
+            "Generated changes remain draft until a maintainer reviews and merges them.",
         ]
     )
     return "\n".join(lines).rstrip() + "\n"

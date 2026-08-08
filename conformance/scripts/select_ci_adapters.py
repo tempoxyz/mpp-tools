@@ -33,6 +33,7 @@ ADAPTER_PATTERNS = {
 }
 
 AGRICOLA_PATTERNS = [
+    ".github/agricola/**",
     ".github/workflows/agricola.yml",
     "agricola/**",
     "docs/**",
@@ -75,11 +76,18 @@ def path_matches(path: str, pattern: str) -> bool:
 def read_changed_files(path: Path) -> list[str]:
     if not path.exists():
         return []
-    return [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return [
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
 
 
 def matrix(adapters: list[str]) -> list[dict[str, str]]:
-    return [{"adapter": adapter, "install-target": ADAPTER_TARGETS[adapter]} for adapter in adapters]
+    return [
+        {"adapter": adapter, "install-target": ADAPTER_TARGETS[adapter]}
+        for adapter in adapters
+    ]
 
 
 def output(values: dict[str, str]) -> None:
@@ -102,7 +110,10 @@ def select_adapters(event_name: str, changed_files: list[str]) -> tuple[list[str
         for path in changed_files
     ):
         return [], "only Agricola control-plane files changed"
-    if any(any(path_matches(path, pattern) for pattern in FULL_PATTERNS) for path in changed_files):
+    if any(
+        any(path_matches(path, pattern) for pattern in FULL_PATTERNS)
+        for path in changed_files
+    ):
         return ADAPTER_ORDER, "shared conformance files changed"
 
     selected = [
@@ -128,7 +139,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    adapters, reason = select_adapters(args.event_name, read_changed_files(args.changed_files))
+    adapters, reason = select_adapters(
+        args.event_name, read_changed_files(args.changed_files)
+    )
     output(
         {
             "adapters_csv": ",".join(adapters),

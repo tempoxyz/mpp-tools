@@ -20,6 +20,9 @@ jobs:
   run:
     if: github.event_name != 'issue_comment' || contains(github.event.comment.body, '@agricola')
     runs-on: ubuntu-latest
+    outputs:
+      has-propagations: ${{ steps.process.outputs.has-propagations }}
+      propagation-matrix: ${{ steps.process.outputs.propagation-matrix }}
     env:
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       STATE_BRANCH: agricola/state
@@ -46,12 +49,39 @@ jobs:
           pip install .
           agricola validate
 
+      - name: Create canonical repository token
+        id: canonical-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ vars.AGRICOLA_APP_ID }}
+          private-key: ${{ secrets.AGRICOLA_APP_PRIVATE_KEY }}
+          owner: wevm
+          repositories: mppx
+          permission-contents: read
+          permission-issues: read
+          permission-pull-requests: read
+
       - name: Process event
+        id: process
+        env:
+          AGRICOLA_CANONICAL_TOKEN: ${{ steps.canonical-token.outputs.token }}
         run: |
+          result="$RUNNER_TEMP/agricola-result.json"
           if [ "${{ github.event_name }}" = "issue_comment" ]; then
-            agricola handle-comment --reply-file "$RUNNER_TEMP/agricola-reply.json"
+            agricola handle-comment \
+              --reply-file "$RUNNER_TEMP/agricola-reply.json" \
+              --issue-update-file "$RUNNER_TEMP/agricola-issue-update.json" \
+              > "$result"
           else
-            agricola poll
+            agricola poll > "$result"
+          fi
+          cat "$result"
+          jq -c '{include: [.propagations[] | {request: .}]}' "$result" \
+            | sed 's/^/propagation-matrix=/' >> "$GITHUB_OUTPUT"
+          if jq -e '.propagations | length > 0' "$result" >/dev/null; then
+            echo "has-propagations=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-propagations=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Persist control-plane state
@@ -85,6 +115,321 @@ jobs:
       - name: Deliver command reply
         if: github.event_name == 'issue_comment'
         run: |
+          if [ -f "$RUNNER_TEMP/agricola-issue-update.json" ]; then
+            agricola deliver-issue-update "$RUNNER_TEMP/agricola-issue-update.json"
+          fi
           if [ -f "$RUNNER_TEMP/agricola-reply.json" ]; then
             agricola deliver-reply "$RUNNER_TEMP/agricola-reply.json"
           fi
+
+  generate:
+    needs: run
+    if: needs.run.outputs.has-propagations == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.run.outputs.propagation-matrix) }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout downstream SDK
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ matrix.request.target_repo }}
+          ref: ${{ matrix.request.target_base_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout Agricola prompt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: .agricola/control
+          persist-credentials: false
+
+      - name: Prepare generation context
+        env:
+          REQUEST_JSON: ${{ toJSON(matrix.request) }}
+        run: |
+          printf '%s\n' "$REQUEST_JSON" > .agricola/request.json
+          echo .agricola/ >> .git/info/exclude
+          source_repo="$(jq -r .source.repo .agricola/request.json)"
+          source_sha="$(jq -r .source.sha .agricola/request.json)"
+          git clone --filter=blob:none "https://github.com/${source_repo}.git" .agricola/canonical
+          git -C .agricola/canonical checkout --detach "$source_sha"
+          git clone --depth 1 https://github.com/tempoxyz/mpp-specs.git .agricola/spec
+
+      - name: Generate downstream changes
+        uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .agricola/control/.github/agricola/propagate.md
+          output-file: .agricola/codex-output.md
+          permission-profile: ":workspace"
+          safety-strategy: drop-sudo
+          codex-args: '["--ephemeral"]'
+
+      - name: Capture generated patch
+        run: |
+          git add --all
+          if git diff --cached --quiet --; then
+            echo "Codex produced no downstream changes" >&2
+            exit 1
+          fi
+          git diff --cached --binary --output="$RUNNER_TEMP/changes.patch" --
+
+      - name: Upload generated patch
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: agricola-patch-${{ matrix.request.target }}-${{ matrix.request.source.pr }}
+          path: ${{ runner.temp }}/changes.patch
+          if-no-files-found: error
+
+  verify:
+    needs: [run, generate]
+    if: needs.run.outputs.has-propagations == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.run.outputs.propagation-matrix) }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout downstream SDK
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ matrix.request.target_repo }}
+          ref: ${{ matrix.request.target_base_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout Agricola
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: .agricola/control
+          persist-credentials: false
+
+      - name: Download generated patch
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: agricola-patch-${{ matrix.request.target }}-${{ matrix.request.source.pr }}
+          path: ${{ runner.temp }}/patch
+
+      - name: Apply generated patch
+        env:
+          REQUEST_JSON: ${{ toJSON(matrix.request) }}
+        run: |
+          printf '%s\n' "$REQUEST_JSON" > .agricola/request.json
+          git apply --index "$RUNNER_TEMP/patch/changes.patch"
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: .agricola/control/pyproject.toml
+
+      - name: Run manifest verification
+        run: |
+          pip install .agricola/control
+          agricola verify-propagation .agricola/request.json
+
+  publish:
+    needs: [run, verify]
+    if: needs.run.outputs.has-propagations == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.run.outputs.propagation-matrix) }}
+    permissions:
+      contents: read
+    steps:
+      - name: Create downstream repository token
+        id: downstream-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ vars.AGRICOLA_APP_ID }}
+          private-key: ${{ secrets.AGRICOLA_APP_PRIVATE_KEY }}
+          owner: tempoxyz
+          repositories: |
+            mpp-go
+            mpp-rs
+            pympp
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Checkout downstream SDK
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ matrix.request.target_repo }}
+          ref: ${{ matrix.request.target_base_sha }}
+          token: ${{ steps.downstream-token.outputs.token }}
+          fetch-depth: 0
+
+      - name: Checkout Agricola
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: .agricola/control
+          persist-credentials: false
+
+      - name: Download verified patch
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: agricola-patch-${{ matrix.request.target }}-${{ matrix.request.source.pr }}
+          path: ${{ runner.temp }}/patch
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: .agricola/control/pyproject.toml
+
+      - name: Prepare downstream commit
+        env:
+          REQUEST_JSON: ${{ toJSON(matrix.request) }}
+        run: |
+          printf '%s\n' "$REQUEST_JSON" > .agricola/request.json
+          git apply --index "$RUNNER_TEMP/patch/changes.patch"
+          pip install .agricola/control
+          agricola render-propagation .agricola/request.json \
+            --title-file "$RUNNER_TEMP/pr-title.txt" \
+            --body-file "$RUNNER_TEMP/pr-body.md"
+          git config user.name "${{ steps.downstream-token.outputs.app-slug }}[bot]"
+          git config user.email "${{ steps.downstream-token.outputs.app-slug }}[bot]@users.noreply.github.com"
+          git commit -F "$RUNNER_TEMP/pr-title.txt"
+
+      - name: Create or update draft pull request
+        env:
+          GH_TOKEN: ${{ steps.downstream-token.outputs.token }}
+        run: |
+          repo="$(jq -r .target_repo .agricola/request.json)"
+          branch="$(jq -r .branch .agricola/request.json)"
+          owner="${repo%%/*}"
+          candidates="$(gh api --method GET "repos/$repo/pulls" \
+            -f state=all -f head="$owner:$branch" -f per_page=100)"
+          existing="$(jq -c --arg repo "$repo" \
+            '[.[] | select(.head.repo.full_name == $repo)][0] // {}' \
+            <<< "$candidates")"
+          state="$(jq -r 'if .merged_at then "MERGED" else (.state // "" | ascii_upcase) end' \
+            <<< "$existing")"
+          if [ "$state" = "MERGED" ]; then
+            url="$(jq -r .html_url <<< "$existing")"
+            number="$(jq -r .number <<< "$existing")"
+          elif [ "$state" = "CLOSED" ]; then
+            echo "Existing Agricola PR is closed; use retry after reopening it" >&2
+            exit 1
+          else
+            if [ "$state" = "OPEN" ] && [ "$(jq -r .draft <<< "$existing")" != "true" ]; then
+              gh pr ready --undo "$(jq -r .number <<< "$existing")" --repo "$repo"
+            fi
+            if remote="$(git ls-remote --heads origin "refs/heads/$branch" | cut -f1)" && [ -n "$remote" ]; then
+              git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch"
+              git push --force-with-lease="refs/heads/$branch:$remote" origin "HEAD:refs/heads/$branch"
+            else
+              git push origin "HEAD:refs/heads/$branch"
+            fi
+            if [ "$state" = "OPEN" ]; then
+              url="$(jq -r .html_url <<< "$existing")"
+              number="$(jq -r .number <<< "$existing")"
+            else
+              url="$(gh pr create --repo "$repo" --head "$branch" --draft \
+                --title "$(tr -d '\n' < "$RUNNER_TEMP/pr-title.txt")" \
+                --body-file "$RUNNER_TEMP/pr-body.md")"
+              number="$(gh pr view "$url" --repo "$repo" --json number --jq .number)"
+            fi
+          fi
+          mkdir -p "$RUNNER_TEMP/results"
+          jq -n \
+            --slurpfile request .agricola/request.json \
+            --arg pr "$repo#$number" \
+            --arg url "$url" \
+            --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{request: $request[0], pr: $pr, url: $url, at: $at}' \
+            > "$RUNNER_TEMP/results/${{ matrix.request.target }}-${{ matrix.request.source.pr }}.json"
+
+      - name: Upload propagation result
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: agricola-result-${{ matrix.request.target }}-${{ matrix.request.source.pr }}
+          path: ${{ runner.temp }}/results/*.json
+          if-no-files-found: error
+
+  record:
+    needs: [run, publish]
+    if: always() && needs.run.result == 'success' && needs.run.outputs.has-propagations == 'true'
+    runs-on: ubuntu-latest
+    env:
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      STATE_BRANCH: agricola/state
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      - name: Restore control-plane state
+        run: |
+          if git fetch origin "refs/heads/$STATE_BRANCH:refs/remotes/origin/$STATE_BRANCH"; then
+            git restore --source "origin/$STATE_BRANCH" -- ledger
+          fi
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Agricola
+        run: pip install .
+
+      - name: Download propagation results
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: agricola-result-*
+          path: ${{ runner.temp }}/results
+          merge-multiple: true
+
+      - name: Record propagation decisions
+        run: |
+          mkdir -p "$RUNNER_TEMP/results"
+          agricola record-propagations "$RUNNER_TEMP/results" \
+            --reply-directory "$RUNNER_TEMP/replies" \
+            --issue-update-directory "$RUNNER_TEMP/issue-updates"
+
+      - name: Persist propagation decisions
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ github.token }}
+          base: ${{ env.DEFAULT_BRANCH }}
+          branch: ${{ env.STATE_BRANCH }}
+          commit-message: "chore(agricola): update state"
+          title: "chore(agricola): update state"
+          body: |
+            > [!IMPORTANT]
+            > This pull request is maintained by automation. Merge it to checkpoint state on the default branch; do not close or edit it manually.
+
+            ## Motivation
+
+            Persist Agricola's durable cursor and decision ledger through the repository's required pull-request path.
+
+            ## Summary
+
+            - tracks the latest processed canonical merge
+            - records immutable source snapshots and maintainer decisions
+
+            ## Key design considerations
+
+            - workflow code always executes from the protected default branch
+            - this pull request is updated in place as state advances
+          add-paths: ledger
+          delete-branch: true
+
+      - name: Update tracking issues and deliver publication replies
+        run: |
+          for update in "$RUNNER_TEMP"/issue-updates/*.json; do
+            [ -e "$update" ] || continue
+            agricola deliver-issue-update "$update"
+          done
+          for reply in "$RUNNER_TEMP"/replies/*.json; do
+            [ -e "$reply" ] || continue
+            agricola deliver-reply "$reply"
+          done

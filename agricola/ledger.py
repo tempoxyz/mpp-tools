@@ -52,6 +52,18 @@ class DecisionLedger:
         path = self.path_for(change.repo, change.number)
         entry = self.read(change.repo, change.number) or self._new_entry(change)
         self._require_source(entry, change, path)
+        return self._append(path, entry, decision)
+
+    def append_source(self, source: Source, decision: Decision) -> bool:
+        path = self.path_for(source.repo, source.pr)
+        entry = self.read(source.repo, source.pr)
+        if entry is None:
+            raise LedgerError(f"cannot append decision before source snapshot: {path}")
+        if entry.source != source:
+            raise LedgerError(f"source metadata conflict in {path}")
+        return self._append(path, entry, decision)
+
+    def _append(self, path: Path, entry: LedgerEntry, decision: Decision) -> bool:
         for existing in entry.decisions:
             if existing.idempotency_key != decision.idempotency_key:
                 continue
@@ -73,7 +85,21 @@ class DecisionLedger:
         entry = self.read(change.repo, change.number)
         if entry is not None:
             self._require_source(entry, change, path)
-            return False
+            if labels is None:
+                return False
+            resolved_labels = tuple(sorted(set(labels)))
+            if entry.labels == resolved_labels:
+                return False
+            if not entry.labels and not entry.decisions:
+                repaired = entry.model_copy(
+                    update={"labels": resolved_labels}, deep=True
+                )
+                self._write(
+                    path,
+                    repaired.model_dump_json(indent=2, exclude_none=True) + "\n",
+                )
+                return True
+            raise LedgerError(f"merge-time label conflict in {path}")
         new_entry = self._new_entry(change, labels)
         self._write(path, new_entry.model_dump_json(indent=2, exclude_none=True) + "\n")
         return True
