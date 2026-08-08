@@ -15,6 +15,9 @@ CONFORMANCE_DIR = SCRIPT_DIR.parent
 ADAPTERS_DIR = CONFORMANCE_DIR / "adapters"
 SCHEMAS_DIR = CONFORMANCE_DIR / "schemas"
 OPERATIONS_PATH = CONFORMANCE_DIR / "operations.json"
+VECTORS_DIR = CONFORMANCE_DIR / "vectors"
+FLOW_CASES_PATH = CONFORMANCE_DIR / "flows" / "flows.json"
+FLOW_RESULTS_PATH = CONFORMANCE_DIR / "flows" / "golden-results.json"
 
 COMMAND_TO_OPERATION = {
     "parse-www-authenticate": "challenge.parse",
@@ -34,6 +37,24 @@ COMMAND_TO_OPERATION = {
 def load_json(path: Path) -> Any:
     with path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def load_vector(path: Path) -> dict[str, Any]:
+    vector = load_json(path)
+    validate_value(vector, "vector.schema.json", str(path))
+    return vector
+
+
+def load_flow_cases(path: Path = FLOW_CASES_PATH) -> list[dict[str, Any]]:
+    document = load_json(path)
+    validate_value(document, "flow-cases.schema.json", str(path))
+    return document["cases"]
+
+
+def load_flow_results(path: Path = FLOW_RESULTS_PATH) -> list[dict[str, Any]]:
+    document = load_json(path)
+    validate_value(document, "flow-results.schema.json", str(path))
+    return document["results"]
 
 
 def _schema_store() -> dict[str, Any]:

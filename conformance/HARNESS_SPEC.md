@@ -14,6 +14,9 @@ The normative contract lives in JSON Schema:
 - [`schemas/adapter-response.schema.json`](./schemas/adapter-response.schema.json)
 - [`schemas/operation-registry.schema.json`](./schemas/operation-registry.schema.json)
 - [`schemas/protocol.schema.json`](./schemas/protocol.schema.json)
+- [`schemas/vector.schema.json`](./schemas/vector.schema.json)
+- [`schemas/flow-cases.schema.json`](./schemas/flow-cases.schema.json)
+- [`schemas/flow-results.schema.json`](./schemas/flow-results.schema.json)
 
 The operation list lives in [`operations.json`](./operations.json). Examples
 live in [`examples/`](./examples/).
