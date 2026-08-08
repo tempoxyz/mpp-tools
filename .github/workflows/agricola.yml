@@ -10,7 +10,7 @@ on:
 permissions:
   contents: write
   issues: write
-  pull-requests: read
+  pull-requests: write
 
 concurrency:
   group: agricola-control-plane
@@ -22,14 +22,21 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      STATE_BRANCH: agricola/state
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - name: Restore control-plane state
+        run: |
+          if git fetch origin "refs/heads/$STATE_BRANCH:refs/remotes/origin/$STATE_BRANCH"; then
+            git restore --source "origin/$STATE_BRANCH" -- ledger
+          fi
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           cache: pip
@@ -48,20 +55,29 @@ jobs:
           fi
 
       - name: Persist control-plane state
-        run: |
-          if [ -z "$(git status --porcelain -- ledger)" ]; then
-            exit 0
-          fi
-          git config user.name "agricola[bot]"
-          git config user.email "agricola[bot]@users.noreply.github.com"
-          git add ledger
-          if [ "${{ github.event_name }}" = "issue_comment" ]; then
-            git commit -m "chore: record agricola decision"
-          else
-            git commit -m "chore: advance agricola control plane"
-          fi
-          git pull --rebase origin "$DEFAULT_BRANCH"
-          git push origin "HEAD:$DEFAULT_BRANCH"
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ github.token }}
+          base: ${{ env.DEFAULT_BRANCH }}
+          branch: ${{ env.STATE_BRANCH }}
+          commit-message: "chore: update Agricola state"
+          title: "chore: update Agricola state"
+          body: |
+            ## Motivation
+
+            Persist Agricola's durable cursor and decision ledger through the repository's required pull-request path.
+
+            ## Summary
+
+            - tracks the latest processed canonical merge
+            - records immutable source snapshots and maintainer decisions
+
+            ## Key design considerations
+
+            - workflow code always executes from the protected default branch
+            - this pull request is updated in place as state advances
+          add-paths: ledger
+          delete-branch: false
 
       - name: Deliver command reply
         if: github.event_name == 'issue_comment'
