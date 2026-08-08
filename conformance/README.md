@@ -21,7 +21,7 @@ make server-verify # run SDK server verification ABI tests
 
 ## How It Works
 
-Test vectors are hand-authored JSON files in `vectors/`. No SDK is privileged — the vectors are the single source of truth.
+Test vectors are hand-authored JSON files in `vectors/`. Their explicit inputs and expected outputs are normative. The pinned TypeScript `mppx` package is the reference implementation for canonical serialization, flow behavior, and cases where the protocol specification permits multiple interpretations.
 
 Each SDK has a thin **adapter** CLI that wraps its library and exposes a uniform interface. A Python test runner invokes every adapter against every vector and compares outputs.
 
@@ -29,7 +29,7 @@ Each SDK has a thin **adapter** CLI that wraps its library and exposes a uniform
 vectors/*.json ──► vector_runner.py ──► adapter (Rust/Python/Go/Ruby/Java) ──► pass/fail
 ```
 
-The TypeScript adapter remains the golden implementation for fixture maintenance and can be run explicitly with `make test-typescript`. Default vector runs skip it because the vector JSON files are the checked golden source of truth.
+The TypeScript adapter is the reference implementation for fixture maintenance and can be run explicitly with `make test-typescript`. Default vector runs skip it because checked-in vector expectations do not need to be regenerated on every run.
 
 See [`HARNESS_SPEC.md`](./HARNESS_SPEC.md) for the schema-backed adapter ABI, manifest format, operation registry, migration plan, and language skeletons.
 
@@ -94,7 +94,7 @@ make flow
 
 The Python flow runner owns the HTTP state machine. It calls each adapter's existing parse/format commands to parse the challenge, format the credential, and parse the receipt. This keeps flow tests focused on protocol compatibility rather than each SDK's HTTP transport implementation.
 
-Flow assertions compare adapter results against `flows/golden-results.json`, generated with the pinned TypeScript `mppx` package. Regenerate it with `make update-flow-golden` when the flow fixtures intentionally change.
+Flow assertions compare adapter results against `flows/golden-results.json`, generated exclusively with the pinned TypeScript `mppx` package. Regenerate it with `make update-flow-golden` only when the flow fixtures or pinned `mppx` behavior intentionally change, and commit the golden diff with that change.
 
 ## Server Verification Tests
 
