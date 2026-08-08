@@ -69,7 +69,7 @@ class CommandTests(unittest.TestCase):
             parse_commands("@agricola skip go", self.manifest)
 
     def test_authorization_is_case_insensitive(self) -> None:
-        require_maintainer("BrendanRyan", self.manifest)
+        require_maintainer("BrendanJRyan", self.manifest)
         with self.assertRaises(AuthorizationError):
             require_maintainer("outsider", self.manifest)
 

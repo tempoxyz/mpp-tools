@@ -89,7 +89,7 @@ class CliTests(unittest.TestCase):
                             "id": 55,
                             "body": '@agricola skip ruby reason="TS-only tooling"',
                             "created_at": "2026-08-07T14:02:00Z",
-                            "user": {"login": "brendanryan"},
+                            "user": {"login": "brendanjryan"},
                         },
                         "issue": {
                             "number": 207,

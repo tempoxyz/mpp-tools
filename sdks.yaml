@@ -1,6 +1,6 @@
 version: 1
 maintainers:
-  - brendanryan
+  - brendanjryan
 
 canonical:
   repo: wevm/mppx
@@ -11,17 +11,15 @@ spec:
 sdks:
   go:
     repo: tempoxyz/mpp-go
-    automation: pr
-    owners: [brendanryan]
+    automation: notify
+    owners: [brendanjryan]
     changelog: keep-a-changelog
-    verify:
-      - make test
-      - make conformance
+    verify: []
 
   rust:
     repo: tempoxyz/mpp-rs
     automation: pr
-    owners: [brendanryan]
+    owners: [brendanjryan]
     changelog: keep-a-changelog
     verify:
       - cargo test --all-features
@@ -29,7 +27,7 @@ sdks:
   python:
     repo: tempoxyz/pympp
     automation: pr
-    owners: [brendanryan]
+    owners: [brendanjryan]
     changelog: keep-a-changelog
     verify:
       - uv run pytest

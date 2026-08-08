@@ -18,7 +18,7 @@ Create one GitHub App and install it for these repositories:
 
 - `wevm/mppx`;
 - `tempoxyz/mpp-tools`;
-- every `automation: pr` target currently listed in [`sdks.yaml`](../sdks.yaml): `mpp-go`, `mpp-rs`, and `pympp`.
+- every `automation: pr` target currently listed in [`sdks.yaml`](../sdks.yaml): `mpp-rs` and `pympp`.
 
 Grant repository permissions:
 
