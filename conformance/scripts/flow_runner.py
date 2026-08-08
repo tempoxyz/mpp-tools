@@ -18,7 +18,14 @@ from typing import Any
 from deepdiff import DeepDiff
 
 from conformance_checks import make_check
-from harness import AdapterClient, AdapterConfig, build_adapter, discover_adapters
+from harness import (
+    AdapterClient,
+    AdapterConfig,
+    build_adapter,
+    discover_adapters,
+    load_flow_cases as load_validated_flow_cases,
+    load_flow_results,
+)
 
 
 SCRIPT_DIR = Path(__file__).parent
@@ -105,20 +112,8 @@ def wait_for_server(base_url: str, timeout: int = 15) -> None:
     raise RuntimeError("Server did not start")
 
 
-def load_results(data: str) -> list[dict[str, Any]]:
-    parsed = json.loads(data)
-    results = parsed.get("results")
-    if not isinstance(results, list):
-        raise ValueError("Invalid results payload")
-    return results
-
-
 def load_flow_cases() -> list[dict[str, Any]]:
-    parsed = json.loads(FLOW_CASES.read_text())
-    cases = parsed.get("cases")
-    if not isinstance(cases, list):
-        raise ValueError("Invalid flow cases payload")
-    return cases
+    return load_validated_flow_cases(FLOW_CASES)
 
 
 def flow_case_url(base_url: str, flow_case: dict[str, Any], *, retry: bool = False) -> str:
@@ -137,7 +132,7 @@ def load_golden_results() -> list[dict[str, Any]]:
             f"Missing flow golden file: {FLOW_RESULTS}. "
             "Run scripts/flow_runner.py --update-golden to create it."
         )
-    return load_results(FLOW_RESULTS.read_text())
+    return load_flow_results(FLOW_RESULTS)
 
 
 def parse_problem_details(headers: Any, body_bytes: bytes) -> tuple[dict[str, Any] | None, str | None]:

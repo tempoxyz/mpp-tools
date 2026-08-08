@@ -6,7 +6,7 @@ Reads test vectors from vectors/*.json, invokes each registered adapter,
 compares outputs to expected results, and produces a pass/fail summary.
 
 Usage:
-    python3 scripts/vector_runner.py [--adapter NAME] [--verbose] [--vector NAME]
+    uv run --locked python scripts/vector_runner.py [--adapter NAME] [--verbose] [--vector NAME]
 
 Options:
     --adapter NAME    Run only the specified adapter (default: all)
@@ -29,7 +29,7 @@ from typing import Any, Callable
 from deepdiff import DeepDiff
 
 from conformance_checks import make_check
-from harness import AdapterClient, AdapterConfig, build_adapter, discover_adapters
+from harness import AdapterClient, AdapterConfig, build_adapter, discover_adapters, load_vector
 from sdk_version import installed_version
 from version_constraints import matches_constraint
 
@@ -478,8 +478,7 @@ class VectorRunner:
             self.log(f"  ⚠ Vector file not found: {vector_path}")
             return
 
-        with open(vector_path) as f:
-            vectors = json.load(f)
+        vectors = load_vector(vector_path)
 
         commands = vectors.get("commands", {})
         spec_ref = vectors.get("spec_ref")
