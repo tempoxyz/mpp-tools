@@ -711,10 +711,10 @@ class VectorRunner:
 
             # Build if needed
             if adapter.build_command:
-                self.log(f"  building...", end="", flush=True)
+                self.log("  building...", end="", flush=True)
                 build_error = build_adapter(adapter)
                 if build_error:
-                    self.log(f" FAILED")
+                    self.log(" FAILED")
                     self._record_result(
                         vector_file="adapter",
                         test_type=TestType.BUILD,
@@ -727,11 +727,11 @@ class VectorRunner:
                         error=build_error,
                     )
                     continue
-                self.log(f" ok")
+                self.log(" ok")
             else:
                 build_error = build_adapter(adapter)
                 if build_error:
-                    self.log(f"  build FAILED")
+                    self.log("  build FAILED")
                     self._record_result(
                         vector_file="adapter",
                         test_type=TestType.BUILD,

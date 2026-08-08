@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "test:golden": "tsx golden/adapter.ts",
+    "typecheck": "tsc --noEmit",
     "test:all": "uv run --locked python scripts/vector_runner.py",
     "flow": "uv run --locked python scripts/flow_runner.py",
     "test:go": "uv run --locked python scripts/vector_runner.py --adapter go",

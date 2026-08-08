@@ -9,5 +9,8 @@ dependencies = [
     "semantic-version>=2.10.0,<3",
 ]
 
+[dependency-groups]
+dev = ["ruff==0.15.0"]
+
 [tool.uv]
 package = false

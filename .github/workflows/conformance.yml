@@ -123,6 +123,9 @@ jobs:
       - name: Install adapter dependencies
         run: make ${{ matrix.install-target }}
 
+      - name: Run adapter static checks
+        run: make check-${{ matrix.adapter }}
+
       - name: Run vector conformance
         env:
           ADAPTER: ${{ matrix.adapter }}

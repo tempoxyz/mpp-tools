@@ -559,7 +559,7 @@ fn generate_conformance_challenge_id(params: ChallengeIdParams<'_>) -> Result<St
     const MINIMUM_SECRET_KEY_BYTES: usize = 32;
     type HmacSha256 = Hmac<Sha256>;
 
-    if params.secret_key.as_bytes().len() < MINIMUM_SECRET_KEY_BYTES {
+    if params.secret_key.len() < MINIMUM_SECRET_KEY_BYTES {
         return Err(format!(
             "secretKey must be at least {} bytes",
             MINIMUM_SECRET_KEY_BYTES
