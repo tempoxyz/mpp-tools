@@ -352,11 +352,11 @@ class AuditTests(unittest.TestCase):
             self.assertEqual(tuple(context.affected), ("go",))
 
             legacy = pending.finding_issues[0].body.replace(
-                "/ag fix", "@agricola propagate go"
+                "/ag fix", "/agricola propagate go"
             )
             updated = ensure_audit_remediation(legacy, context, manifest())
             self.assertIn("```text\n/ag fix\n```", updated)
-            self.assertNotIn("@agricola propagate go", updated)
+            self.assertNotIn("/agricola propagate go", updated)
 
     def test_rollup_links_semantic_source_evidence(self) -> None:
         canonical = snapshot("typescript")

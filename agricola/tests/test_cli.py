@@ -92,7 +92,7 @@ class CliTests(unittest.TestCase):
                     {
                         "comment": {
                             "id": 55,
-                            "body": '@agricola skip ruby reason="TS-only tooling"',
+                            "body": '/ag skip ruby reason="TS-only tooling"',
                             "created_at": "2026-08-07T14:02:00Z",
                             "user": {"login": "brendanjryan"},
                         },

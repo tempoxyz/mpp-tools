@@ -15,9 +15,7 @@ from .models import (
     Manifest,
 )
 
-_COMMAND_PREFIX = re.compile(
-    r"^\s*(?:/ag(?:ricola)?|@agricola)(?:\s+|$)", re.IGNORECASE
-)
+_COMMAND_PREFIX = re.compile(r"^\s*/ag(?:ricola)?(?:\s+|$)", re.IGNORECASE)
 _FIX_ALIASES = {"fix", "propagate", "propogate"}
 
 

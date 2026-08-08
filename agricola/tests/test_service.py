@@ -281,7 +281,7 @@ class CommentTests(unittest.TestCase):
                 client,
                 manifest(),
                 DecisionLedger(directory),
-                self.event("@agricola plan"),
+                self.event("/agricola plan"),
             )
             self.assertEqual(result.commands, 1)
             self.assertFalse(client.updated)
@@ -299,7 +299,7 @@ class CommentTests(unittest.TestCase):
             client = FakeGitHub()
             client.change = replace(client.change, labels=())
             ledger = DecisionLedger(directory)
-            event = self.event('@agricola skip ruby reason="TS-only tooling"')
+            event = self.event('/agricola skip ruby reason="TS-only tooling"')
             first = handle_comment(client, manifest(), ledger, event)
             second = handle_comment(client, manifest(), ledger, event)
             self.assertTrue(first.changed_ledger)
@@ -325,7 +325,7 @@ class CommentTests(unittest.TestCase):
                 client,
                 manifest(),
                 ledger,
-                self.event("@agricola propagate go"),
+                self.event("/agricola propagate go"),
             )
 
             self.assertEqual(len(queued.propagations), 1)
@@ -361,7 +361,7 @@ class CommentTests(unittest.TestCase):
                 client,
                 manifest(),
                 ledger,
-                self.event("@agricola propagate go", comment_id=56),
+                self.event("/agricola propagate go", comment_id=56),
             )
             self.assertFalse(repeated.propagations)
             assert repeated.reply is not None
@@ -493,7 +493,7 @@ class CommentTests(unittest.TestCase):
                 client,
                 manifest(),
                 ledger,
-                self.event("@agricola propagate go"),
+                self.event("/agricola propagate go"),
             )
             record_propagations(
                 ledger,
@@ -554,7 +554,7 @@ class CommentTests(unittest.TestCase):
                 client,
                 manifest(),
                 ledger,
-                self.event("@agricola propagate all"),
+                self.event("/agricola propagate all"),
             )
             go, rust = queued.propagations
 
@@ -590,7 +590,7 @@ class CommentTests(unittest.TestCase):
                 FakeGitHub(),
                 manifest(),
                 DecisionLedger(directory),
-                self.event("@agricola propagate go\n@agricola propagate go"),
+                self.event("/agricola propagate go\n/agricola propagate go"),
             )
 
             self.assertEqual(len(result.propagations), 1)
@@ -604,7 +604,7 @@ class CommentTests(unittest.TestCase):
                 client,
                 manifest(),
                 DecisionLedger(directory),
-                self.event("@agricola status", "outsider"),
+                self.event("/agricola status", "outsider"),
             )
             self.assertTrue(result.ignored)
             self.assertFalse(client.comments)
@@ -616,7 +616,7 @@ class CommentTests(unittest.TestCase):
                 client,
                 manifest(),
                 DecisionLedger(directory),
-                self.event("@agricola destroy everything", "outsider"),
+                self.event("/agricola destroy everything", "outsider"),
             )
             self.assertTrue(result.ignored)
             self.assertFalse(client.comments)
@@ -628,14 +628,14 @@ class CommentTests(unittest.TestCase):
                 client,
                 manifest(),
                 DecisionLedger(directory),
-                self.event("please ask @agricola status"),
+                self.event("please ask /agricola status"),
             )
             self.assertTrue(result.ignored)
 
     def test_command_outside_tracking_issue_gets_scope_reply(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             client = FakeGitHub()
-            event = self.event("@agricola status")
+            event = self.event("/agricola status")
             event["issue"]["body"] = "ordinary issue"
             result = handle_comment(
                 client, manifest(), DecisionLedger(directory), event
@@ -655,7 +655,7 @@ class CommentTests(unittest.TestCase):
                 client,
                 manifest(),
                 DecisionLedger(directory),
-                self.event("@agricola status"),
+                self.event("/agricola status"),
             )
 
             self.assertIsNotNone(result.reply)

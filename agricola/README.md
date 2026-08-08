@@ -96,7 +96,7 @@ The tracking issue also contains a durable downstream propagation table. It list
 
 ## Commands
 
-`/ag` must be the first token on a line. Commands are accepted only from configured maintainers and only on canonical-change or audit-finding issues in `mpp-tools`. Accepted commands receive an eyes reaction while the workflow processes them. `/agricola`, the former `@agricola` prefix, and the `propagate` verb remain compatibility aliases.
+`/ag` must be the first token on a line. Commands are accepted only from configured maintainers and only on canonical-change or audit-finding issues in `mpp-tools`. Accepted commands receive an eyes reaction while the workflow processes them. `/agricola` and the `propagate` verb remain compatibility aliases.
 
 | Command | What it does | Example comment |
 | --- | --- | --- |

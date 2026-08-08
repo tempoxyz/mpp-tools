@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   run:
-    if: github.event_name != 'issue_comment' || contains(github.event.comment.body, '/ag') || contains(github.event.comment.body, '@agricola')
+    if: github.event_name != 'issue_comment' || contains(github.event.comment.body, '/ag')
     runs-on: ubuntu-latest
     outputs:
       has-propagations: ${{ steps.process.outputs.has-propagations }}

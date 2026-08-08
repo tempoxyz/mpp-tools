@@ -28,17 +28,17 @@ class CommandTests(unittest.TestCase):
 
     def test_parses_quoted_skip_reason(self) -> None:
         command = parse_commands(
-            '@agricola skip ruby reason="TS-only tooling"', self.manifest
+            '/ag skip ruby reason="TS-only tooling"', self.manifest
         )[0]
         self.assertEqual(command.target, "ruby")
         self.assertEqual(command.reason, "TS-only tooling")
 
     def test_rejects_unsupported_command(self) -> None:
         with self.assertRaisesRegex(CommandError, "unknown command"):
-            parse_commands("@agricola destroy everything", self.manifest)
+            parse_commands("/agricola destroy everything", self.manifest)
 
     def test_parses_propagation_targets(self) -> None:
-        command = parse_commands("@agricola propagate go rust go", self.manifest)[0]
+        command = parse_commands("/agricola propagate go rust go", self.manifest)[0]
         self.assertEqual(command.verb, CommandVerb.PROPAGATE)
         self.assertEqual(command.targets, ("go", "rust"))
 
@@ -82,7 +82,7 @@ class CommandTests(unittest.TestCase):
 
     def test_accepts_legacy_prefix_and_propagation_spellings(self) -> None:
         for body in (
-            "@agricola propagate go",
+            "/agricola propagate go",
             "/agricola propogate go",
         ):
             with self.subTest(body=body):
@@ -92,37 +92,37 @@ class CommandTests(unittest.TestCase):
     def test_detects_only_command_line_prefixes(self) -> None:
         self.assertTrue(has_command_line("/ag status"))
         self.assertTrue(has_command_line("/agricola status"))
-        self.assertTrue(has_command_line("@agricola status"))
+        self.assertFalse(has_command_line("@agricola status"))
         self.assertFalse(has_command_line("/agent status"))
         self.assertFalse(has_command_line("please run /ag status"))
         self.assertFalse(has_command_line("please run /agricola status"))
 
     def test_parses_all_propagation(self) -> None:
-        command = parse_commands("@agricola propagate All", self.manifest)[0]
+        command = parse_commands("/agricola propagate All", self.manifest)[0]
         self.assertTrue(command.all_targets)
 
     def test_rejects_notify_only_propagation(self) -> None:
         with self.assertRaisesRegex(CommandError, "does not support PR automation"):
-            parse_commands("@agricola propagate ruby", self.manifest)
+            parse_commands("/agricola propagate ruby", self.manifest)
 
     def test_rejects_mixed_all_propagation(self) -> None:
         with self.assertRaisesRegex(CommandError, "cannot be combined"):
-            parse_commands("@agricola propagate all go", self.manifest)
+            parse_commands("/agricola propagate all go", self.manifest)
 
     def test_rejects_propagating_and_skipping_the_same_target(self) -> None:
         with self.assertRaisesRegex(CommandError, "both propagated and skipped: go"):
             parse_commands(
-                '@agricola propagate all\n@agricola skip go reason="not needed"',
+                '/agricola propagate all\n/agricola skip go reason="not needed"',
                 self.manifest,
             )
 
     def test_rejects_unknown_target(self) -> None:
         with self.assertRaisesRegex(CommandError, "unknown SDK target"):
-            parse_commands('@agricola skip golang reason="wrong"', self.manifest)
+            parse_commands('/agricola skip golang reason="wrong"', self.manifest)
 
     def test_requires_skip_reason(self) -> None:
         with self.assertRaisesRegex(CommandError, "requires reason"):
-            parse_commands("@agricola skip go", self.manifest)
+            parse_commands("/agricola skip go", self.manifest)
 
     def test_authorization_is_case_insensitive(self) -> None:
         require_maintainer("BrendanJRyan", self.manifest)
