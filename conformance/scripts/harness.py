@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from jsonschema import Draft202012Validator, RefResolver
+from jsonschema import Draft202012Validator, FormatChecker, RefResolver
 
 
 SCRIPT_DIR = Path(__file__).parent
@@ -48,13 +48,26 @@ def load_vector(path: Path) -> dict[str, Any]:
 def load_flow_cases(path: Path = FLOW_CASES_PATH) -> list[dict[str, Any]]:
     document = load_json(path)
     validate_value(document, "flow-cases.schema.json", str(path))
-    return document["cases"]
+    cases = document["cases"]
+    seen_paths: set[str] = set()
+    for flow_case in cases:
+        case_path = flow_case["path"]
+        if case_path in seen_paths:
+            raise ValueError(f"{path} contains duplicate flow case path: {case_path}")
+        seen_paths.add(case_path)
+    return cases
 
 
 def load_flow_results(path: Path = FLOW_RESULTS_PATH) -> list[dict[str, Any]]:
     document = load_json(path)
     validate_value(document, "flow-results.schema.json", str(path))
     return document["results"]
+
+
+def write_flow_results(results: list[dict[str, Any]], path: Path = FLOW_RESULTS_PATH) -> None:
+    document = {"results": results}
+    validate_value(document, "flow-results.schema.json", str(path))
+    path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
 
 
 def _schema_store() -> dict[str, Any]:
@@ -74,7 +87,11 @@ SCHEMA_STORE = _schema_store()
 def validate_value(value: Any, schema: dict[str, Any] | str, label: str) -> None:
     schema_obj = SCHEMA_STORE[schema] if isinstance(schema, str) else schema
     resolver = RefResolver.from_schema(schema_obj, store=SCHEMA_STORE)
-    validator = Draft202012Validator(schema_obj, resolver=resolver)
+    validator = Draft202012Validator(
+        schema_obj,
+        resolver=resolver,
+        format_checker=FormatChecker(),
+    )
     errors = sorted(validator.iter_errors(value), key=lambda error: list(error.path))
     if errors:
         error = errors[0]

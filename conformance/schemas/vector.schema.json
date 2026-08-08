@@ -33,6 +33,41 @@
       "items": { "$ref": "#/$defs/Scenario" }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "commands": { "required": ["operation"] }
+        }
+      },
+      "then": {
+        "properties": {
+          "scenarios": {
+            "items": { "required": ["input", "expected"] }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "commands": {
+            "anyOf": [
+              { "required": ["parse"] },
+              { "required": ["format"] }
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "scenarios": {
+            "items": { "required": ["tests"] }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "ExpectedError": {
       "type": "object",
@@ -116,6 +151,78 @@
       "anyOf": [
         { "required": ["tests"] },
         { "required": ["input", "expected"] }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "required": ["tests"],
+            "properties": { "tests": { "required": ["parse"] } }
+          },
+          "then": {
+            "anyOf": [
+              { "required": ["wire"] },
+              { "required": ["encoded"] }
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": ["tests"],
+            "properties": {
+              "tests": {
+                "required": ["parse"],
+                "properties": { "parse": { "const": true } }
+              }
+            }
+          },
+          "then": {
+            "anyOf": [
+              { "required": ["object"] },
+              { "required": ["decoded"] }
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": ["tests"],
+            "properties": { "tests": { "required": ["format"] } }
+          },
+          "then": {
+            "anyOf": [
+              { "required": ["object"] },
+              { "required": ["decoded"] }
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": ["tests"],
+            "properties": {
+              "tests": {
+                "required": ["format"],
+                "properties": { "format": { "const": true } }
+              }
+            }
+          },
+          "then": {
+            "anyOf": [
+              { "required": ["wire"] },
+              { "required": ["encoded"] }
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": ["tests"],
+            "properties": { "tests": { "required": ["roundtrip"] } }
+          },
+          "then": {
+            "anyOf": [
+              { "required": ["wire", "object"] },
+              { "required": ["encoded", "decoded"] }
+            ]
+          }
+        }
       ]
     }
   }

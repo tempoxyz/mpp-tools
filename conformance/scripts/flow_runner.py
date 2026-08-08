@@ -25,6 +25,7 @@ from harness import (
     discover_adapters,
     load_flow_cases as load_validated_flow_cases,
     load_flow_results,
+    write_flow_results,
 )
 
 
@@ -164,7 +165,11 @@ def perform_request(
 ) -> tuple[int, Any, bytes]:
     method = flow_case.get("http_method", "GET")
     body = flow_case.get("retry_body", flow_case.get("body")) if retry else flow_case.get("body")
-    data = body.encode("utf-8") if body and method == "POST" else None
+    data = (
+        body.encode("utf-8")
+        if body is not None and method in {"POST", "PUT", "PATCH"}
+        else None
+    )
     request = urllib.request.Request(url, data=data, method=method)
     request.add_header("X-Flow-Client", client_name)
     if data is not None:
@@ -624,7 +629,7 @@ def run_adapter_flows(adapter: AdapterConfig, base_url: str, verbose: bool) -> l
 
 def update_golden_results(adapters: dict[str, AdapterConfig], base_url: str, verbose: bool) -> list[dict[str, Any]]:
     results = run_adapter_flows(adapters["typescript"], base_url, verbose)
-    FLOW_RESULTS.write_text(json.dumps({"results": results}, indent=2) + "\n")
+    write_flow_results(results, FLOW_RESULTS)
     return results
 
 
@@ -708,6 +713,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    load_flow_cases()
     adapters = discover_adapters()
     base_url = f"http://127.0.0.1:{args.port}"
     env = os.environ.copy()

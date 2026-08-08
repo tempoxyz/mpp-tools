@@ -251,6 +251,18 @@ class VectorRunner:
                 raise ValueError(f"sdkVersions.{adapter_name} must be a string")
         return constraints
 
+    def scenario_adapters(self, scenario: dict[str, Any]) -> list[str] | None:
+        adapter_names = scenario.get("adapters")
+        if adapter_names is None:
+            return None
+        if self.known_adapter_names is None:
+            self.known_adapter_names = set(discover_adapters())
+        unknown_adapters = set(adapter_names) - self.known_adapter_names
+        if unknown_adapters:
+            names = ", ".join(sorted(unknown_adapters))
+            raise ValueError(f"adapters contains unknown names: {names}")
+        return adapter_names
+
     def scenario_version_applies(
         self, scenario: dict[str, Any], adapter: AdapterConfig
     ) -> tuple[bool, str | None]:
@@ -505,7 +517,7 @@ class VectorRunner:
         for scenario in vectors.get("scenarios", []):
             self.scenario_version_constraints(scenario)
             name = scenario["name"]
-            scenario_adapters = scenario.get("adapters")
+            scenario_adapters = self.scenario_adapters(scenario)
             if scenario_adapters and adapter.name not in scenario_adapters:
                 continue
 
