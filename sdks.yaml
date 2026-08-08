@@ -1,0 +1,62 @@
+version: 1
+maintainers:
+  - brendanryan
+
+canonical:
+  repo: wevm/mppx
+
+spec:
+  repo: tempoxyz/mpp-specs
+
+sdks:
+  go:
+    repo: tempoxyz/mpp-go
+    automation: pr
+    owners: [brendanryan]
+    changelog: keep-a-changelog
+    verify:
+      - make test
+      - make conformance
+    capabilities:
+      - auth.jws-detached
+      - intents
+      - refunds
+
+  rust:
+    repo: tempoxyz/mpp-rs
+    automation: pr
+    owners: [brendanryan]
+    changelog: keep-a-changelog
+    verify:
+      - cargo test --all-features
+    capabilities:
+      - auth.jws-detached
+      - intents
+      - refunds
+
+  python:
+    repo: tempoxyz/pympp
+    automation: pr
+    owners: [brendanryan]
+    changelog: keep-a-changelog
+    verify:
+      - uv run pytest
+    capabilities:
+      - auth.jws-detached
+      - intents
+      - refunds
+
+  ruby:
+    repo: stripe/mpp-rb
+    automation: notify
+    owners: []
+    changelog: none
+    verify: []
+    capabilities: []
+  java:
+    repo: stripe/mpp-java
+    automation: notify
+    owners: []
+    changelog: none
+    verify: []
+    capabilities: []

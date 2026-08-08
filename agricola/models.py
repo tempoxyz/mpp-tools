@@ -1,0 +1,247 @@
+from __future__ import annotations
+
+from collections.abc import Mapping
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from enum import StrEnum
+from types import MappingProxyType
+from typing import Annotated, Literal
+
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PositiveInt,
+    StringConstraints,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
+
+RepoName = Annotated[
+    str, StringConstraints(pattern=r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+]
+TargetName = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9-]*$")]
+Login = Annotated[
+    str,
+    StringConstraints(pattern=r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$"),
+]
+NonEmpty = Annotated[str, StringConstraints(min_length=1)]
+Sha = Annotated[str, StringConstraints(min_length=7)]
+SourceId = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_.-]+#[1-9][0-9]*$")]
+PullRequestRef = Annotated[
+    str,
+    StringConstraints(pattern=r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[1-9][0-9]*$"),
+]
+FindingId = Annotated[str, StringConstraints(pattern=r"^AGR-[0-9]{4}-[0-9]{3,}$")]
+
+
+class FrozenModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class Automation(StrEnum):
+    PR = "pr"
+    NOTIFY = "notify"
+
+
+class Changelog(StrEnum):
+    KEEP_A_CHANGELOG = "keep-a-changelog"
+    NONE = "none"
+
+
+class DecisionKind(StrEnum):
+    PROPAGATE = "propagate"
+    SKIP = "skip"
+
+
+class LabelAction(StrEnum):
+    LABELED = "labeled"
+    UNLABELED = "unlabeled"
+
+
+class Repository(FrozenModel):
+    repo: RepoName
+
+
+class SDK(FrozenModel):
+    repo: RepoName
+    automation: Automation
+    owners: tuple[Login, ...]
+    changelog: Changelog
+    verify: tuple[NonEmpty, ...]
+    capabilities: tuple[NonEmpty, ...]
+
+    @model_validator(mode="after")
+    def require_pr_verification(self) -> SDK:
+        if self.automation is Automation.PR and not self.verify:
+            raise ValueError("verify must not be empty for pr automation")
+        return self
+
+
+class Manifest(FrozenModel):
+    version: Literal[1]
+    maintainers: frozenset[Login] = Field(min_length=1)
+    canonical: Repository
+    spec: Repository
+    sdks: Mapping[TargetName, SDK] = Field(min_length=1)
+
+    @field_validator("sdks", mode="after")
+    @classmethod
+    def freeze_sdks(cls, value: Mapping[str, SDK]) -> Mapping[str, SDK]:
+        return MappingProxyType(dict(value))
+
+    @field_serializer("sdks")
+    def serialize_sdks(self, value: Mapping[str, SDK]) -> dict[str, SDK]:
+        return dict(value)
+
+    @model_validator(mode="after")
+    def require_unique_repositories(self) -> Manifest:
+        repositories = [
+            self.canonical.repo,
+            self.spec.repo,
+            *(sdk.repo for sdk in self.sdks.values()),
+        ]
+        if len(repositories) != len(set(repositories)):
+            duplicate = next(
+                repo for repo in repositories if repositories.count(repo) > 1
+            )
+            raise ValueError(f"repository appears more than once: {duplicate}")
+        return self
+
+    def target(self, name: str) -> SDK:
+        try:
+            return self.sdks[name]
+        except KeyError as exc:
+            raise ValueError(f"unknown SDK target: {name}") from exc
+
+
+class Source(FrozenModel):
+    repo: RepoName
+    pr: PositiveInt
+    sha: Sha
+
+
+class DecisionBase(FrozenModel):
+    target: TargetName
+    by: Login
+    idempotency_key: NonEmpty
+    at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @field_validator("at")
+    @classmethod
+    def require_aware_timestamp(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("timestamp must include a timezone")
+        return value.astimezone(UTC)
+
+
+class PropagateDecision(DecisionBase):
+    decision: Literal[DecisionKind.PROPAGATE]
+    pr: PullRequestRef
+    reason: None = None
+
+
+class SkipDecision(DecisionBase):
+    decision: Literal[DecisionKind.SKIP]
+    reason: NonEmpty
+    pr: None = None
+
+
+Decision = Annotated[PropagateDecision | SkipDecision, Field(discriminator="decision")]
+
+
+class LedgerEntry(FrozenModel):
+    id: SourceId
+    source: Source
+    labels: tuple[str, ...]
+    decisions: tuple[Decision, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_identity_and_idempotency(self) -> LedgerEntry:
+        expected_id = f"{self.source.repo.rsplit('/', 1)[-1]}#{self.source.pr}"
+        if self.id != expected_id:
+            raise ValueError(f"id must be {expected_id}")
+        keys = [decision.idempotency_key for decision in self.decisions]
+        if len(keys) != len(set(keys)):
+            raise ValueError("decision idempotency keys must be unique")
+        return self
+
+
+@dataclass(frozen=True)
+class PullRequestFile:
+    path: str
+    status: str = "modified"
+    additions: int = 0
+    deletions: int = 0
+
+
+@dataclass(frozen=True)
+class CanonicalChange:
+    repo: str
+    number: int
+    sha: str
+    title: str
+    url: str
+    body: str
+    merged_at: datetime
+    labels: tuple[str, ...] = ()
+    files: tuple[PullRequestFile, ...] = ()
+
+    @property
+    def source_id(self) -> str:
+        return f"{self.repo.rsplit('/', 1)[-1]}#{self.number}"
+
+    @property
+    def marker(self) -> str:
+        return f"<!-- agricola:source={self.repo}#{self.number} -->"
+
+
+@dataclass(frozen=True)
+class LabelEvent:
+    action: LabelAction
+    label: str
+    actor: str
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class LabelResolution:
+    labels: tuple[str, ...]
+    targets: tuple[str, ...]
+    disabled: bool = False
+    errors: tuple[str, ...] = ()
+    notes: tuple[str, ...] = ()
+
+
+class CommandVerb(StrEnum):
+    PLAN = "plan"
+    STATUS = "status"
+    SKIP = "skip"
+
+
+@dataclass(frozen=True)
+class Command:
+    verb: CommandVerb
+    target: str | None = None
+    reason: str | None = None
+    line: int = 1
+
+
+class PendingReply(FrozenModel):
+    issue_number: PositiveInt
+    body: NonEmpty
+
+
+class Cursor(FrozenModel):
+    merged_at: datetime
+
+    @field_validator("merged_at")
+    @classmethod
+    def require_aware_timestamp(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("timestamp must include a timezone")
+        return value.astimezone(UTC)
+
+    def advance(self, change: CanonicalChange) -> Cursor:
+        return Cursor(merged_at=max(self.merged_at, change.merged_at))

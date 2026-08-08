@@ -19,6 +19,30 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  agricola-tests:
+    name: Agricola tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install Agricola
+        run: pip install .
+
+      - name: Run Agricola tests
+        run: python -m unittest discover -s agricola/tests -v
+
+      - name: Validate Agricola state
+        run: agricola validate
+
   script-tests:
     name: Python script tests
     runs-on: ubuntu-latest

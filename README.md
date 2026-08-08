@@ -53,6 +53,8 @@ make flow         # run end-to-end 402 flow conformance
 
 ```text
 mpp-tools/
+├── agricola/             # Control plane for SDK change review
+├── ledger/               # Append-only Agricola decision records
 ├── conformance/          # Cross-SDK conformance test suite
 │   ├── adapters/         # Per-language CLI adapters
 │   ├── flows/            # End-to-end 402 flow tests
@@ -60,8 +62,13 @@ mpp-tools/
 │   ├── scripts/          # Test runners and helpers
 │   └── vectors/          # Hand-authored protocol vectors
 ├── SPEC.md               # SDK conformance specification
+├── sdks.yaml             # Reviewed Agricola SDK manifest
 └── README.md
 ```
+
+## Agricola
+
+[Agricola](./agricola/README.md) is the review control plane for canonical SDK changes. It creates deterministic dry-run tracking plans, reconstructs authorized merge-time labels, and records maintainer decisions without writing to downstream repositories. Its deployment runbook is [docs/agricola-actions.md](./docs/agricola-actions.md).
 
 ## Conformance Suite
 
