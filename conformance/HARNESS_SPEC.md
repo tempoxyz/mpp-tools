@@ -18,6 +18,18 @@ The normative contract lives in JSON Schema:
 The operation list lives in [`operations.json`](./operations.json). Examples
 live in [`examples/`](./examples/).
 
+## Reference Implementation
+
+The pinned TypeScript `mppx` package is the executable reference implementation.
+It defines canonical serialization and flow behavior where the protocol
+specification permits multiple interpretations. Hand-authored vectors remain
+normative for their explicit inputs and expected outputs.
+
+Only the TypeScript adapter may regenerate `flows/golden-results.json`. Golden
+changes must be reviewed and committed with the fixture or pinned `mppx` change
+that caused them. Other adapters are always compared with the checked-in golden
+results and never update them.
+
 ## Simplification Plan
 
 1. Add one adapter manifest per language.
