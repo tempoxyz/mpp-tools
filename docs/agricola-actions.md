@@ -10,7 +10,7 @@ Agricola runs from [`.github/workflows/agricola.yml`](../.github/workflows/agric
 | `workflow_dispatch` | Run the poller manually. |
 | New `issue_comment` containing `@agricola` | Validate and handle a tracking-issue command. The parser still requires `@agricola` as the first token on a line. |
 
-One concurrency group serializes all triggers. Runs check out the repository's current default branch rather than assuming `main`.
+One concurrency group serializes all triggers. Runs execute trusted code from the repository's current default branch rather than assuming `main`. Durable ledger data is restored from `agricola/state`, and the changelogs-style PR updater keeps one open state pull request current. Code from the state branch is never executed.
 
 ## Required permissions
 
@@ -18,9 +18,9 @@ The workflow declares:
 
 - `contents: write` to persist the cursor and decision ledger;
 - `issues: write` to create tracking issues, update plans, and deliver command replies;
-- `pull-requests: read` to inspect canonical changes and query live status.
+- `pull-requests: write` to inspect canonical changes, query live status, and maintain the state pull request.
 
-The repository's Actions settings must allow `GITHUB_TOKEN` write access. Branch rules must permit the bot-authored ledger commit or provide an approved equivalent update path. If the default branch rejects the push, the workflow fails before delivering a state-changing command acknowledgement.
+The repository's Actions settings must allow `GITHUB_TOKEN` write access and pull-request creation. Agricola uses the same stable-branch pattern as the changelogs release action: `peter-evans/create-pull-request` creates or updates `agricola/state` and its single state pull request. No direct default-branch push or branch-rule exception is required. If the state PR update fails, the workflow stops before delivering a state-changing command acknowledgement.
 
 The canonical repository must be publicly readable by this token. Private or cross-organization repositories require an appropriately scoped GitHub App or token and are outside the secret-free setup.
 
@@ -29,11 +29,11 @@ The canonical repository must be publicly readable by this token. Private or cro
 1. Review [`sdks.yaml`](../sdks.yaml), especially `maintainers`, repository names, automation modes, verification commands, and capabilities.
 2. Create canonical labels `agricola:all`, `agricola:none`, and `agricola:<target>` for each desired manifest target. Agricola validates labels but does not create them.
 3. Enable GitHub Actions and workflow write permissions in `mpp-tools`.
-4. Ensure branch rules allow the `agricola[bot]` ledger commit.
-5. Run the workflow manually once and confirm that `ledger/cursor.json` is committed.
+4. Ensure Actions can create pull requests and write to non-default branches.
+5. Run the workflow manually once and confirm that the Agricola state PR contains `ledger/cursor.json`.
 6. Run `agricola validate` locally or inspect the workflow's validation step.
 
-The initial cursor starts fifteen minutes in the past. Because every poll also replays a one-hour overlap, the first API read covers approximately the previous 75 minutes. To intentionally backfill a different window, commit a reviewed `ledger/cursor.json` containing a timezone-aware ISO 8601 `merged_at` timestamp; polling begins one hour before that value.
+The initial cursor starts fifteen minutes in the past. Because every poll also replays a one-hour overlap, the first API read covers approximately the previous 75 minutes. To intentionally backfill a different window, update the state PR with a reviewed `ledger/cursor.json` containing a timezone-aware ISO 8601 `merged_at` timestamp; polling begins one hour before that value.
 
 ## Labels and authorization
 
@@ -71,4 +71,4 @@ Mention commands, including `@agricola status`, are scoped to Agricola tracking 
 - A command has no reply: inspect the persistence step. Replies are intentionally skipped after a failed ledger push.
 - A command is ignored: confirm the commenter is in `maintainers`, `@agricola` begins a line, the verb is currently supported, and the issue contains an Agricola source marker.
 - A label is ignored: confirm its final application occurred before merge and was performed by a configured maintainer.
-- The default branch rejects the ledger commit: adjust the branch rule or provide an approved write path before retrying the run.
+- The state PR is not created or updated: confirm that Actions has `contents: write`, `pull-requests: write`, and permission to create pull requests.

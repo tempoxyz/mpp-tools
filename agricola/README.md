@@ -93,7 +93,7 @@ Commands in canonical or downstream repositories require cross-repository event 
 
 ## State and recovery
 
-The poller creates `ledger/cursor.json` on its first run. The initial cursor starts fifteen minutes behind the current time; combined with the one-hour replay overlap, the first API read covers approximately the previous 75 minutes. This prevents both a deployment race and an unbounded historical issue flood. Later polls keep the one-hour overlap and deduplicate against ledger snapshots.
+The poller creates `ledger/cursor.json` on its first run. In GitHub Actions, ledger data is restored from `agricola/state`, and a stable state pull request is updated in place like a changelogs release PR. Executable code always comes from the protected default branch. The initial cursor starts fifteen minutes behind the current time; combined with the one-hour replay overlap, the first API read covers approximately the previous 75 minutes. This prevents both a deployment race and an unbounded historical issue flood. Later polls keep the one-hour overlap and deduplicate against ledger snapshots.
 
 Ledger filenames identify the canonical repository and pull request. Entries contain immutable source metadata, the authorized merge-time label snapshot, and discriminated decisions:
 
@@ -105,10 +105,10 @@ Tracking issue deduplication scans the control repository's issue API directly f
 The Actions workflow processes state-changing commands in three stages:
 
 1. prepare the ledger mutation and pending reply;
-2. commit and push the ledger to the default branch;
+2. commit the ledger to the stable state branch and create or update its pull request;
 3. deliver the GitHub reply only after persistence succeeds.
 
-A failed rebase or push therefore cannot leave a misleading “Recorded” acknowledgement. Rerunning the failed job reuses the comment-and-line idempotency key.
+A failed state PR update therefore cannot leave a misleading “Recorded” acknowledgement. Rerunning the failed job reuses the comment-and-line idempotency key.
 
 ## CLI reference
 
