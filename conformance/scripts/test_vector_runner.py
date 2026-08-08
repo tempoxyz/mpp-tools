@@ -49,7 +49,7 @@ class VectorRunnerHelperTest(unittest.TestCase):
         self.assertEqual(error, "duration exceeded: expected <= 5000 ms, got 5000.1 ms")
 
     def test_scenario_version_constraint_applies_when_matching(self) -> None:
-        scenario = {"sdkVersions": {"python": ">0.9.0, <1.0.0"}}
+        scenario = {"sdkVersions": {"python": ">0.9.0 <1.0.0"}}
 
         applies, reason = self.runner.scenario_version_applies(scenario, self.adapter)
 

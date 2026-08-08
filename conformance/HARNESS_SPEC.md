@@ -601,11 +601,11 @@ for vector in vectors:
             compare(normalize(expected), normalize(actual))
 ```
 
-`scenario.sdkVersions` is an optional object keyed by adapter name. Values are
-SemVer comparator expressions using `=`, `==`, `<`, `<=`, `>`, or `>=`;
-whitespace- or comma-separated comparators are combined with AND. Adapters not
-named in the object remain applicable. Invalid expressions and non-SemVer
-installed versions are runner errors, not skips.
+`scenario.sdkVersions` is an optional object keyed by adapter name. Values use
+npm-style SemVer constraints with `=`, `<`, `<=`, `>`, or `>=`; whitespace-
+separated comparators are combined with AND. Adapters not named in the object
+remain applicable. Invalid expressions and non-SemVer installed versions are
+runner errors, not skips.
 
 Flow pseudo-code:
 

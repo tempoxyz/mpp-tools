@@ -67,12 +67,12 @@ Use `sdkVersions` when a rule only applies to particular released SDK versions:
   "name": "rejects_weak_secret",
   "sdkVersions": {
     "typescript": ">0.8.15",
-    "rust": ">=0.12.0, <1.0.0"
+    "rust": ">=0.12.0 <1.0.0"
   }
 }
 ```
 
-Supported SemVer comparators are `=`, `==`, `<`, `<=`, `>`, and `>=`. Multiple comparators separated by whitespace or commas are combined with AND. An adapter not named in `sdkVersions` still runs the scenario; combine `sdkVersions` with `adapters` to restrict both adapter and version. Invalid constraints or installed versions fail the suite instead of silently skipping coverage. Java commit pins are not SemVer and cannot use `sdkVersions` until a versioned release is pinned.
+Constraints use npm-style SemVer syntax with `=`, `<`, `<=`, `>`, and `>=`. Whitespace-separated comparators are combined with AND. An adapter not named in `sdkVersions` still runs the scenario; combine `sdkVersions` with `adapters` to restrict both adapter and version. Invalid constraints or installed versions fail the suite instead of silently skipping coverage. Java commit pins are not SemVer and cannot use `sdkVersions` until a versioned release is pinned.
 
 ### Test Types
 
