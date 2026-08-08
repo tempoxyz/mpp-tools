@@ -10,7 +10,7 @@ Agricola runs from [`.github/workflows/agricola.yml`](../.github/workflows/agric
 | `workflow_dispatch` | Run the poller manually. |
 | New `issue_comment` containing `@agricola` | Validate and handle a tracking-issue command. The parser still requires `@agricola` as the first token on a line. |
 
-One concurrency group serializes all triggers. Runs execute trusted code from the repository's current default branch rather than assuming `main`. Durable ledger data is restored from `agricola/state`, and the changelogs-style PR updater keeps one open state pull request current. The state PR is an automation-owned materialized view: leave it open and do not merge or edit it. Code from the state branch is never executed.
+One concurrency group serializes all triggers. Runs execute trusted code from the repository's current default branch rather than assuming `main`. Durable ledger data is restored from `agricola/state`, and the changelogs-style PR updater creates or updates at most one open state pull request. Merge the state PR to checkpoint its ledger on the default branch; do not close or edit it manually. The next state change creates or updates the next single state PR. Code from the state branch is never executed.
 
 ## Required permissions
 
