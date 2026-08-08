@@ -135,6 +135,41 @@ class CliTests(unittest.TestCase):
             self.assertIn("Skipped — TS-only tooling", updated_body)
             self.assertIn("Recorded skip", client.comments[0][1])
 
+    def test_deferred_reply_can_link_to_its_action_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            reply_path = Path(directory) / "reply.json"
+            reply_path.write_text(
+                json.dumps({"issue_number": 207, "body": "Queued fix for `python`."})
+            )
+            action_url = (
+                "https://github.com/tempoxyz/mpp-tools/actions/runs/31281480045"
+            )
+            client = FakeGitHub()
+
+            with (
+                patch("agricola.cli.GitHubClient", return_value=client),
+                redirect_stdout(StringIO()),
+            ):
+                delivered = main(
+                    [
+                        "deliver-reply",
+                        str(reply_path),
+                        "--action-url",
+                        action_url,
+                    ]
+                )
+
+            self.assertEqual(delivered, 0)
+            self.assertEqual(
+                client.comments,
+                [
+                    (
+                        207,
+                        f"Queued fix for `python`.\n\n[View fix run]({action_url})",
+                    )
+                ],
+            )
+
     def test_records_explicit_generation_skip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

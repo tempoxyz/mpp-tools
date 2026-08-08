@@ -29,11 +29,11 @@ from .github import GitHubClient, GitHubError
 from .ledger import AuditStore, CursorStore, DecisionLedger, LedgerError
 from .manifest import ManifestError, load_manifest, print_schemas
 from .models import (
-    Automation,
     AuditSemanticResult,
+    Automation,
+    PendingAuditReport,
     PendingIssueUpdate,
     PendingReply,
-    PendingAuditReport,
     PropagationOutcome,
     PropagationRequest,
 )
@@ -84,6 +84,10 @@ def parser() -> argparse.ArgumentParser:
         "deliver-reply", help="deliver a previously deferred GitHub reply"
     )
     delivery.add_argument("reply_file")
+    delivery.add_argument(
+        "--action-url",
+        help="append a link to the GitHub Actions run that produced the reply",
+    )
     delivery.add_argument(
         "--control-repo",
         default=os.environ.get("GITHUB_REPOSITORY", "tempoxyz/mpp-tools"),
@@ -191,7 +195,10 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, ValidationError) as exc:
             print(f"reply error: {exc}", file=sys.stderr)
             return 2
-        GitHubClient(args.control_repo).comment_issue(reply.issue_number, reply.body)
+        body = reply.body
+        if args.action_url:
+            body = f"{body}\n\n[View fix run]({args.action_url})"
+        GitHubClient(args.control_repo).comment_issue(reply.issue_number, body)
         print(json.dumps({"delivered": True, "issue_number": reply.issue_number}))
         return 0
     if args.command == "deliver-issue-update":
