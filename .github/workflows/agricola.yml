@@ -1,0 +1,71 @@
+name: Agricola control plane
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: agricola-control-plane
+  cancel-in-progress: false
+
+jobs:
+  run:
+    if: github.event_name != 'issue_comment' || contains(github.event.comment.body, '@agricola')
+    runs-on: ubuntu-latest
+    env:
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install and validate Agricola
+        run: |
+          pip install .
+          agricola validate
+
+      - name: Process event
+        run: |
+          if [ "${{ github.event_name }}" = "issue_comment" ]; then
+            agricola handle-comment --reply-file "$RUNNER_TEMP/agricola-reply.json"
+          else
+            agricola poll
+          fi
+
+      - name: Persist control-plane state
+        run: |
+          if [ -z "$(git status --porcelain -- ledger)" ]; then
+            exit 0
+          fi
+          git config user.name "agricola[bot]"
+          git config user.email "agricola[bot]@users.noreply.github.com"
+          git add ledger
+          if [ "${{ github.event_name }}" = "issue_comment" ]; then
+            git commit -m "chore: record agricola decision"
+          else
+            git commit -m "chore: advance agricola control plane"
+          fi
+          git pull --rebase origin "$DEFAULT_BRANCH"
+          git push origin "HEAD:$DEFAULT_BRANCH"
+
+      - name: Deliver command reply
+        if: github.event_name == 'issue_comment'
+        run: |
+          if [ -f "$RUNNER_TEMP/agricola-reply.json" ]; then
+            agricola deliver-reply "$RUNNER_TEMP/agricola-reply.json"
+          fi
