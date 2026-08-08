@@ -30,6 +30,8 @@ import { Challenge, Credential, Method, Receipt, z } from 'mppx'
 import * as Client from 'mppx/client'
 import { Mppx, stripe } from 'mppx/server'
 
+const minimumSecretKeyBytes = 32
+
 interface SuccessResult<T> {
 	success: true
 	result: T
@@ -121,6 +123,9 @@ function generateConformanceChallengeId(params: {
 	digest?: string
 	opaque?: string
 }): string {
+	if (Buffer.byteLength(params.secretKey, 'utf8') < minimumSecretKeyBytes)
+		throw new Error(`secretKey must be at least ${minimumSecretKeyBytes} bytes`)
+
 	const requestJson = stableStringify(params.request ?? {})
 	const requestB64 = base64UrlEncode(requestJson)
 	const payload = [

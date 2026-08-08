@@ -23,6 +23,8 @@ from mpp import (
     format_payment_receipt,
 )
 
+MINIMUM_SECRET_KEY_BYTES = 32
+
 
 def base64url_encode(data: str) -> str:
     """Encode a string to base64url without padding."""
@@ -55,6 +57,9 @@ def canonical_json(value) -> str:
 
 
 def generate_conformance_challenge_id(*, secret_key: str, realm: str, method: str, intent: str, request, expires: str | None = None, digest: str | None = None, opaque: str | None = None) -> str:
+    if len(secret_key.encode("utf-8")) < MINIMUM_SECRET_KEY_BYTES:
+        raise ValueError(f"secretKey must be at least {MINIMUM_SECRET_KEY_BYTES} bytes")
+
     request_b64 = base64.urlsafe_b64encode(canonical_json(request or {}).encode("utf-8")).decode("ascii").rstrip("=")
     payload = "|".join([
         realm,

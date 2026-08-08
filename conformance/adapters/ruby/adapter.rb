@@ -10,6 +10,8 @@ require "time"
 require "mpp-rb"
 require "mpp/methods/tempo"
 
+MINIMUM_SECRET_KEY_BYTES = 32
+
 def success(result)
   {success: true, result: result}
 end
@@ -55,6 +57,9 @@ def deep_sort_keys(value)
 end
 
 def generate_conformance_challenge_id(params)
+  secret_key = params.fetch("secretKey")
+  raise "secretKey must be at least #{MINIMUM_SECRET_KEY_BYTES} bytes" if secret_key.bytesize < MINIMUM_SECRET_KEY_BYTES
+
   request_b64 = base64url_encode(stable_json(params["request"] || {}))
   payload = [
     params["realm"] || "",
@@ -65,7 +70,7 @@ def generate_conformance_challenge_id(params)
     params["digest"] || "",
     params["opaque"] || ""
   ].join("|")
-  digest = OpenSSL::HMAC.digest("SHA256", params.fetch("secretKey").encode("UTF-8"), payload.encode("UTF-8"))
+  digest = OpenSSL::HMAC.digest("SHA256", secret_key.encode("UTF-8"), payload.encode("UTF-8"))
   base64url_encode(digest)
 end
 
@@ -285,7 +290,7 @@ def verify_stripe_external_id_binding(input)
   require "mpp/methods/stripe"
   require "mpp/server"
 
-  secret_key = "conformance-stripe-secret"
+  secret_key = "conformance-stripe-secret-key-32"
   realm = "conformance.local"
   expires = "2099-01-29T12:05:30Z"
   challenge = Mpp::Challenge.create(
