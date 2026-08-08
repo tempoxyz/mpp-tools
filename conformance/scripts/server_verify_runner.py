@@ -57,6 +57,17 @@ def selected_adapters(name: str, adapters: dict[str, AdapterConfig]) -> list[str
     return selected
 
 
+def guard_no_results(results: list[RunResult], adapter: str) -> None:
+    """An empty result set must fail: zero executed checks is not conformance."""
+    if not results:
+        results.append(RunResult(
+            adapter=adapter,
+            name="no-checks",
+            passed=False,
+            error="No server verification checks were executed",
+        ))
+
+
 def run_adapter(adapter: AdapterConfig, cases: list[dict[str, Any]]) -> list[RunResult]:
     build_error = build_adapter(adapter)
     if build_error:
@@ -117,6 +128,8 @@ def main() -> int:
         except Exception as exc:
             print(" failed")
             results.append(RunResult(adapter=adapter_name, name="adapter-run", passed=False, error=str(exc)))
+
+    guard_no_results(results, args.adapter)
 
     passed = sum(1 for result in results if result.passed)
     failed = sum(1 for result in results if not result.passed)
