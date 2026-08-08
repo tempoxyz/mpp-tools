@@ -65,6 +65,8 @@ No checked-in schema copies need synchronization.
 - `automation`: `pr` for managed propagation or `notify` for external targets;
 - repository, owners, changelog convention, and verification commands for each target.
 
+Set `changelog: none` when the target repository creates release-note fragments automatically; Agricola then leaves that repository-owned workflow in control.
+
 Every `automation: pr` target must declare at least one verification command. The executor runs these commands after generation and before it receives downstream write credentials.
 
 ## Labels

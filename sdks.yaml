@@ -28,7 +28,7 @@ sdks:
     repo: tempoxyz/pympp
     automation: pr
     owners: [brendanjryan]
-    changelog: keep-a-changelog
+    changelog: none
     verify:
       - uv sync --all-extras --dev
       - uv run pytest
