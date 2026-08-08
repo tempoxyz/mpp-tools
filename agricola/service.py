@@ -245,11 +245,11 @@ def handle_comment(
             queued_targets.update(request.target for request in requested)
             for target in targets:
                 if target in recorded_targets:
-                    replies.append(f"Propagation for `{target}` is already recorded.")
+                    replies.append(f"Fix for `{target}` is already recorded.")
                 elif target in fresh_targets:
-                    replies.append(f"Queued propagation for `{target}`.")
+                    replies.append(f"Queued fix for `{target}`.")
                 else:
-                    replies.append(f"Propagation for `{target}` is already queued.")
+                    replies.append(f"Fix for `{target}` is already queued.")
         elif command.verb is CommandVerb.SKIP:
             if command.target is None or command.reason is None:
                 raise CommandError("invalid skip command")
@@ -405,7 +405,7 @@ def _handle_audit_comment(
                 issue_number=issue_number,
                 body=(
                     "Agricola command error: audit finding issues support only "
-                    "`propagate` and `status`."
+                    "`fix` and `status`."
                 ),
             ),
         )

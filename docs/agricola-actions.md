@@ -8,7 +8,7 @@ Agricola propagation runs from [`.github/workflows/agricola.yml`](../.github/wor
 | --- | --- |
 | Ten-minute schedule | Poll merged `wevm/mppx` pull requests. GitHub may delay scheduled jobs. |
 | `workflow_dispatch` | Run the poller manually. |
-| New `issue_comment` containing `@agricola` | Handle a tracking-issue command. `@agricola` must be the first token on a line. |
+| New `issue_comment` containing `/agricola` | Handle a tracking-issue command. `/agricola` must be the first token on a line. |
 
 The audit workflow runs every Monday at 09:00 UTC and supports `workflow_dispatch`. For each manifest SDK, it checks out the exact current heads of that repository and `mppx`, runs an open-ended read-only Codex comparison, and requires schema-validated findings with linked code evidence. Shared vectors and conformance-adapter capabilities remain deterministic supporting signals. Agricola clusters matching `semantic:`, `vector:`, and `capability:` fingerprints, maintains one issue per finding, and updates a roll-up index. The audit itself is read-only outside `mpp-tools`; downstream publication requires a maintainer's explicit command on a finding issue.
 
@@ -72,9 +72,9 @@ Downstream code never runs in a job containing downstream write credentials. Gen
 4. Add `AGRICOLA_APP_ID`, `AGRICOLA_APP_PRIVATE_KEY`, and `OPENAI_API_KEY` to `mpp-tools`.
 5. Enable workflow write access and pull-request creation.
 6. Run the workflow manually and confirm the poll succeeds and the state pull request contains `ledger/cursor.json`.
-7. On a tracking issue, run `@agricola propagate <target>` and confirm generation, verification, a downstream draft pull request, and a recorded ledger decision.
+7. On a tracking issue, run `/agricola fix <target>` and confirm the eyes reaction, generation, verification, a downstream draft pull request, and a recorded ledger decision.
 8. Run the SDK audit manually and confirm the `[Agricola] SDK drift audit` index links one issue per finding and records every exact audited commit.
-9. On an affected PR-enabled finding, run `@agricola propagate <target>` and confirm the finding links the resulting draft remediation pull request.
+9. On an affected PR-enabled finding, copy and post `/agricola fix` and confirm the finding links the resulting draft remediation pull request.
 
 The initial cursor starts fifteen minutes in the past. Because each poll replays a one-hour overlap, the first API read covers approximately the previous 75 minutes. To backfill a different window, update the state pull request with a reviewed `ledger/cursor.json` containing a timezone-aware ISO 8601 `merged_at`; polling begins one hour before it.
 
@@ -86,7 +86,7 @@ The maintainer allowlist lives in [`sdks.yaml`](../sdks.yaml). Agricola reconstr
 
 Commands use deferred issue updates and replies so acknowledgements follow their corresponding state change. Canonical-change tables reflect the durable decision ledger. Audit-finding tables retain linked remediation pull requests across later audit runs. Skip decisions use the comment ID and line number. Canonical propagation branches use `agricola/<canonical-repo>-<pr-number>`; audit remediation branches use `agricola/<finding-id>`. Replaying a poll, comment, job, or state overlap therefore reuses existing work instead of opening duplicate pull requests.
 
-On an audit-finding issue, `@agricola propagate <target>` generates, verifies, and opens or updates a draft fix for a named affected PR-enabled SDK. `@agricola propagate all` selects all PR-enabled SDKs affected by that finding. `@agricola status` reports the linked remediation pull requests. The issue embeds the exact audited canonical and target commits used by the request; `plan` and `skip` are not accepted on finding issues.
+On an audit-finding issue, `/agricola fix` generates, verifies, and opens or updates draft fixes for all affected PR-enabled SDKs. Optional target names narrow the request. `/agricola status` reports the linked remediation pull requests. Every actionable finding includes a copy-ready quick command, and valid maintainer commands receive an eyes reaction when processing begins. The issue embeds the exact audited canonical and target commits used by the request; `plan` and `skip` are not accepted on finding issues. The former `@agricola` prefix and `propagate` spelling remain compatibility aliases.
 
 ## Manual poll
 

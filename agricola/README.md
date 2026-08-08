@@ -8,7 +8,7 @@ It:
 - polls merged canonical pull requests with a durable Git-backed cursor;
 - reconstructs authorized `agricola:*` labels as they existed at merge time;
 - creates one tracking issue per actionable canonical change;
-- accepts maintainer-only `plan`, `propagate`, `status`, and `skip` commands;
+- accepts maintainer-only `plan`, `fix`, `status`, and `skip` commands;
 - generates idiomatic downstream changes, runs each SDK's declared verification, and opens draft pull requests;
 - audits every SDK head against canonical `mppx`, clusters deltas, and maintains one issue per finding plus a roll-up index;
 - records immutable source snapshots and completed decisions under [`ledger/`](../ledger/).
@@ -74,17 +74,16 @@ The tracking issue also contains a durable downstream propagation table. It list
 
 ## Commands
 
-`@agricola` must be the first token on a line. Commands are accepted only from configured maintainers and only on canonical-change or audit-finding issues in `mpp-tools`.
+`/agricola` must be the first token on a line. Commands are accepted only from configured maintainers and only on canonical-change or audit-finding issues in `mpp-tools`. Accepted commands receive an eyes reaction while the workflow processes them. The former `@agricola` prefix and `propagate` verb remain compatibility aliases.
 
 | Command | What it does | Example comment |
 | --- | --- | --- |
-| `plan` | Regenerates the impact plan from immutable merge-time state. | `@agricola plan` |
-| `propagate <targets...>` | Queues named `automation: pr` targets. | `@agricola propagate go rust` |
-| `propagate all` | Queues every `automation: pr` target. | `@agricola propagate all` |
-| `status` | Queries GitHub for downstream PRs recorded in the ledger. | `@agricola status` |
-| `skip <target> reason="..."` | Records an idempotent, reason-required skip for one SDK. | `@agricola skip go reason="Not applicable to this transport"` |
+| `plan` | Regenerates the impact plan from immutable merge-time state. | `/agricola plan` |
+| `fix [targets...]` | Queues named `automation: pr` targets, or all when omitted. | `/agricola fix` |
+| `status` | Queries GitHub for downstream PRs recorded in the ledger. | `/agricola status` |
+| `skip <target> reason="..."` | Records an idempotent, reason-required skip for one SDK. | `/agricola skip go reason="Not applicable to this transport"` |
 
-On an audit-finding issue, `propagate <targets...>` accepts only PR-enabled SDKs listed as affected by that finding. `propagate all` selects every PR-enabled affected SDK, and `status` reports linked remediation pull requests. The finding's exact canonical and target commits are the immutable generation inputs. `plan` and `skip` remain specific to canonical-change issues.
+On an audit-finding issue, `fix` selects every affected PR-enabled SDK. Optional targets limit it to named affected SDKs, and `status` reports linked remediation pull requests. Each actionable issue includes a copy-ready `/agricola fix` block. The finding's exact canonical and target commits are the immutable generation inputs. `plan` and `skip` remain specific to canonical-change issues.
 
 Commands in canonical or downstream repositories are not supported. A failed unpublished propagation can be retried by repeating its issue command or rerunning its workflow; a published stable branch is updated idempotently.
 
@@ -115,7 +114,7 @@ The weekly and manually dispatched audit is head-to-head and report-only. It use
 
 The first pass reviews each repository's current default-branch checkout independently against the exact canonical `mppx` head. A read-only Codex run explores both implementations and emits schema-validated `semantic:<area>/<behavior>` findings with source evidence. Shared protocol vectors and conformance-adapter capabilities provide deterministic supporting evidence. The second pass clusters equivalent findings under SDK-independent fingerprints such as `semantic:receipt/verification-order`, `capability:challenge.parse`, or `vector:www-authenticate/basic/parse`. Stable `AGR-<year>-<sequence>` IDs are assigned in [`ledger/audit.json`](../ledger/audit.json).
 
-One `[Agricola] SDK drift audit` index is updated in place, and every stable finding gets its own issue with exact audited commits, affected and clean SDKs, likely-origin heuristic, severity, confidence, linked source evidence, a suggested test, and action instructions. A healthy audit closes issues whose fingerprints disappear and reopens recurring findings. Incomplete audits never close findings. Findings never create branches or pull requests automatically; a maintainer may explicitly run `@agricola propagate <target>` on the finding issue to open or update a draft remediation pull request. Its link and status survive later audit reconciliations.
+One `[Agricola] SDK drift audit` index is updated in place, and every stable finding gets its own issue with exact audited commits, affected and clean SDKs, likely-origin heuristic, severity, confidence, linked source evidence, a suggested test, and action instructions. A healthy audit closes issues whose fingerprints disappear and reopens recurring findings. Incomplete audits never close findings. Findings never create branches or pull requests automatically; a maintainer may explicitly run `/agricola fix` on the finding issue to open or update draft remediation pull requests. Their links and status survive later audit reconciliations.
 
 ## State and recovery
 
@@ -152,7 +151,7 @@ State-changing replies are deferred until the state pull request has been update
 | `agricola deliver-audit <report>` | Reconciles the roll-up index and per-finding GitHub issues. | `agricola deliver-audit audit.json --control-repo tempoxyz/mpp-tools` |
 | `agricola verify-propagation <request>` | Runs the target's reviewed verification commands. | `agricola verify-propagation request.json --root downstream-sdk` |
 | `agricola render-propagation <request>` | Renders deterministic downstream PR metadata. | `agricola render-propagation request.json --title-file title.txt --body-file body.md` |
-| `agricola parse-command --author <login>` | Parses issue commands from standard input for diagnostics. | `printf '%s\n' '@agricola status' \| agricola parse-command --author maintainer` |
+| `agricola parse-command --author <login>` | Parses issue commands from standard input for diagnostics. | `printf '%s\n' '/agricola status' \| agricola parse-command --author maintainer` |
 
 Live control-plane commands authenticate through `GH_TOKEN`; canonical polling can use a separate repository token:
 

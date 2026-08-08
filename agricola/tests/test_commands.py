@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from agricola.commands import (
     AuthorizationError,
     CommandError,
+    has_command_line,
     parse_commands,
     require_maintainer,
     resolve_labels,
@@ -20,7 +21,7 @@ class CommandTests(unittest.TestCase):
 
     def test_parses_only_first_token_commands(self) -> None:
         commands = parse_commands(
-            "please run @agricola plan\n  @agricola plan", self.manifest
+            "please run /agricola plan\n  /agricola plan", self.manifest
         )
         self.assertEqual([command.verb for command in commands], [CommandVerb.PLAN])
         self.assertEqual(commands[0].line, 2)
@@ -40,6 +41,29 @@ class CommandTests(unittest.TestCase):
         command = parse_commands("@agricola propagate go rust go", self.manifest)[0]
         self.assertEqual(command.verb, CommandVerb.PROPAGATE)
         self.assertEqual(command.targets, ("go", "rust"))
+
+    def test_parses_short_fix_command(self) -> None:
+        command = parse_commands("/agricola fix", self.manifest)[0]
+        self.assertEqual(command.verb, CommandVerb.PROPAGATE)
+        self.assertTrue(command.all_targets)
+
+    def test_parses_targeted_fix_command(self) -> None:
+        command = parse_commands("/agricola fix rust", self.manifest)[0]
+        self.assertEqual(command.targets, ("rust",))
+
+    def test_accepts_legacy_prefix_and_propagation_spellings(self) -> None:
+        for body in (
+            "@agricola propagate go",
+            "/agricola propogate go",
+        ):
+            with self.subTest(body=body):
+                command = parse_commands(body, self.manifest)[0]
+                self.assertEqual(command.targets, ("go",))
+
+    def test_detects_only_command_line_prefixes(self) -> None:
+        self.assertTrue(has_command_line("/agricola status"))
+        self.assertTrue(has_command_line("@agricola status"))
+        self.assertFalse(has_command_line("please run /agricola status"))
 
     def test_parses_all_propagation(self) -> None:
         command = parse_commands("@agricola propagate All", self.manifest)[0]

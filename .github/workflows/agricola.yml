@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   run:
-    if: github.event_name != 'issue_comment' || contains(github.event.comment.body, '@agricola')
+    if: github.event_name != 'issue_comment' || contains(github.event.comment.body, '/agricola') || contains(github.event.comment.body, '@agricola')
     runs-on: ubuntu-latest
     outputs:
       has-propagations: ${{ steps.process.outputs.has-propagations }}
@@ -83,6 +83,19 @@ jobs:
           else
             echo "has-propagations=false" >> "$GITHUB_OUTPUT"
           fi
+          if jq -e '.commands > 0 and (.ignored | not)' "$result" >/dev/null; then
+            echo "accepted-command=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "accepted-command=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Acknowledge accepted command
+        if: github.event_name == 'issue_comment' && steps.process.outputs.accepted-command == 'true'
+        continue-on-error: true
+        run: |
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/issues/comments/${{ github.event.comment.id }}/reactions" \
+            -f content=eyes
 
       - name: Persist control-plane state
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
