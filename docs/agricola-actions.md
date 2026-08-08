@@ -33,8 +33,9 @@ Grant repository permissions:
 | Pull requests | Read and write | Read canonical metadata; create downstream draft pull requests. |
 | Actions | Read | Read failed downstream GitHub Actions logs during revision. |
 | Checks | Read | Read downstream check summaries and annotations during revision. |
+| Workflows | Read and write | Update downstream workflow files when a generated remediation requires it. |
 
-The workflow requests only read access when minting the `wevm/mppx` token. It mints an issues-write token scoped to `mpp-tools` so issue activity uses the App identity and icon. For `tempoxyz` targets it mints separate read tokens for recorded PR state and revision feedback, then requests contents, issues, and pull-request write access only after verification. Adding a new target requires updating both `sdks.yaml` and the downstream repository list in the workflow. Configure the App's public logo in its GitHub settings to control the displayed avatar.
+The workflow requests only read access when minting the `wevm/mppx` token. It mints an issues-write token scoped to `mpp-tools` so issue activity uses the App identity and icon. For `tempoxyz` targets it mints separate read tokens for recorded PR state and revision feedback, then requests contents, issues, pull-request, and workflow write access only after verification. Adding a new target requires updating both `sdks.yaml` and the downstream repository list in the workflow. Configure the App's public logo in its GitHub settings to control the displayed avatar.
 
 Configure `tempoxyz/mpp-tools` with:
 

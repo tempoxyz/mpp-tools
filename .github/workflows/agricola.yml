@@ -415,6 +415,7 @@ jobs:
           permission-contents: write
           permission-issues: write
           permission-pull-requests: write
+          permission-workflows: write
 
       - name: Checkout downstream SDK
         if: steps.patch.outputs.has-changes == 'true'
