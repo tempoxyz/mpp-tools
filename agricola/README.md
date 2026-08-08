@@ -98,8 +98,8 @@ target tree, even if the default branch advances while the workflow is running.
 The executor:
 
 1. checks out the downstream repository, pinned canonical commit, specification, reviewed plan or audit evidence, and target conventions;
-2. generates the smallest idiomatic downstream patch without repository credentials;
-3. transfers only that patch to a separate job and runs the manifest verification commands without secrets;
+2. generates the smallest idiomatic downstream patch and runs the manifest verification commands without repository credentials;
+3. transfers only that patch to a separate job and independently repeats the manifest verification commands without secrets;
 4. mints a target-scoped GitHub App token only after verification succeeds;
 5. creates or updates the stable branch and opens a draft pull request;
 6. records the propagation decision only after GitHub returns the pull-request reference.

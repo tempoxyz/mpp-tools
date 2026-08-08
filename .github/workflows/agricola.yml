@@ -172,6 +172,11 @@ jobs:
           git -C .agricola/canonical checkout --detach "$source_sha"
           git clone --depth 1 https://github.com/tempoxyz/mpp-specs.git .agricola/spec
 
+      - name: Setup uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          version: "0.9.26"
+
       - name: Generate downstream changes
         uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1
         with:
