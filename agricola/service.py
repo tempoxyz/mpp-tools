@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Protocol
 
@@ -19,13 +19,17 @@ from .models import (
     CanonicalChange,
     CommandVerb,
     Cursor,
+    Decision,
     DecisionKind,
     LabelEvent,
     Manifest,
     PendingReply,
+    PropagateDecision,
+    PropagationRequest,
+    PropagationResult,
     SkipDecision,
 )
-from .planner import build_tracking_issue, tracking_issue_title
+from .planner import applicable_targets, build_tracking_issue, tracking_issue_title
 
 
 class GitHub(Protocol):
@@ -49,6 +53,7 @@ class PollResult:
     created: int = 0
     deduplicated: int = 0
     suppressed: int = 0
+    propagations: tuple[PropagationRequest, ...] = ()
 
 
 def poll(
@@ -59,28 +64,49 @@ def poll(
 ) -> PollResult:
     cursor = cursor_store.load()
     counters = {"discovered": 0, "created": 0, "deduplicated": 0, "suppressed": 0}
+    propagations: list[PropagationRequest] = []
     for summary in client.merged_changes(manifest.canonical.repo, cursor):
         counters["discovered"] += 1
-        if ledger.read(summary.repo, summary.number) is not None:
-            counters["deduplicated"] += 1
-            cursor = cursor.advance(summary)
-            cursor_store.save(cursor)
-            continue
         change = client.pull_request(summary.repo, summary.number)
         events = client.label_events(change.repo, change.number)
         resolution = resolve_labels(events, change.merged_at, manifest)
+        if any(
+            label.lower().startswith("agricola:") for label in change.labels
+        ) and not any(event.label.lower().startswith("agricola:") for event in events):
+            resolution = replace(
+                resolution,
+                errors=(*resolution.errors, "could not verify merge-time label actors"),
+            )
+        existing_entry = ledger.read(summary.repo, summary.number)
         ledger.ensure(change, labels=resolution.labels)
+        issue = client.find_tracking_issue(change.marker)
         if resolution.disabled and not resolution.errors and not resolution.notes:
             counters["suppressed"] += 1
-        elif client.find_tracking_issue(change.marker):
+        elif issue:
             counters["deduplicated"] += 1
         else:
             body = build_tracking_issue(change, resolution, manifest)
-            client.create_issue(tracking_issue_title(change), body)
+            issue = client.create_issue(tracking_issue_title(change), body)
             counters["created"] += 1
+        if issue and not resolution.disabled and not resolution.errors:
+            entry = ledger.read(change.repo, change.number)
+            assert entry is not None
+            propagations.extend(
+                _requests_for_targets(
+                    change,
+                    resolution.targets,
+                    dict(resolution.target_actors),
+                    manifest,
+                    issue,
+                    build_tracking_issue(change, resolution, manifest),
+                    entry.decisions,
+                )
+            )
+        if existing_entry is not None and not issue:
+            counters["deduplicated"] += 1
         cursor = cursor.advance(change)
         cursor_store.save(cursor)
-    return PollResult(**counters)
+    return PollResult(**counters, propagations=tuple(propagations))
 
 
 @dataclass(frozen=True)
@@ -89,6 +115,7 @@ class CommentResult:
     changed_ledger: bool = False
     ignored: bool = False
     reply: PendingReply | None = None
+    propagations: tuple[PropagationRequest, ...] = ()
 
 
 def handle_comment(
@@ -137,6 +164,8 @@ def handle_comment(
     change = client.pull_request(source_repo, source_number)
     changed_ledger = False
     replies: list[str] = []
+    propagations: list[PropagationRequest] = []
+    queued_targets: set[str] = set()
     for command in commands:
         if command.verb is CommandVerb.PLAN:
             events = client.label_events(change.repo, change.number)
@@ -146,7 +175,47 @@ def handle_comment(
                 title=tracking_issue_title(change),
                 body=build_tracking_issue(change, labels, manifest),
             )
-            replies.append(f"Regenerated the dry-run plan for `{change.source_id}`.")
+            replies.append(f"Regenerated the impact plan for `{change.source_id}`.")
+        elif command.verb is CommandVerb.PROPAGATE:
+            created = ledger.ensure(change)
+            changed_ledger = changed_ledger or created
+            targets = (
+                applicable_targets(change, manifest)
+                if command.applicable
+                else command.targets
+            )
+            if not targets:
+                replies.append("No SDKs are currently marked applicable.")
+                continue
+            entry = ledger.read(change.repo, change.number)
+            assert entry is not None
+            recorded_targets = {decision.target for decision in entry.decisions}
+            fresh_targets = tuple(
+                target
+                for target in targets
+                if target not in recorded_targets and target not in queued_targets
+            )
+            requested = _requests_for_targets(
+                change,
+                fresh_targets,
+                {target: author for target in targets},
+                manifest,
+                {
+                    "number": issue_number,
+                    "html_url": str(issue.get("html_url") or "https://github.com"),
+                },
+                issue_body,
+                entry.decisions,
+            )
+            propagations.extend(requested)
+            queued_targets.update(request.target for request in requested)
+            for target in targets:
+                if target in recorded_targets:
+                    replies.append(f"Propagation for `{target}` is already recorded.")
+                elif target in fresh_targets:
+                    replies.append(f"Queued propagation for `{target}`.")
+                else:
+                    replies.append(f"Propagation for `{target}` is already queued.")
         elif command.verb is CommandVerb.SKIP:
             if command.target is None or command.reason is None:
                 raise CommandError("invalid skip command")
@@ -192,7 +261,84 @@ def handle_comment(
         if replies
         else None
     )
-    return CommentResult(len(commands), changed_ledger, reply=reply)
+    return CommentResult(
+        len(commands),
+        changed_ledger,
+        reply=reply,
+        propagations=tuple(propagations),
+    )
+
+
+def record_propagations(
+    ledger: DecisionLedger, results: Sequence[PropagationResult]
+) -> tuple[bool, tuple[PendingReply, ...]]:
+    changed = False
+    replies: dict[int, list[str]] = {}
+    for result in results:
+        request = result.request
+        appended = ledger.append_source(
+            request.source,
+            PropagateDecision(
+                target=request.target,
+                decision=DecisionKind.PROPAGATE,
+                by=request.by,
+                pr=result.pr,
+                idempotency_key=request.idempotency_key,
+                at=result.at,
+            ),
+        )
+        changed = changed or appended
+        action = "Opened" if appended else "Already recorded"
+        replies.setdefault(request.tracking_issue, []).append(
+            f"{action} draft PR for `{request.target}`: [{result.pr}]({result.url})."
+        )
+    pending = tuple(
+        PendingReply(issue_number=issue, body="\n".join(messages))
+        for issue, messages in sorted(replies.items())
+    )
+    return changed, pending
+
+
+def _requests_for_targets(
+    change: CanonicalChange,
+    targets: Sequence[str],
+    actors: dict[str, str],
+    manifest: Manifest,
+    issue: dict[str, object],
+    plan: str,
+    decisions: Sequence[Decision],
+) -> tuple[PropagationRequest, ...]:
+    decided = {decision.target for decision in decisions}
+    issue_number = int(str(issue["number"]))
+    issue_url = str(issue.get("html_url") or issue.get("url") or "")
+    requests: list[PropagationRequest] = []
+    for target in targets:
+        if target in decided:
+            continue
+        sdk = manifest.target(target)
+        requests.append(
+            PropagationRequest(
+                source={
+                    "repo": change.repo,
+                    "pr": change.number,
+                    "sha": change.sha,
+                },
+                source_title=change.title,
+                source_url=change.url,
+                target=target,
+                target_repo=sdk.repo,
+                tracking_issue=issue_number,
+                tracking_issue_url=issue_url,
+                by=actors[target],
+                idempotency_key=f"propagate:{change.source_id}:{target}",
+                branch=f"agricola/{change.source_id.replace('#', '-')}",
+                verify=sdk.verify,
+                changelog=sdk.changelog,
+                owners=sdk.owners,
+                plan=plan,
+            )
+        )
+    return tuple(requests)
 
 
 def _object(value: dict[str, object], key: str) -> dict[str, object]:

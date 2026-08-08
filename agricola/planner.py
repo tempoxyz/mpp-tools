@@ -121,6 +121,21 @@ def _applicability(
     )
 
 
+def applicable_targets(change: CanonicalChange, manifest: Manifest) -> tuple[str, ...]:
+    normative_change = any(
+        classify_file(file) is FileCategory.NORMATIVE for file in change.files
+    )
+    signals = detected_capabilities(change, manifest)
+    return tuple(
+        name
+        for name, sdk in manifest.sdks.items()
+        if sdk.automation is Automation.PR
+        and (
+            normative_change or (signals and not (set(signals) - set(sdk.capabilities)))
+        )
+    )
+
+
 def build_tracking_issue(
     change: CanonicalChange, labels: LabelResolution, manifest: Manifest
 ) -> str:
@@ -137,7 +152,7 @@ def build_tracking_issue(
         "",
         f"Canonical change: [{change.repo}#{change.number}]({change.url}) at `{change.sha}`.",
         "",
-        "> This is a dry-run plan. Agricola never writes to downstream SDK repositories.",
+        "> Agricola creates draft downstream PRs only for targets authorized by merge-time labels or maintainer commands.",
         "",
         "## Change classification",
         "",
@@ -209,11 +224,13 @@ def build_tracking_issue(
             "",
             "```text",
             "@agricola plan",
+            "@agricola propagate <sdk> [<sdk> ...]",
+            "@agricola propagate applicable",
             "@agricola status",
             '@agricola skip <sdk> reason="..."',
             "```",
             "",
-            "Propagation and revision commands are intentionally unavailable.",
+            "Generated changes remain draft until a maintainer reviews and merges them.",
         ]
     )
     return "\n".join(lines).rstrip() + "\n"

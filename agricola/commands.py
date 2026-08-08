@@ -62,6 +62,36 @@ def parse_commands(body: str, manifest: Manifest) -> list[Command]:
             commands.append(Command(verb=verb, line=line_number))
             continue
 
+        if verb is CommandVerb.PROPAGATE:
+            if not args:
+                raise CommandError(
+                    f"line {line_number}: propagate requires SDK targets or applicable"
+                )
+            if len(args) == 1 and args[0].lower() == "applicable":
+                commands.append(Command(verb=verb, applicable=True, line=line_number))
+                continue
+            if any(argument.lower() == "applicable" for argument in args):
+                raise CommandError(
+                    f"line {line_number}: applicable cannot be combined with SDK targets"
+                )
+            targets: list[str] = []
+            for argument in args:
+                target = argument.lower()
+                try:
+                    sdk = manifest.target(target)
+                except ValueError as exc:
+                    raise CommandError(f"line {line_number}: {exc}") from exc
+                if sdk.automation is not Automation.PR:
+                    raise CommandError(
+                        f"line {line_number}: {target} does not support PR automation"
+                    )
+                if target not in targets:
+                    targets.append(target)
+            commands.append(
+                Command(verb=verb, targets=tuple(targets), line=line_number)
+            )
+            continue
+
         if not args:
             raise CommandError(f"line {line_number}: skip requires an SDK target")
         target = args[0].lower()
@@ -104,7 +134,7 @@ def resolve_labels(
             last_events[label] = event
 
     applied = {
-        label
+        label: event
         for label, event in last_events.items()
         if event.action is LabelAction.LABELED and event.actor.lower() in authorized
     }
@@ -114,27 +144,35 @@ def resolve_labels(
         "agricola:none",
         *(f"agricola:{name}" for name in manifest.sdks),
     }
-    unknown = sorted(applied - known)
+    unknown = sorted(set(applied) - known)
     errors = tuple(f"unknown label: {label}" for label in unknown)
-    effective = applied & known
+    effective = set(applied) & known
     if "agricola:none" in effective:
         conflicts = sorted(effective - {"agricola:none"})
         notes = ()
         if conflicts:
             notes = ("agricola:none overrides " + ", ".join(conflicts),)
-        return LabelResolution(tuple(sorted(applied)), (), True, errors, notes)
+        return LabelResolution(
+            labels=tuple(sorted(applied)),
+            targets=(),
+            disabled=True,
+            errors=errors,
+            notes=notes,
+        )
 
-    targets = {
-        label.removeprefix("agricola:")
+    target_actors = {
+        label.removeprefix("agricola:"): applied[label].actor
         for label in effective
-        if label not in {"agricola:all"}
+        if label != "agricola:all"
     }
     if "agricola:all" in effective:
-        targets.update(
-            name
-            for name, sdk in manifest.sdks.items()
-            if sdk.automation is Automation.PR
-        )
+        actor = applied["agricola:all"].actor
+        for name, sdk in manifest.sdks.items():
+            if sdk.automation is Automation.PR:
+                target_actors.setdefault(name, actor)
     return LabelResolution(
-        tuple(sorted(applied)), tuple(sorted(targets)), False, errors
+        labels=tuple(sorted(applied)),
+        targets=tuple(sorted(target_actors)),
+        target_actors=tuple(sorted(target_actors.items())),
+        errors=errors,
     )

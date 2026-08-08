@@ -20,11 +20,18 @@ class GitHubError(RuntimeError):
 
 
 class GitHubClient:
-    def __init__(self, control_repo: str, *, token: str | None = None) -> None:
+    def __init__(
+        self,
+        control_repo: str,
+        *,
+        token: str | None = None,
+        repo_tokens: dict[str, str] | None = None,
+    ) -> None:
         self.control_repo = control_repo
         self.environment = os.environ.copy()
         if token:
             self.environment["GH_TOKEN"] = token
+        self.repo_tokens = repo_tokens or {}
 
     def api(
         self,
@@ -45,12 +52,16 @@ class GitHubClient:
             else:
                 command.extend(["--input", "-"])
                 input_text = json.dumps(fields)
+        environment = self.environment.copy()
+        match = re.match(r"repos/([^/]+/[^/]+)(?:/|$)", endpoint)
+        if match and (repo_token := self.repo_tokens.get(match.group(1))):
+            environment["GH_TOKEN"] = repo_token
         process = subprocess.run(
             command,
             input=input_text,
             text=True,
             capture_output=True,
-            env=self.environment,
+            env=environment,
             check=False,
         )
         if process.returncode:

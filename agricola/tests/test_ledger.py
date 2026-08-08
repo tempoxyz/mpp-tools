@@ -20,7 +20,28 @@ class LedgerTests(unittest.TestCase):
             self.assertIsNotNone(entry)
             assert entry is not None
             self.assertEqual(entry.labels, ("agricola:go",))
-            self.assertEqual(entry.decisions, ())
+
+    def test_ensure_repairs_empty_undecided_label_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = DecisionLedger(directory)
+            source = change()
+            ledger.ensure(source, labels=())
+
+            changed = ledger.ensure(source, labels=("agricola:all",))
+
+            self.assertTrue(changed)
+            entry = ledger.read(source.repo, source.number)
+            assert entry is not None
+            self.assertEqual(entry.labels, ("agricola:all",))
+
+    def test_ensure_rejects_changed_nonempty_label_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = DecisionLedger(directory)
+            source = change()
+            ledger.ensure(source, labels=("agricola:go",))
+
+            with self.assertRaisesRegex(LedgerError, "merge-time label conflict"):
+                ledger.ensure(source, labels=("agricola:all",))
 
     def test_append_is_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

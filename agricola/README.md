@@ -1,17 +1,18 @@
 # Agricola
 
-Agricola is the GitHub-native control plane for reviewing changes from the canonical `wevm/mppx` SDK before they reach downstream MPP SDKs.
+Agricola is the GitHub-native control plane for propagating reviewed changes from the canonical `wevm/mppx` SDK to downstream MPP SDKs.
 
-The current control plane:
+It:
 
-- validate the reviewed [`sdks.yaml`](../sdks.yaml) manifest;
-- poll merged canonical pull requests with a durable Git-backed cursor;
-- create one dry-run tracking plan per actionable canonical change;
-- reconstruct authorized `agricola:*` labels as they existed at merge time;
-- accept maintainer-only `plan`, `status`, and `skip` commands on tracking issues;
-- record source snapshots and human decisions under [`ledger/`](../ledger/).
+- validates the reviewed [`sdks.yaml`](../sdks.yaml) manifest;
+- polls merged canonical pull requests with a durable Git-backed cursor;
+- reconstructs authorized `agricola:*` labels as they existed at merge time;
+- creates one tracking issue per actionable canonical change;
+- accepts maintainer-only `plan`, `propagate`, `status`, and `skip` commands;
+- generates idiomatic downstream changes, runs each SDK's declared verification, and opens draft pull requests;
+- records immutable source snapshots and completed decisions under [`ledger/`](../ledger/).
 
-Agricola never creates downstream branches or pull requests, runs SDK verification commands, or invokes code generation.
+Agricola never auto-merges a downstream pull request. Maintainers retain review and merge control.
 
 ## Requirements and installation
 
@@ -23,13 +24,13 @@ python3.12 -m venv .venv
 .venv/bin/agricola validate
 ```
 
-`validate` loads the manifest, rejects duplicate YAML keys and unknown fields, and validates every ledger entry plus an existing cursor. Pydantic models are the source of truth for validation and generated JSON Schemas:
+`validate` rejects duplicate YAML keys and unknown fields, then validates the manifest, ledger, and cursor. Pydantic models are the source of truth for validation and generated JSON Schemas:
 
 ```bash
 .venv/bin/agricola schema > schemas.json
 ```
 
-No checked-in schema copies need to be synchronized.
+No checked-in schema copies need synchronization.
 
 ## Configuration
 
@@ -38,25 +39,25 @@ No checked-in schema copies need to be synchronized.
 - `maintainers`: GitHub logins authorized to apply effective labels and issue commands;
 - `canonical` and `spec`: repository names in `OWNER/REPO` form;
 - `sdks`: immutable target definitions keyed by lowercase target name;
-- `automation`: `pr` for future managed propagation or `notify` for external targets;
-- `owners`, changelog convention, verification commands, and declared capabilities.
+- `automation`: `pr` for managed propagation or `notify` for external targets;
+- repository, owners, changelog convention, verification commands, and capabilities for each target.
 
-An `automation: pr` target must declare at least one verification command. Verification commands describe the target contract but are not executed by the current review-only control plane.
+Every `automation: pr` target must declare at least one verification command. The executor runs these commands after generation and before it receives downstream write credentials.
 
 ## Labels
 
-Labels are applied to the canonical pull request:
+Apply labels to the canonical pull request before merging:
 
 | Label | Effect |
 | --- | --- |
-| `agricola:all` | Select every manifest target with `automation: pr`. |
-| `agricola:<target>` | Select the named target; target labels are additive. |
+| `agricola:all` | Queue every manifest target with `automation: pr`. |
+| `agricola:<target>` | Queue the named target; target labels are additive. |
 | `agricola:none` | Disable propagation. A clean `none` result is recorded without a tracking issue. |
 | No Agricola label | Create a tracking issue and await a command. |
 
-Only the last label event at or before merge counts, and its actor must be in `maintainers`. Later label edits cannot change the plan or ledger snapshot. Unknown authorized labels create a diagnostic plan. `agricola:none` wins over other labels, but conflicts and errors still create a diagnostic plan rather than being silently suppressed.
+Only the last label event at or before merge counts, and its actor must be in `maintainers`. Later label edits cannot change the snapshot. Unknown authorized labels create a diagnostic plan. `agricola:none` wins over other labels, but conflicts and errors remain visible in a diagnostic tracking issue.
 
-Labels select targets for human review; they do not create downstream pull requests.
+The workflow reads canonical label events with a GitHub App installation token. This is required because the `mpp-tools` repository token cannot reliably read cross-repository timeline events.
 
 ## Impact plans
 
@@ -72,7 +73,7 @@ Applicability is deterministic:
 - otherwise Agricola extracts declared capability signals from the PR title, body, and file paths;
 - an SDK is applicable when it declares every detected capability;
 - an SDK is not applicable when detected capabilities are missing;
-- with no recognized capability signal, applicability is reported as unknown rather than guessed;
+- with no recognized capability signal, applicability is unknown rather than guessed;
 - `automation: notify` targets remain notification-only.
 
 ## Commands
@@ -81,34 +82,49 @@ Applicability is deterministic:
 
 ```text
 @agricola plan
+@agricola propagate go rust
+@agricola propagate applicable
 @agricola status
 @agricola skip ruby reason="TS-only tooling"
 ```
 
-- `plan` regenerates the dry-run plan from the immutable merge-time label history.
-- `status` queries GitHub live for downstream references already recorded in the ledger.
+- `plan` regenerates the impact plan from the immutable merge-time label history.
+- `propagate <targets...>` queues explicit `automation: pr` targets.
+- `propagate applicable` queues every target deterministically classified as applicable.
+- `status` queries GitHub for downstream pull requests already recorded in the ledger.
 - `skip` appends an idempotent, reason-required decision for one manifest target.
 
-Commands in canonical or downstream repositories require cross-repository event delivery and authentication that are not configured. Propagation, revision, retry, audit, and downstream issue commands are intentionally unavailable.
+Commands in canonical or downstream repositories are not supported. Revision, retry, audit, and downstream issue commands remain manual operations. A failed unpublished propagation can be retried by rerunning its workflow; a published stable branch is updated idempotently.
+
+## Downstream execution
+
+Every source-target pair uses a stable branch such as `agricola/mppx-412`. The source SHA and target define a stable idempotency key, so overlapping polls and repeated commands do not create duplicate pull requests.
+
+The executor:
+
+1. checks out the downstream repository, exact canonical merge commit, specification, reviewed plan, and target conventions;
+2. generates the smallest idiomatic downstream patch without repository credentials;
+3. transfers only that patch to a separate job and runs the manifest verification commands without secrets;
+4. mints a target-scoped GitHub App token only after verification succeeds;
+5. creates or updates the stable branch and opens a draft pull request;
+6. records the propagation decision only after GitHub returns the pull-request reference.
+
+Generation and verification failure leave no recorded propagate decision, so the same request remains retryable. A closed stable pull request must be reopened before retrying. A merged pull request is treated as the completed result.
 
 ## State and recovery
 
-The poller creates `ledger/cursor.json` on its first run. In GitHub Actions, ledger data is restored from `agricola/state`, and a stable state pull request is updated in place like a changelogs release PR. At most one state PR is open: merge it to checkpoint the ledger on the default branch, and the next state change creates or updates its successor. Do not close or edit state PRs manually. Executable code always comes from the protected default branch. The initial cursor starts fifteen minutes behind the current time; combined with the one-hour replay overlap, the first API read covers approximately the previous 75 minutes. This prevents both a deployment race and an unbounded historical issue flood. Later polls keep the one-hour overlap and deduplicate against ledger snapshots.
+The poller creates `ledger/cursor.json` on its first run. GitHub Actions restores ledger data from `agricola/state` and updates one stable state pull request, following the changelog release-PR pattern. Merge that pull request to checkpoint the ledger on the default branch. Do not close or edit it manually. The next state change creates or updates its successor, so at most one state pull request remains open.
+
+Executable control-plane code always comes from the protected default branch. The initial cursor starts fifteen minutes behind the current time; combined with the one-hour replay overlap, the first API read covers approximately the previous 75 minutes. Later polls retain the overlap and deduplicate using source snapshots and decisions.
 
 Ledger filenames identify the canonical repository and pull request. Entries contain immutable source metadata, the authorized merge-time label snapshot, and discriminated decisions:
 
-- `skip` requires `reason` and forbids a pull-request reference;
-- `propagate` requires a downstream pull-request reference; the schema can validate imported propagation records, but no current command creates them.
+- `skip` requires a reason and forbids a pull-request reference;
+- `propagate` requires a downstream pull-request reference and is written only after publication.
 
 Tracking issue deduplication scans the control repository's issue API directly for the stable marker; it does not depend on search indexing.
 
-The Actions workflow processes state-changing commands in three stages:
-
-1. prepare the ledger mutation and pending reply;
-2. commit the ledger to the stable state branch and create or update its pull request;
-3. deliver the GitHub reply only after persistence succeeds.
-
-A failed state PR update therefore cannot leave a misleading “Recorded” acknowledgement. Rerunning the failed job reuses the comment-and-line idempotency key.
+State-changing replies are deferred until the state pull request has been updated. A failed state update therefore cannot leave a misleading acknowledgement. Reruns reuse deterministic idempotency keys.
 
 ## CLI reference
 
@@ -118,16 +134,20 @@ A failed state PR update therefore cannot leave a misleading “Recorded” ackn
 | `agricola schema` | Print generated manifest, ledger, and cursor JSON Schemas. |
 | `agricola poll` | Process merged canonical pull requests. |
 | `agricola handle-comment [event]` | Parse an `issue_comment` event; defaults to `GITHUB_EVENT_PATH`. |
-| `agricola deliver-reply <file>` | Deliver a reply deferred until after Git persistence. Used internally by Actions. |
+| `agricola deliver-reply <file>` | Deliver a reply deferred until after Git persistence. |
+| `agricola record-propagations <results>` | Record published pull requests and render deferred replies. |
+| `agricola verify-propagation <request>` | Run the target's reviewed verification commands. |
+| `agricola render-propagation <request>` | Render deterministic pull-request metadata. |
 | `agricola parse-command --author <login>` | Parse commands from standard input for diagnostics. |
 
-Live commands authenticate through `GH_TOKEN` or the existing `gh` login:
+Live control-plane commands authenticate through `GH_TOKEN`; canonical polling can use a separate repository token:
 
 ```bash
-GH_TOKEN=... .venv/bin/agricola poll --control-repo tempoxyz/mpp-tools
+GH_TOKEN=... AGRICOLA_CANONICAL_TOKEN=... \
+  .venv/bin/agricola poll --control-repo tempoxyz/mpp-tools
 ```
 
-See [Agricola Actions setup](../docs/agricola-actions.md) for deployment and permissions.
+See [Agricola Actions setup](../docs/agricola-actions.md) for GitHub App, secret, and deployment configuration.
 
 ## Development verification
 

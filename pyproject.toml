@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "agricola-mpp"
 version = "0.1.0"
-description = "GitHub control plane for reviewing canonical MPP SDK changes"
+description = "GitHub control plane for propagating canonical MPP SDK changes"
 requires-python = ">=3.12"
 dependencies = [
   "pydantic>=2.12,<3",

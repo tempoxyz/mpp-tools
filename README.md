@@ -68,7 +68,7 @@ mpp-tools/
 
 ## Agricola
 
-[Agricola](./agricola/README.md) is the review control plane for canonical SDK changes. It creates deterministic dry-run tracking plans, reconstructs authorized merge-time labels, and records maintainer decisions without writing to downstream repositories. Its deployment runbook is [docs/agricola-actions.md](./docs/agricola-actions.md).
+[Agricola](./agricola/README.md) is the propagation control plane for canonical SDK changes. It creates deterministic tracking plans, reconstructs authorized merge-time labels, verifies generated downstream changes, opens draft SDK pull requests, and records maintainer decisions. Its deployment runbook is [docs/agricola-actions.md](./docs/agricola-actions.md).
 
 ## Conformance Suite
 

@@ -53,6 +53,19 @@ class GitHubApiTests(unittest.TestCase):
         self.assertEqual(run.call_args.kwargs["env"]["GH_TOKEN"], "token")
 
     @patch("agricola.github.subprocess.run")
+    def test_repo_token_overrides_control_plane_token(self, run) -> None:
+        run.return_value = subprocess.CompletedProcess([], 0, "[]", "")
+        client = GitHubClient(
+            "tempoxyz/mpp-tools",
+            token="control-token",
+            repo_tokens={"wevm/mppx": "canonical-token"},
+        )
+
+        client.api("repos/wevm/mppx/issues/1/events")
+
+        self.assertEqual(run.call_args.kwargs["env"]["GH_TOKEN"], "canonical-token")
+
+    @patch("agricola.github.subprocess.run")
     def test_post_fields_are_json_body(self, run) -> None:
         run.return_value = subprocess.CompletedProcess([], 0, '{"number": 1}', "")
         client = GitHubClient("tempoxyz/mpp-tools")

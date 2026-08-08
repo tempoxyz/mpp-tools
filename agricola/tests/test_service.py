@@ -7,8 +7,8 @@ from datetime import UTC, datetime
 
 from agricola.github import GitHubError
 from agricola.ledger import CursorStore, DecisionLedger
-from agricola.models import Cursor, LabelAction, LabelEvent
-from agricola.service import handle_comment, poll
+from agricola.models import Cursor, LabelAction, LabelEvent, PropagationResult
+from agricola.service import handle_comment, poll, record_propagations
 from agricola.tests.helpers import change, manifest
 
 
@@ -44,7 +44,13 @@ class FakeGitHub:
 
     def create_issue(self, title, body, labels=()):
         self.created.append((title, body))
-        return {"number": 99, "title": title, "body": body}
+        self.tracking = {
+            "number": 99,
+            "title": title,
+            "body": body,
+            "html_url": "https://github.com/tempoxyz/mpp-tools/issues/99",
+        }
+        return self.tracking
 
     def update_issue(self, number, *, title=None, body=None):
         self.updated.append((number, title, body))
@@ -82,14 +88,19 @@ class PollTests(unittest.TestCase):
             self.assertEqual(first.created, 1)
             self.assertEqual(second.deduplicated, 1)
             self.assertEqual(len(client.created), 1)
-            self.assertEqual(client.pull_requests, 1)
+            self.assertEqual(client.pull_requests, 2)
+            self.assertEqual(first.propagations[0].target, "go")
+            self.assertEqual(second.propagations[0], first.propagations[0])
             self.assertEqual(store.load().merged_at, client.change.merged_at)
             self.assertIsNotNone(ledger.read("wevm/mppx", 412))
 
     def test_deduplicates_by_marker(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             client = FakeGitHub()
-            client.tracking = {"number": 4}
+            client.tracking = {
+                "number": 4,
+                "html_url": "https://github.com/tempoxyz/mpp-tools/issues/4",
+            }
             result = poll(
                 client,
                 manifest(),
@@ -166,6 +177,38 @@ class PollTests(unittest.TestCase):
             assert entry is not None
             self.assertEqual(entry.labels, ("agricola:go",))
 
+    def test_missing_label_events_creates_diagnostic_without_propagating(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeGitHub()
+            client.events = ()
+
+            result = poll(
+                client,
+                manifest(),
+                DecisionLedger(directory),
+                cursor_store(directory),
+            )
+
+            self.assertFalse(result.propagations)
+            self.assertIn(
+                "could not verify merge-time label actors", client.created[0][1]
+            )
+
+    def test_authenticated_poll_repairs_empty_label_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeGitHub()
+            ledger = DecisionLedger(directory)
+            ledger.ensure(client.change, labels=())
+
+            result = poll(client, manifest(), ledger, cursor_store(directory))
+
+            entry = ledger.read(client.change.repo, client.change.number)
+            assert entry is not None
+            self.assertEqual(entry.labels, ("agricola:go",))
+            self.assertEqual(
+                tuple(item.target for item in result.propagations), ("go",)
+            )
+
 
 class CommentTests(unittest.TestCase):
     def event(self, body: str, author: str = "maintainer", comment_id: int = 55):
@@ -176,7 +219,11 @@ class CommentTests(unittest.TestCase):
                 "created_at": "2026-08-07T14:02:00Z",
                 "user": {"login": author},
             },
-            "issue": {"number": 207, "body": "<!-- agricola:source=wevm/mppx#412 -->"},
+            "issue": {
+                "number": 207,
+                "html_url": "https://github.com/tempoxyz/mpp-tools/issues/207",
+                "body": "<!-- agricola:source=wevm/mppx#412 -->",
+            },
         }
 
     def test_plan_regenerates_issue(self) -> None:
@@ -214,6 +261,80 @@ class CommentTests(unittest.TestCase):
             assert second.reply is not None
             self.assertIn("Already recorded", second.reply.body)
             self.assertFalse(client.comments)
+
+    def test_propagate_queues_then_records_published_pr(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeGitHub()
+            ledger = DecisionLedger(directory)
+
+            queued = handle_comment(
+                client,
+                manifest(),
+                ledger,
+                self.event("@agricola propagate go"),
+            )
+
+            self.assertEqual(len(queued.propagations), 1)
+            request = queued.propagations[0]
+            self.assertEqual(request.branch, "agricola/mppx-412")
+            entry = ledger.read("wevm/mppx", 412)
+            assert entry is not None
+            self.assertFalse(entry.decisions)
+
+            changed, replies = record_propagations(
+                ledger,
+                (
+                    PropagationResult(
+                        request=request,
+                        pr="tempoxyz/mpp-go#88",
+                        url="https://github.com/tempoxyz/mpp-go/pull/88",
+                        at=datetime(2026, 8, 7, 14, 5, tzinfo=UTC),
+                    ),
+                ),
+            )
+
+            self.assertTrue(changed)
+            self.assertIn("mpp-go#88", replies[0].body)
+            entry = ledger.read("wevm/mppx", 412)
+            assert entry is not None
+            self.assertEqual(entry.decisions[0].pr, "tempoxyz/mpp-go#88")
+
+            repeated = handle_comment(
+                client,
+                manifest(),
+                ledger,
+                self.event("@agricola propagate go", comment_id=56),
+            )
+            self.assertFalse(repeated.propagations)
+            assert repeated.reply is not None
+            self.assertIn("already recorded", repeated.reply.body)
+
+    def test_propagate_applicable_uses_plan_classification(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = handle_comment(
+                FakeGitHub(),
+                manifest(),
+                DecisionLedger(directory),
+                self.event("@agricola propagate applicable"),
+            )
+
+            self.assertEqual(
+                tuple(request.target for request in result.propagations),
+                ("go", "rust"),
+            )
+
+    def test_duplicate_propagation_commands_queue_target_once(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = handle_comment(
+                FakeGitHub(),
+                manifest(),
+                DecisionLedger(directory),
+                self.event("@agricola propagate go\n@agricola propagate go"),
+            )
+
+            self.assertEqual(len(result.propagations), 1)
+            assert result.reply is not None
+            self.assertIn("already queued", result.reply.body)
 
     def test_unauthorized_command_is_ignored(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

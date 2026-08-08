@@ -34,7 +34,24 @@ class CommandTests(unittest.TestCase):
 
     def test_rejects_unsupported_command(self) -> None:
         with self.assertRaisesRegex(CommandError, "unknown command"):
-            parse_commands("@agricola propagate go", self.manifest)
+            parse_commands("@agricola destroy everything", self.manifest)
+
+    def test_parses_propagation_targets(self) -> None:
+        command = parse_commands("@agricola propagate go rust go", self.manifest)[0]
+        self.assertEqual(command.verb, CommandVerb.PROPAGATE)
+        self.assertEqual(command.targets, ("go", "rust"))
+
+    def test_parses_applicable_propagation(self) -> None:
+        command = parse_commands("@agricola propagate Applicable", self.manifest)[0]
+        self.assertTrue(command.applicable)
+
+    def test_rejects_notify_only_propagation(self) -> None:
+        with self.assertRaisesRegex(CommandError, "does not support PR automation"):
+            parse_commands("@agricola propagate ruby", self.manifest)
+
+    def test_rejects_mixed_applicable_propagation(self) -> None:
+        with self.assertRaisesRegex(CommandError, "cannot be combined"):
+            parse_commands("@agricola propagate applicable go", self.manifest)
 
     def test_rejects_unknown_target(self) -> None:
         with self.assertRaisesRegex(CommandError, "unknown SDK target"):
@@ -77,6 +94,10 @@ class LabelTests(unittest.TestCase):
             [self.event("agricola:all")], self.merged, self.manifest
         )
         self.assertEqual(result.targets, ("go", "rust"))
+        self.assertEqual(
+            result.target_actors,
+            (("go", "maintainer"), ("rust", "maintainer")),
+        )
 
     def test_none_wins_and_reports_conflict(self) -> None:
         labels = ["agricola:none", "agricola:go"]

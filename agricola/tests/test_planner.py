@@ -34,9 +34,9 @@ class PlannerTests(unittest.TestCase):
         self.assertIn("Normative specification requirements", body)
         self.assertIn("Canonical behavior worth matching", body)
         self.assertIn("Incidental TypeScript", body)
-        self.assertIn("Agricola never writes", body)
+        self.assertIn("creates draft downstream PRs only", body)
         self.assertIn("**ruby** (`stripe/mpp-rb`): notify only", body)
-        self.assertNotIn("@agricola propagate", body)
+        self.assertIn("@agricola propagate applicable", body)
 
     def test_plan_surfaces_label_errors(self) -> None:
         labels = LabelResolution(
