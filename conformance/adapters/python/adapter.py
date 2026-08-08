@@ -316,6 +316,8 @@ def main():
             print(json.dumps(success(receipt_to_dict(receipt))))
         elif command == "format-www-authenticate":
             data = json.loads(input_data)
+            if not data.get("id"):
+                raise ValueError("id must not be empty")
             challenge = Challenge(
                 id=data["id"],
                 method=data["method"],

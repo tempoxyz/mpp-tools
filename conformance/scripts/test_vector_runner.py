@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 
 from harness import AdapterConfig
-from vector_runner import VectorRunner
+from vector_runner import VectorRunner, expects_failure
 
 
 class VectorRunnerHelperTest(unittest.TestCase):
@@ -36,6 +36,21 @@ class VectorRunnerHelperTest(unittest.TestCase):
         }
 
         self.assertEqual(self.runner.duration_limit_ms(scenario, self.adapter), 5000)
+
+    def test_expected_failure_detection(self) -> None:
+        cases = [
+            ({"success": False}, "success", True),
+            ({"success": True}, "success", False),
+            ({"ok": False}, "ok", True),
+            (True, "success", False),
+        ]
+
+        for expectation, result_key, expected in cases:
+            with self.subTest(expectation=expectation, result_key=result_key):
+                self.assertEqual(
+                    expects_failure(expectation, result_key),
+                    expected,
+                )
 
     def test_command_timeout_leaves_room_for_reporting_duration_failure(self) -> None:
         self.assertEqual(self.runner.command_timeout_seconds(None), 30.0)

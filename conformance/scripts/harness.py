@@ -269,7 +269,14 @@ class AdapterClient:
     def __init__(self, adapter: AdapterConfig):
         self.adapter = adapter
 
-    def call(self, op: str, input_value: Any, context: dict[str, Any] | None = None, timeout: float = 30) -> dict[str, Any]:
+    def call(
+        self,
+        op: str,
+        input_value: Any,
+        context: dict[str, Any] | None = None,
+        timeout: float = 30,
+        validate_input: bool = True,
+    ) -> dict[str, Any]:
         if op not in self.adapter.capabilities:
             return {
                 "ok": False,
@@ -282,7 +289,12 @@ class AdapterClient:
         request: dict[str, Any] = {"schema": 1, "op": op, "input": input_value}
         if context:
             request["context"] = context
-        validate_value(request, "adapter-request.schema.json", f"{self.adapter.name} request")
+        request_schema = (
+            "adapter-request.schema.json"
+            if validate_input
+            else "adapter-request-envelope.schema.json"
+        )
+        validate_value(request, request_schema, f"{self.adapter.name} request")
 
         env = os.environ.copy()
         if self.adapter.env:
@@ -333,7 +345,18 @@ class AdapterClient:
             }
         return response
 
-    def run_legacy_command(self, command: str, input_data: str, timeout: float = 30) -> dict[str, Any]:
+    def run_legacy_command(
+        self,
+        command: str,
+        input_data: str,
+        timeout: float = 30,
+        validate_input: bool = True,
+    ) -> dict[str, Any]:
         op, input_value = request_input_for_command(command, input_data)
-        response = self.call(op, input_value, timeout=timeout)
+        response = self.call(
+            op,
+            input_value,
+            timeout=timeout,
+            validate_input=validate_input,
+        )
         return legacy_response_for_operation(op, response)

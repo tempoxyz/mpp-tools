@@ -62,6 +62,11 @@ def base64url_decode(s: str) -> bytes:
     return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
 
 
+def expects_failure(expectation: Any, result_key: str = "success") -> bool:
+    """Return whether a vector explicitly expects an adapter error."""
+    return isinstance(expectation, dict) and expectation.get(result_key) is False
+
+
 def compute_diff(expected: Any, actual: Any) -> str:
     """Compute a human-readable diff between expected and actual values."""
     diff = DeepDiff(expected, actual, ignore_order=True, verbose_level=2)
@@ -193,19 +198,40 @@ class VectorRunner:
         return {"success": False, "error": message, "error_type": "unknown_error"}
 
     def run_adapter(
-        self, adapter: AdapterConfig, command: str, input_data: str, timeout: float = 30
+        self,
+        adapter: AdapterConfig,
+        command: str,
+        input_data: str,
+        timeout: float = 30,
+        validate_input: bool = True,
     ) -> dict[str, Any]:
         """Run an adapter operation through the schema-backed JSON ABI."""
         try:
-            return AdapterClient(adapter).run_legacy_command(command, input_data, timeout=timeout)
+            return AdapterClient(adapter).run_legacy_command(
+                command,
+                input_data,
+                timeout=timeout,
+                validate_input=validate_input,
+            )
         except Exception as exc:
             return self._error_result(str(exc))
 
     def run_adapter_timed(
-        self, adapter: AdapterConfig, command: str, input_data: str, timeout: float = 30
+        self,
+        adapter: AdapterConfig,
+        command: str,
+        input_data: str,
+        timeout: float = 30,
+        validate_input: bool = True,
     ) -> tuple[dict[str, Any], float]:
         start = time.perf_counter()
-        result = self.run_adapter(adapter, command, input_data, timeout=timeout)
+        result = self.run_adapter(
+            adapter,
+            command,
+            input_data,
+            timeout=timeout,
+            validate_input=validate_input,
+        )
         elapsed_ms = (time.perf_counter() - start) * 1000
         return result, elapsed_ms
 
@@ -216,10 +242,17 @@ class VectorRunner:
         input_value: Any,
         context: dict[str, Any] | None = None,
         timeout: float = 30,
+        validate_input: bool = True,
     ) -> tuple[dict[str, Any], float]:
         start = time.perf_counter()
         try:
-            result = AdapterClient(adapter).call(operation, input_value, context=context, timeout=timeout)
+            result = AdapterClient(adapter).call(
+                operation,
+                input_value,
+                context=context,
+                timeout=timeout,
+                validate_input=validate_input,
+            )
         except Exception as exc:
             result = {"ok": False, "error": {"type": "unknown_error", "message": str(exc)}}
         elapsed_ms = (time.perf_counter() - start) * 1000
@@ -538,14 +571,15 @@ class VectorRunner:
             command_timeout = self.command_timeout_seconds(duration_limit_ms)
 
             if operation:
+                expected = scenario["expected"]
                 result, elapsed_ms = self.run_operation_timed(
                     adapter,
                     operation,
                     scenario["input"],
                     context={"caseName": name, "vectorName": vector_name},
                     timeout=command_timeout,
+                    validate_input=not expects_failure(expected, "ok"),
                 )
-                expected = scenario["expected"]
                 passed, error = self.compare_adapter_response(expected, result)
                 if passed:
                     passed, error = self.compare_duration(duration_limit_ms, elapsed_ms)
@@ -563,12 +597,18 @@ class VectorRunner:
 
             if is_challenge_id:
                 input_data = json.dumps(scenario["input"])
-                result, elapsed_ms = self.run_adapter_timed(adapter, generate_cmd, input_data, timeout=command_timeout)
                 generate_test = tests.get("generate")
                 if generate_test is not None and generate_test is not True:
                     expected = generate_test
                 else:
                     expected = {"success": True, "result": scenario["expected"]}
+                result, elapsed_ms = self.run_adapter_timed(
+                    adapter,
+                    generate_cmd,
+                    input_data,
+                    timeout=command_timeout,
+                    validate_input=not expects_failure(expected),
+                )
                 passed, error = self.compare_results(expected, result)
                 if passed:
                     passed, error = self.compare_duration(duration_limit_ms, elapsed_ms)
@@ -597,12 +637,20 @@ class VectorRunner:
             # Parse test
             parse_test = tests.get("parse")
             if parse_test is not None and parse_cmd and wire is not None:
-                result, elapsed_ms = self.run_adapter_timed(adapter, parse_cmd, wire, timeout=command_timeout)
                 if parse_test is True:
                     expected = {"success": True, "result": obj}
-                    passed, error = self.compare_parse_results_semantic(expected, result, parse_cmd)
                 else:
                     expected = parse_test
+                result, elapsed_ms = self.run_adapter_timed(
+                    adapter,
+                    parse_cmd,
+                    wire,
+                    timeout=command_timeout,
+                    validate_input=not expects_failure(expected),
+                )
+                if parse_test is True:
+                    passed, error = self.compare_parse_results_semantic(expected, result, parse_cmd)
+                else:
                     passed, error = self.compare_results(parse_test, result)
                 if passed:
                     passed, error = self.compare_duration(duration_limit_ms, elapsed_ms)
@@ -627,12 +675,20 @@ class VectorRunner:
                     format_input = obj
                 else:
                     format_input = json.dumps(obj)
-                result, elapsed_ms = self.run_adapter_timed(adapter, format_cmd, format_input, timeout=command_timeout)
                 if format_test is True:
                     expected_format = {"success": True, "result": wire}
-                    passed, error = self.compare_format_results_semantic(adapter, expected_format, result, format_cmd, parse_cmd)
                 else:
                     expected_format = format_test
+                result, elapsed_ms = self.run_adapter_timed(
+                    adapter,
+                    format_cmd,
+                    format_input,
+                    timeout=command_timeout,
+                    validate_input=not expects_failure(expected_format),
+                )
+                if format_test is True:
+                    passed, error = self.compare_format_results_semantic(adapter, expected_format, result, format_cmd, parse_cmd)
+                else:
                     passed, error = self.compare_results(expected_format, result)
                 if passed:
                     passed, error = self.compare_duration(duration_limit_ms, elapsed_ms)

@@ -10,6 +10,7 @@ calls.
 The normative contract lives in JSON Schema:
 
 - [`schemas/adapter-manifest.schema.json`](./schemas/adapter-manifest.schema.json)
+- [`schemas/adapter-request-envelope.schema.json`](./schemas/adapter-request-envelope.schema.json)
 - [`schemas/adapter-request.schema.json`](./schemas/adapter-request.schema.json)
 - [`schemas/adapter-response.schema.json`](./schemas/adapter-response.schema.json)
 - [`schemas/operation-registry.schema.json`](./schemas/operation-registry.schema.json)
@@ -98,9 +99,11 @@ Rules:
 
 ## Adapter ABI
 
-All adapter requests must validate against
-`schemas/adapter-request.schema.json`. All adapter responses must validate
-against `schemas/adapter-response.schema.json`.
+Adapter requests normally validate against `schemas/adapter-request.schema.json`.
+Negative vectors whose expected result is an error validate only against
+`schemas/adapter-request-envelope.schema.json`, allowing deliberately invalid
+operation inputs to reach the SDK under test. All adapter responses must
+validate against `schemas/adapter-response.schema.json`.
 
 Request:
 

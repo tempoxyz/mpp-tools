@@ -375,6 +375,7 @@ def run_command(command, input)
     success(receipt_to_h(Mpp::Receipt.from_payment_receipt(input)))
   when "format-www-authenticate"
     data = JSON.parse(input)
+    raise ArgumentError, "id must not be empty" if data.fetch("id", "").empty?
     success(challenge_from_h(data).to_www_authenticate(data.fetch("realm", "")))
   when "format-authorization"
     data = JSON.parse(input)
