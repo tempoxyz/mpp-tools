@@ -24,11 +24,13 @@ from .models import (
     AuditSeverity,
     AuditSnapshot,
     Manifest,
+    PendingAuditFindingIssue,
     PendingAuditReport,
 )
 
 AUDIT_MARKER = "<!-- agricola:audit -->"
 AUDIT_TITLE = "[Agricola] SDK drift audit"
+AUDIT_FINDING_MARKER_PREFIX = "<!-- agricola:audit-finding="
 
 
 class AuditError(ValueError):
@@ -36,12 +38,19 @@ class AuditError(ValueError):
 
 
 class GitHub(Protocol):
-    def find_tracking_issue(self, marker: str) -> dict[str, object] | None: ...
+    def find_tracking_issues(
+        self, marker: str
+    ) -> tuple[dict[str, object], ...]: ...
     def create_issue(
         self, title: str, body: str, labels: Sequence[str] = ()
     ) -> dict[str, object]: ...
     def update_issue(
-        self, number: int, *, title: str | None = None, body: str | None = None
+        self,
+        number: int,
+        *,
+        title: str | None = None,
+        body: str | None = None,
+        state: str | None = None,
     ) -> dict[str, object]: ...
 
 
@@ -412,56 +421,13 @@ def render_audit_report(report: AuditReport) -> PendingAuditReport:
                     origin=_escape(finding.likely_origin),
                 )
             )
-        for finding in report.findings:
-            lines.extend(
-                [
-                    "",
-                    f"### {finding.id} — `{finding.fingerprint}`",
-                    "",
-                    finding.summary,
-                    "",
-                    f"- Affected: {', '.join(f'`{item}`' for item in finding.affected)}",
-                    f"- Clean: {', '.join(f'`{item}`' for item in finding.clean) or 'none'}",
-                    f"- Canonical reference: `{finding.reference or 'conformance result'}`",
-                    f"- Likely origin: {finding.likely_origin}",
-                ]
-            )
-            if finding.semantic_evidence:
-                lines.extend(
-                    [
-                        f"- Severity: {finding.severity}",
-                        f"- Confidence: {finding.confidence}",
-                        "",
-                        "| SDK | Canonical evidence | SDK evidence | Suggested test |",
-                        "| --- | --- | --- | --- |",
-                    ]
-                )
-                for evidence in finding.semantic_evidence:
-                    target = snapshots[evidence.target]
-                    semantic = evidence.finding
-                    lines.append(
-                        "| `{target}` | {canonical} | {downstream} | {test} |".format(
-                            target=evidence.target,
-                            canonical=_evidence_link(
-                                report.canonical.repo,
-                                report.canonical.sha,
-                                semantic.canonical,
-                            ),
-                            downstream=_evidence_link(
-                                target.repo,
-                                target.sha,
-                                semantic.target,
-                            ),
-                            test=_escape(semantic.suggested_test),
-                        )
-                    )
-                for evidence in finding.semantic_evidence:
-                    lines.extend(
-                        [
-                            "",
-                            f"**{evidence.target}:** {evidence.finding.description}",
-                        ]
-                    )
+        lines.extend(
+            [
+                "",
+                "Each finding links to a durable issue. Assign it, link remediation "
+                "pull requests, and use the next healthy audit to verify the fix.",
+            ]
+        )
     else:
         lines.append(
             "No capability, conformance, or semantic implementation deltas detected."
@@ -475,28 +441,203 @@ def render_audit_report(report: AuditReport) -> PendingAuditReport:
     lines.extend(
         [
             "",
-            "This roll-up is updated in place. Individual SDK issues and propagation "
-            "remain explicit maintainer actions.",
+            "This index and its finding issues are updated in place. Findings are "
+            "closed only after a healthy audit no longer detects them.",
         ]
+    )
+    finding_issues = tuple(
+        _render_finding_issue(report, finding, snapshots, timestamp)
+        for finding in report.findings
     )
     return PendingAuditReport(
         title=AUDIT_TITLE,
         body="\n".join(lines).rstrip() + "\n",
         healthy=not report.errors,
+        finding_issues=finding_issues,
     )
 
 
 def deliver_audit_report(
     client: GitHub, pending: PendingAuditReport
 ) -> dict[str, object]:
-    existing = client.find_tracking_issue(AUDIT_MARKER)
-    if existing is None:
-        return client.create_issue(pending.title, pending.body)
-    return client.update_issue(
-        int(str(existing["number"])),
-        title=pending.title,
-        body=pending.body,
+    existing = client.find_tracking_issues("<!-- agricola:audit")
+    rollup = next(
+        (issue for issue in existing if AUDIT_MARKER in str(issue.get("body") or "")),
+        None,
     )
+    findings_by_marker = {
+        marker: issue
+        for issue in existing
+        if (marker := _finding_marker_from_body(str(issue.get("body") or "")))
+    }
+    active_markers = {finding.marker for finding in pending.finding_issues}
+    urls: dict[str, str] = {}
+    for finding in pending.finding_issues:
+        issue = findings_by_marker.get(finding.marker)
+        if issue is None:
+            issue = client.create_issue(finding.title, finding.body)
+        else:
+            issue = client.update_issue(
+                int(str(issue["number"])),
+                title=finding.title,
+                body=finding.body,
+                state="open",
+            )
+        if url := issue.get("html_url"):
+            urls[finding.id] = str(url)
+
+    if pending.healthy:
+        for marker, issue in findings_by_marker.items():
+            if marker not in active_markers and issue.get("state") != "closed":
+                client.update_issue(int(str(issue["number"])), state="closed")
+
+    body = _link_finding_issues(pending.body, urls)
+    if rollup is None:
+        return client.create_issue(pending.title, body)
+    return client.update_issue(
+        int(str(rollup["number"])),
+        title=pending.title,
+        body=body,
+        state="open",
+    )
+
+
+def _render_finding_issue(
+    report: AuditReport,
+    finding: AuditFinding,
+    snapshots: Mapping[str, AuditSnapshot],
+    timestamp: str,
+) -> PendingAuditFindingIssue:
+    marker = f"{AUDIT_FINDING_MARKER_PREFIX}{finding.id} -->"
+    lines = [
+        marker,
+        f"# {finding.id} — {finding.summary}",
+        "",
+        f"Last observed by the head-to-head audit at `{timestamp}`.",
+        "",
+        "## Audited heads",
+        "",
+        "| Target | Repository | Commit | Conformance | Semantic review |",
+        "| --- | --- | --- | --- | --- |",
+        _snapshot_row(report.canonical),
+        *(
+            _snapshot_row(snapshots[target])
+            for target in (*finding.affected, *finding.clean)
+        ),
+        "",
+        "## Finding",
+        "",
+        f"- Fingerprint: `{finding.fingerprint}`",
+        f"- Source: {_finding_source(finding.fingerprint)}",
+        f"- Affected SDKs: {', '.join(f'`{item}`' for item in finding.affected)}",
+        f"- Clean SDKs: {', '.join(f'`{item}`' for item in finding.clean) or 'none'}",
+        f"- Canonical reference: `{finding.reference or 'conformance result'}`",
+        f"- Likely origin: {finding.likely_origin}",
+    ]
+    if finding.severity is not None:
+        lines.append(f"- Severity: {finding.severity}")
+    if finding.confidence is not None:
+        lines.append(f"- Confidence: {finding.confidence}")
+
+    if finding.semantic_evidence:
+        lines.extend(
+            [
+                "",
+                "## Evidence",
+                "",
+                "| SDK | Canonical evidence | SDK evidence | Suggested test |",
+                "| --- | --- | --- | --- |",
+            ]
+        )
+        for evidence in finding.semantic_evidence:
+            target = snapshots[evidence.target]
+            semantic = evidence.finding
+            lines.append(
+                "| `{target}` | {canonical} | {downstream} | {test} |".format(
+                    target=evidence.target,
+                    canonical=_evidence_link(
+                        report.canonical.repo,
+                        report.canonical.sha,
+                        semantic.canonical,
+                    ),
+                    downstream=_evidence_link(
+                        target.repo,
+                        target.sha,
+                        semantic.target,
+                    ),
+                    test=_escape(semantic.suggested_test),
+                )
+            )
+        for evidence in finding.semantic_evidence:
+            lines.extend(
+                [
+                    "",
+                    f"**{evidence.target}:** {evidence.finding.description}",
+                ]
+            )
+
+    action_steps = (
+        (
+            "1. Assign an owner and confirm the discrepancy against the linked commits.",
+            "2. Add the suggested regression test in each affected SDK.",
+            "3. Implement the SDK fix and link its pull request to this issue.",
+            "4. Re-run the audit. A healthy run closes this issue when the fingerprint disappears.",
+        )
+        if finding.semantic_evidence
+        else (
+            "1. Assign an owner and confirm the delta against the audited heads.",
+            "2. Add a conformance test that captures the missing capability or behavior.",
+            "3. Implement the SDK fix and link its pull request to this issue.",
+            "4. Re-run the audit. A healthy run closes this issue when the fingerprint disappears.",
+        )
+    )
+    lines.extend(
+        [
+            "",
+            "## How to action",
+            "",
+            *action_steps,
+            "",
+            "### Re-run command",
+            "",
+            "Runs the complete audit against the latest default-branch heads:",
+            "",
+            "```bash",
+            "gh workflow run agricola-audit.yml --repo tempoxyz/mpp-tools --ref main",
+            "```",
+            "",
+            "Example for checking the dispatched run:",
+            "",
+            "```bash",
+            "gh run list --repo tempoxyz/mpp-tools --workflow agricola-audit.yml --limit 1",
+            "```",
+        ]
+    )
+    title = f"[Agricola] {finding.id}: {finding.summary}"[:256]
+    return PendingAuditFindingIssue(
+        id=finding.id,
+        marker=marker,
+        title=title,
+        body="\n".join(lines).rstrip() + "\n",
+    )
+
+
+def _finding_marker_from_body(body: str) -> str | None:
+    match = re.search(
+        r"<!-- agricola:audit-finding=AGR-[0-9]{4}-[0-9]{3,} -->",
+        body,
+    )
+    return match.group(0) if match else None
+
+
+def _link_finding_issues(body: str, urls: Mapping[str, str]) -> str:
+    for finding_id, url in urls.items():
+        body = body.replace(
+            f"| {finding_id} |",
+            f"| [{finding_id}]({url}) |",
+            1,
+        )
+    return body
 
 
 def load_snapshots(directory: str | Path) -> tuple[AuditSnapshot, ...]:

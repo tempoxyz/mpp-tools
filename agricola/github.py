@@ -179,18 +179,18 @@ class GitHubClient:
         return tuple(events)
 
     def find_tracking_issue(self, marker: str) -> dict[str, object] | None:
+        return next(iter(self.find_tracking_issues(marker)), None)
+
+    def find_tracking_issues(self, marker: str) -> tuple[dict[str, object], ...]:
         pages = self.api(
             f"repos/{self.control_repo}/issues?state=all&per_page=100",
             paginate=True,
         )
-        return next(
-            (
-                item
-                for page in pages
-                for item in page
-                if marker in (item.get("body") or "")
-            ),
-            None,
+        return tuple(
+            item
+            for page in pages
+            for item in page
+            if marker in (item.get("body") or "")
         )
 
     def create_issue(
@@ -204,11 +204,16 @@ class GitHubClient:
         )
 
     def update_issue(
-        self, number: int, *, title: str | None = None, body: str | None = None
+        self,
+        number: int,
+        *,
+        title: str | None = None,
+        body: str | None = None,
+        state: str | None = None,
     ) -> dict[str, object]:
         fields: dict[str, object] = {
             name: value
-            for name, value in (("title", title), ("body", body))
+            for name, value in (("title", title), ("body", body), ("state", state))
             if value is not None
         }
         return self.api(

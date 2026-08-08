@@ -43,6 +43,8 @@ class PlannerTests(unittest.TestCase):
         self.assertIn("Draft PR automation: `go`, `rust`", body)
         self.assertIn("Notification only: `ruby`", body)
         self.assertIn("@agricola propagate all", body)
+        self.assertIn("What it does", body)
+        self.assertIn("@agricola skip go reason=", body)
         self.assertIn("| `go` | pr | Queued | — |", body)
         self.assertIn("| `rust` | pr | Awaiting decision | — |", body)
         self.assertIn("| `ruby` | notify | Notification only | — |", body)

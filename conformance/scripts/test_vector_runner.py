@@ -330,7 +330,7 @@ class VectorRunnerJsonArtifactTest(unittest.TestCase):
         self.assertEqual(output["skipped"], 1)
         failing = [c for c in output["checks"] if c["status"] == "FAILURE"]
         self.assertEqual(len(failing), 1)
-        self.assertIn("version-skipped", failing[0]["error"])
+        self.assertIn("version-skipped", failing[0]["errorMessage"])
 
 
 if __name__ == "__main__":

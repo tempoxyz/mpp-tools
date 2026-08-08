@@ -140,7 +140,7 @@ def parser() -> argparse.ArgumentParser:
     builder.add_argument("--report-file", required=True)
 
     audit_delivery = subcommands.add_parser(
-        "deliver-audit", help="create or update the audit roll-up issue"
+        "deliver-audit", help="reconcile the audit index and finding issues"
     )
     audit_delivery.add_argument("report_file")
     audit_delivery.add_argument(
