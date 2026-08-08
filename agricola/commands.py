@@ -15,7 +15,8 @@ from .models import (
     Manifest,
 )
 
-_COMMAND_PREFIX = re.compile(r"^\s*@agricola(?:\s+|$)", re.IGNORECASE)
+_COMMAND_PREFIX = re.compile(r"^\s*(?:/agricola|@agricola)(?:\s+|$)", re.IGNORECASE)
+_FIX_ALIASES = {"fix", "propagate", "propogate"}
 
 
 class CommandError(ValueError):
@@ -47,12 +48,15 @@ def parse_commands(body: str, manifest: Manifest) -> list[Command]:
         if len(tokens) < 2:
             raise CommandError(f"line {line_number}: missing command verb")
         verb_text = tokens[1].lower()
-        try:
-            verb = CommandVerb(verb_text)
-        except ValueError as exc:
-            raise CommandError(
-                f"line {line_number}: unknown command {verb_text!r}"
-            ) from exc
+        if verb_text in _FIX_ALIASES:
+            verb = CommandVerb.PROPAGATE
+        else:
+            try:
+                verb = CommandVerb(verb_text)
+            except ValueError as exc:
+                raise CommandError(
+                    f"line {line_number}: unknown command {verb_text!r}"
+                ) from exc
         args = tokens[2:]
         if verb in {CommandVerb.PLAN, CommandVerb.STATUS}:
             if args:
@@ -64,8 +68,13 @@ def parse_commands(body: str, manifest: Manifest) -> list[Command]:
 
         if verb is CommandVerb.PROPAGATE:
             if not args:
+                if verb_text == "fix":
+                    commands.append(
+                        Command(verb=verb, all_targets=True, line=line_number)
+                    )
+                    continue
                 raise CommandError(
-                    f"line {line_number}: propagate requires SDK targets or all"
+                    f"line {line_number}: {verb_text} requires SDK targets or all"
                 )
             if len(args) == 1 and args[0].lower() == "all":
                 commands.append(Command(verb=verb, all_targets=True, line=line_number))

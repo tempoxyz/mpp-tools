@@ -30,7 +30,7 @@ from .models import (
     PendingAuditFindingIssue,
     PendingAuditReport,
 )
-from .planner import preserve_propagation_state, propagation_table
+from .planner import preserve_propagation_state, propagation_table, quick_fix_lines
 
 AUDIT_MARKER = "<!-- agricola:audit -->"
 AUDIT_TITLE = "[Agricola] SDK drift audit"
@@ -632,9 +632,7 @@ def _render_finding_issue(
             "",
             *propagation_table(manifest, finding.affected),
             "",
-            "| Command | What it does | Example |",
-            "| --- | --- | --- |",
-            *_finding_command_rows(finding.affected, manifest),
+            *_finding_command_lines(finding.affected, manifest),
             "",
             "## How to action",
             "",
@@ -723,9 +721,7 @@ def audit_finding_context_from_body(body: str) -> AuditFindingContext | None:
     )
 
 
-def _finding_command_rows(
-    affected: Iterable[str], manifest: Manifest
-) -> list[str]:
+def _finding_command_lines(affected: Iterable[str], manifest: Manifest) -> list[str]:
     enabled = tuple(
         target
         for target in affected
@@ -733,16 +729,21 @@ def _finding_command_rows(
     )
     rows = []
     if enabled:
-        example_targets = " ".join(enabled)
+        rows.extend([*quick_fix_lines(), ""])
+    rows.extend(
+        [
+            "| Command | What it does | Example |",
+            "| --- | --- | --- |",
+        ]
+    )
+    if enabled:
         rows.extend(
             [
-                "| `propagate <sdk>...` | Generates, verifies, and opens or updates draft fixes for the named affected SDKs. | "
-                f"`@agricola propagate {example_targets}` |",
-                "| `propagate all` | Does the same for every PR-enabled SDK affected by this finding. | `@agricola propagate all` |",
+                "| `fix [sdk...]` | Generates, verifies, and opens or updates draft fixes for named affected SDKs, or all when omitted. | `/agricola fix` |",
             ]
         )
     rows.append(
-        "| `status` | Reports the current state of linked remediation pull requests. | `@agricola status` |"
+        "| `status` | Reports the current state of linked remediation pull requests. | `/agricola status` |"
     )
     return rows
 
@@ -753,7 +754,7 @@ def ensure_audit_remediation(
     manifest: Manifest,
 ) -> str:
     if "<!-- agricola:propagation-table:start -->" in body:
-        return body
+        return _replace_audit_commands(body, context.affected, manifest)
     section = "\n".join(
         [
             "## Agricola remediation",
@@ -763,9 +764,7 @@ def ensure_audit_remediation(
             "",
             *propagation_table(manifest, context.affected),
             "",
-            "| Command | What it does | Example |",
-            "| --- | --- | --- |",
-            *_finding_command_rows(context.affected, manifest),
+            *_finding_command_lines(context.affected, manifest),
             "",
         ]
     )
@@ -773,6 +772,27 @@ def ensure_audit_remediation(
     if separator in body:
         return body.replace(separator, f"\n{section}\n## How to action\n", 1)
     return body.rstrip() + "\n\n" + section
+
+
+def _replace_audit_commands(
+    body: str,
+    affected: Iterable[str],
+    manifest: Manifest,
+) -> str:
+    table_end = "<!-- agricola:propagation-table:end -->"
+    table_index = body.find(table_end)
+    action_index = body.find("\n## How to action\n", table_index)
+    if table_index < 0 or action_index < 0:
+        return body
+    table_index += len(table_end)
+    commands = "\n".join(_finding_command_lines(affected, manifest))
+    return (
+        body[:table_index].rstrip()
+        + "\n\n"
+        + commands
+        + "\n\n"
+        + body[action_index + 1 :].lstrip()
+    )
 
 
 def _link_finding_issues(body: str, urls: Mapping[str, str]) -> str:

@@ -365,7 +365,7 @@ class CommentTests(unittest.TestCase):
                 FakeGitHub(),
                 manifest(),
                 DecisionLedger(directory),
-                self.event("@agricola propagate all"),
+                self.event("/agricola fix"),
             )
 
             self.assertEqual(
@@ -379,7 +379,7 @@ class CommentTests(unittest.TestCase):
                 FakeGitHub(),
                 manifest(),
                 DecisionLedger(directory),
-                self.audit_event("@agricola propagate go"),
+                self.audit_event("/agricola fix"),
             )
 
             self.assertEqual(len(result.propagations), 1)
@@ -401,7 +401,7 @@ class CommentTests(unittest.TestCase):
                 FakeGitHub(),
                 manifest(),
                 ledger,
-                self.audit_event("@agricola propagate go"),
+                self.audit_event("/agricola fix"),
             )
 
             changed, replies, updates = record_propagations(
@@ -426,7 +426,7 @@ class CommentTests(unittest.TestCase):
                 FakeGitHub(),
                 manifest(),
                 DecisionLedger(directory),
-                self.audit_event("@agricola propagate rust"),
+                self.audit_event("/agricola fix rust"),
             )
 
             self.assertFalse(result.propagations)

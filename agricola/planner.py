@@ -144,6 +144,18 @@ def propagation_table(
     )
 
 
+def quick_fix_lines() -> list[str]:
+    return [
+        "### Quick action",
+        "",
+        "Use GitHub's copy button, then post this command as a comment:",
+        "",
+        "```text",
+        "/agricola fix",
+        "```",
+    ]
+
+
 def queued_propagations(body: str, targets: Iterable[str]) -> str:
     replacements = {
         target: _table_row(target, "pr", "Queued") for target in targets
@@ -309,15 +321,16 @@ def build_tracking_issue(
             "",
             "## Commands",
             "",
-            "Post one of these as an issue comment. `@agricola` must be the first token on the line.",
+            *quick_fix_lines(),
+            "",
+            "Post one of these as an issue comment. `/agricola` must be the first token on the line.",
             "",
             "| Command | What it does | Example |",
             "| --- | --- | --- |",
-            "| `plan` | Rebuilds this impact plan from the immutable merge-time snapshot. | `@agricola plan` |",
-            "| `propagate <sdk>...` | Queues draft PR generation for one or more PR-enabled SDKs. | `@agricola propagate go rust` |",
-            "| `propagate all` | Queues every SDK configured for draft PR automation. | `@agricola propagate all` |",
-            "| `status` | Reports the current state of recorded downstream PRs. | `@agricola status` |",
-            '| `skip <sdk> reason="..."` | Records why one SDK should not receive this change. | `@agricola skip go reason="Not applicable to this transport"` |',
+            "| `plan` | Rebuilds this impact plan from the immutable merge-time snapshot. | `/agricola plan` |",
+            "| `fix [sdk...]` | Queues named PR-enabled SDKs, or every PR-enabled SDK when omitted. | `/agricola fix` |",
+            "| `status` | Reports the current state of recorded downstream PRs. | `/agricola status` |",
+            '| `skip <sdk> reason="..."` | Records why one SDK should not receive this change. | `/agricola skip go reason="Not applicable to this transport"` |',
             "",
             "Generated changes remain draft until a maintainer reviews and merges them.",
         ]
