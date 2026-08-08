@@ -5,6 +5,11 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Protocol
 
+from .audit import (
+    AuditError,
+    audit_finding_context_from_body,
+    ensure_audit_remediation,
+)
 from .commands import (
     AuthorizationError,
     CommandError,
@@ -16,7 +21,11 @@ from .commands import (
 from .github import GitHubError
 from .ledger import CursorStore, DecisionLedger
 from .models import (
+    AuditFindingContext,
+    AuditSource,
+    Automation,
     CanonicalChange,
+    Command,
     CommandVerb,
     Cursor,
     Decision,
@@ -29,10 +38,13 @@ from .models import (
     PropagationOutcome,
     PropagationRequest,
     PropagationSkip,
+    Source,
     SkipDecision,
 )
 from .planner import (
     build_tracking_issue,
+    queued_propagations,
+    recorded_propagations,
     record_propagation_outcomes,
     tracking_issue_title,
 )
@@ -162,6 +174,25 @@ def handle_comment(
 
     issue_number = int(str(issue["number"]))
     issue_body = str(issue.get("body") or "")
+    try:
+        audit_context = audit_finding_context_from_body(issue_body)
+    except AuditError as exc:
+        return CommentResult(
+            commands=len(commands),
+            reply=PendingReply(
+                issue_number=issue_number,
+                body=f"Agricola command error: {exc}",
+            ),
+        )
+    if audit_context is not None:
+        return _handle_audit_comment(
+            client,
+            manifest,
+            issue,
+            author,
+            commands,
+            audit_context,
+        )
     try:
         source_repo, source_number = client.source_from_body(issue_body)
         if source_repo.lower() != manifest.canonical.repo.lower():
@@ -332,12 +363,10 @@ def record_propagations(
             message = (
                 f"Opened draft PR for `{request.target}`: [{result.pr}]({result.url})."
             )
-        appended = ledger.append_source(
-            request.source,
-            decision,
-        )
+        canonical = isinstance(request.source, Source)
+        appended = ledger.append_source(request.source, decision) if canonical else False
         changed = changed or appended
-        if not appended:
+        if canonical and not appended:
             message = f"Already recorded: {message[0].lower()}{message[1:]}"
         replies.setdefault(request.tracking_issue, []).append(message)
         issue_results.setdefault(request.tracking_issue, []).append(result)
@@ -353,6 +382,135 @@ def record_propagations(
         for issue, grouped in sorted(issue_results.items())
     )
     return changed, pending, updates
+
+
+def _handle_audit_comment(
+    client: GitHub,
+    manifest: Manifest,
+    issue: dict[str, object],
+    author: str,
+    commands: Sequence[Command],
+    context: AuditFindingContext,
+) -> CommentResult:
+    issue_number = int(str(issue["number"]))
+    unsupported = tuple(
+        command.verb.value
+        for command in commands
+        if command.verb not in {CommandVerb.PROPAGATE, CommandVerb.STATUS}
+    )
+    if unsupported:
+        return CommentResult(
+            commands=len(commands),
+            reply=PendingReply(
+                issue_number=issue_number,
+                body=(
+                    "Agricola command error: audit finding issues support only "
+                    "`propagate` and `status`."
+                ),
+            ),
+        )
+
+    for command in commands:
+        if command.verb is not CommandVerb.PROPAGATE or command.all_targets:
+            continue
+        outside_finding = tuple(
+            target for target in command.targets if target not in context.affected
+        )
+        if outside_finding:
+            return CommentResult(
+                commands=len(commands),
+                reply=PendingReply(
+                    issue_number=issue_number,
+                    body=(
+                        "Agricola command error: this finding does not affect: "
+                        + ", ".join(outside_finding)
+                    ),
+                ),
+            )
+
+    issue_body = ensure_audit_remediation(
+        str(issue.get("body") or ""), context, manifest
+    )
+    recorded = recorded_propagations(issue_body)
+    requested: list[str] = []
+    replies: list[str] = []
+    for command in commands:
+        if command.verb is CommandVerb.STATUS:
+            if recorded:
+                statuses = "\n".join(
+                    f"- {client.pull_status(reference)}"
+                    for reference in recorded.values()
+                )
+                replies.append("Live remediation status:\n" + statuses)
+            else:
+                replies.append(
+                    "No remediation pull requests are recorded for this finding."
+                )
+            continue
+        targets = (
+            tuple(
+                target
+                for target in context.affected
+                if manifest.target(target).automation is Automation.PR
+            )
+            if command.all_targets
+            else command.targets
+        )
+        if not targets:
+            replies.append("No affected SDK supports draft PR automation.")
+        for target in targets:
+            if target in recorded:
+                replies.append(f"Remediation for `{target}` is already recorded.")
+            elif target in requested:
+                replies.append(f"Remediation for `{target}` is already queued.")
+            else:
+                requested.append(target)
+                replies.append(f"Queued remediation for `{target}`.")
+
+    updated_body = queued_propagations(issue_body, requested)
+    issue_url = str(issue.get("html_url") or issue.get("url") or "")
+    title = str(issue.get("title") or context.id)
+    summary = title.split(": ", 1)[-1]
+    propagations = tuple(
+        PropagationRequest(
+            source=AuditSource(
+                repo=context.canonical.repo,
+                sha=context.canonical.sha,
+                finding=context.id,
+                fingerprint=context.fingerprint,
+            ),
+            source_title=f"fix: {summary}",
+            source_url=issue_url,
+            target=target,
+            target_repo=context.affected[target].repo,
+            target_base_sha=context.affected[target].sha,
+            tracking_issue=issue_number,
+            tracking_issue_url=issue_url,
+            by=author,
+            idempotency_key=f"audit:{context.id}:{target}",
+            branch=f"agricola/{context.id.lower()}",
+            verify=manifest.target(target).verify,
+            changelog=manifest.target(target).changelog,
+            owners=manifest.target(target).owners,
+            plan=updated_body,
+        )
+        for target in requested
+    )
+    update = (
+        PendingIssueUpdate(issue_number=issue_number, body=updated_body)
+        if requested or updated_body != str(issue.get("body") or "")
+        else None
+    )
+    return CommentResult(
+        commands=len(commands),
+        reply=(
+            PendingReply(issue_number=issue_number, body="\n\n".join(replies))
+            if replies
+            else None
+        ),
+        issue_update=update,
+        propagations=propagations,
+    )
 
 
 def _requests_for_targets(

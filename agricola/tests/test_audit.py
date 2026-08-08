@@ -8,6 +8,7 @@ from pathlib import Path
 from agricola.audit import (
     AUDIT_MARKER,
     analyze_deltas,
+    audit_finding_context_from_body,
     audit_matrix,
     build_audit_report,
     deliver_audit_report,
@@ -334,14 +335,20 @@ class AuditTests(unittest.TestCase):
 
             self.assertEqual(first.findings[0].id, "AGR-2026-001")
             self.assertEqual(second.findings[0].id, "AGR-2026-001")
-            pending = render_audit_report(first)
+            pending = render_audit_report(first, manifest())
             self.assertTrue(pending.healthy)
             self.assertIn(AUDIT_MARKER, pending.body)
             self.assertIn("AGR-2026-001", pending.body)
             self.assertIn("`go`", pending.body)
             self.assertEqual(len(pending.finding_issues), 1)
             self.assertIn("## How to action", pending.finding_issues[0].body)
+            self.assertIn("## Agricola remediation", pending.finding_issues[0].body)
+            self.assertIn("@agricola propagate go", pending.finding_issues[0].body)
             self.assertIn("gh workflow run agricola-audit.yml", pending.finding_issues[0].body)
+            context = audit_finding_context_from_body(pending.finding_issues[0].body)
+            assert context is not None
+            self.assertEqual(context.id, "AGR-2026-001")
+            self.assertEqual(tuple(context.affected), ("go",))
 
     def test_rollup_links_semantic_source_evidence(self) -> None:
         canonical = snapshot("typescript")
@@ -354,7 +361,7 @@ class AuditTests(unittest.TestCase):
                 manifest(), (canonical, go, rust, ruby), AuditStore(directory)
             )
 
-        pending = render_audit_report(report)
+        pending = render_audit_report(report, manifest())
         body = pending.finding_issues[0].body
         self.assertIn("semantic:receipt/verification-order", pending.body)
         self.assertIn("wevm/mppx/blob/typescript1234567/src/receipt.ts#L42", body)
@@ -365,7 +372,7 @@ class AuditTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             report = build_audit_report(manifest(), (canonical,), AuditStore(directory))
 
-        pending = render_audit_report(report)
+        pending = render_audit_report(report, manifest())
         self.assertFalse(pending.healthy)
         self.assertIn("go: audit snapshot is missing", pending.body)
 
@@ -379,7 +386,7 @@ class AuditTests(unittest.TestCase):
                 manifest(), (canonical, go, rust, ruby), AuditStore(directory)
             )
 
-        pending = render_audit_report(report)
+        pending = render_audit_report(report, manifest())
         self.assertFalse(pending.healthy)
         self.assertIn("go: semantic review is missing", pending.body)
 
@@ -409,7 +416,7 @@ class AuditTests(unittest.TestCase):
                 },
             )
         )
-        pending = render_audit_report(AuditReportFixture.complete())
+        pending = render_audit_report(AuditReportFixture.complete(), manifest())
 
         deliver_audit_report(client, pending)
 
@@ -431,7 +438,7 @@ class AuditTests(unittest.TestCase):
             )
         client = AuditGitHub()
 
-        rollup = deliver_audit_report(client, render_audit_report(report))
+        rollup = deliver_audit_report(client, render_audit_report(report, manifest()))
 
         finding = next(
             issue for issue in client.issues if "agricola:audit-finding" in str(issue["body"])
@@ -451,7 +458,7 @@ class AuditTests(unittest.TestCase):
                 },
             )
         )
-        pending = render_audit_report(AuditReportFixture.complete())
+        pending = render_audit_report(AuditReportFixture.complete(), manifest())
 
         deliver_audit_report(client, pending)
 
@@ -470,7 +477,8 @@ class AuditTests(unittest.TestCase):
                     (canonical, go, snapshot("rust"), snapshot("ruby")),
                     AuditStore(directory),
                     at=datetime(2026, 8, 8, 18, 0, tzinfo=UTC),
-                )
+                ),
+                manifest(),
             )
         finding = pending.finding_issues[0]
         client = AuditGitHub(
@@ -489,6 +497,41 @@ class AuditTests(unittest.TestCase):
         self.assertEqual(client.issues[0]["state"], "open")
         self.assertEqual(len(client.issues), 2)
 
+    def test_delivery_preserves_recorded_remediation(self) -> None:
+        check = "vector:www-authenticate/basic/parse"
+        canonical = snapshot("typescript", observations=(observation(check),))
+        go = snapshot(
+            "go", observations=(observation(check, AuditCheckStatus.FAILURE),)
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            pending = render_audit_report(
+                build_audit_report(
+                    manifest(),
+                    (canonical, go, snapshot("rust"), snapshot("ruby")),
+                    AuditStore(directory),
+                ),
+                manifest(),
+            )
+        finding = pending.finding_issues[0]
+        recorded = finding.body.replace(
+            "| `go` | pr | Awaiting decision | — |",
+            "| `go` | pr | Recorded | [tempoxyz/mpp-go#91](https://github.com/tempoxyz/mpp-go/pull/91) |",
+        )
+        client = AuditGitHub(
+            (
+                {
+                    "number": 7,
+                    "body": recorded,
+                    "state": "open",
+                    "html_url": "https://github.com/tempoxyz/mpp-tools/issues/7",
+                },
+            )
+        )
+
+        deliver_audit_report(client, pending)
+
+        self.assertIn("tempoxyz/mpp-go#91", str(client.issues[0]["body"]))
+
     def test_incomplete_delivery_preserves_unobserved_findings(self) -> None:
         marker = "<!-- agricola:audit-finding=AGR-2026-001 -->"
         client = AuditGitHub(
@@ -501,7 +544,9 @@ class AuditTests(unittest.TestCase):
                 },
             )
         )
-        pending = render_audit_report(AuditReportFixture.complete()).model_copy(
+        pending = render_audit_report(
+            AuditReportFixture.complete(), manifest()
+        ).model_copy(
             update={"healthy": False}
         )
 

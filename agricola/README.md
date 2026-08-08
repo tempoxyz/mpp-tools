@@ -74,7 +74,7 @@ The tracking issue also contains a durable downstream propagation table. It list
 
 ## Commands
 
-`@agricola` must be the first token on a line. Commands are accepted only from configured maintainers and only on Agricola tracking issues in `mpp-tools`.
+`@agricola` must be the first token on a line. Commands are accepted only from configured maintainers and only on canonical-change or audit-finding issues in `mpp-tools`.
 
 | Command | What it does | Example comment |
 | --- | --- | --- |
@@ -84,11 +84,13 @@ The tracking issue also contains a durable downstream propagation table. It list
 | `status` | Queries GitHub for downstream PRs recorded in the ledger. | `@agricola status` |
 | `skip <target> reason="..."` | Records an idempotent, reason-required skip for one SDK. | `@agricola skip go reason="Not applicable to this transport"` |
 
-Commands in canonical or downstream repositories are not supported. Revision, retry, audit-finding actions, and downstream issue commands remain manual operations. A failed unpublished propagation can be retried by rerunning its workflow; a published stable branch is updated idempotently.
+On an audit-finding issue, `propagate <targets...>` accepts only PR-enabled SDKs listed as affected by that finding. `propagate all` selects every PR-enabled affected SDK, and `status` reports linked remediation pull requests. The finding's exact canonical and target commits are the immutable generation inputs. `plan` and `skip` remain specific to canonical-change issues.
+
+Commands in canonical or downstream repositories are not supported. A failed unpublished propagation can be retried by repeating its issue command or rerunning its workflow; a published stable branch is updated idempotently.
 
 ## Downstream execution
 
-Every source-target pair uses a stable branch such as `agricola/mppx-412`. The source SHA and target define a stable idempotency key, so overlapping polls and repeated commands do not create duplicate pull requests.
+Every source-target pair uses a stable branch such as `agricola/mppx-412` for a canonical change or `agricola/agr-2026-022` for an audit finding. The source identity and target define a stable idempotency key, so overlapping polls and repeated commands do not create duplicate pull requests.
 
 The executor pins the target repository's default-branch commit when it creates a
 propagation request. Generation, verification, and publication all use that exact
@@ -96,7 +98,7 @@ target tree, even if the default branch advances while the workflow is running.
 
 The executor:
 
-1. checks out the downstream repository, exact canonical merge commit, specification, reviewed plan, and target conventions;
+1. checks out the downstream repository, pinned canonical commit, specification, reviewed plan or audit evidence, and target conventions;
 2. generates the smallest idiomatic downstream patch without repository credentials;
 3. transfers only that patch to a separate job and runs the manifest verification commands without secrets;
 4. mints a target-scoped GitHub App token only after verification succeeds;
@@ -113,7 +115,7 @@ The weekly and manually dispatched audit is head-to-head and report-only. It use
 
 The first pass reviews each repository's current default-branch checkout independently against the exact canonical `mppx` head. A read-only Codex run explores both implementations and emits schema-validated `semantic:<area>/<behavior>` findings with source evidence. Shared protocol vectors and conformance-adapter capabilities provide deterministic supporting evidence. The second pass clusters equivalent findings under SDK-independent fingerprints such as `semantic:receipt/verification-order`, `capability:challenge.parse`, or `vector:www-authenticate/basic/parse`. Stable `AGR-<year>-<sequence>` IDs are assigned in [`ledger/audit.json`](../ledger/audit.json).
 
-One `[Agricola] SDK drift audit` index is updated in place, and every stable finding gets its own issue with exact audited commits, affected and clean SDKs, likely-origin heuristic, severity, confidence, linked source evidence, a suggested test, and action instructions. A healthy audit closes issues whose fingerprints disappear and reopens recurring findings. Incomplete audits never close findings. Findings never create branches or pull requests automatically.
+One `[Agricola] SDK drift audit` index is updated in place, and every stable finding gets its own issue with exact audited commits, affected and clean SDKs, likely-origin heuristic, severity, confidence, linked source evidence, a suggested test, and action instructions. A healthy audit closes issues whose fingerprints disappear and reopens recurring findings. Incomplete audits never close findings. Findings never create branches or pull requests automatically; a maintainer may explicitly run `@agricola propagate <target>` on the finding issue to open or update a draft remediation pull request. Its link and status survive later audit reconciliations.
 
 ## State and recovery
 
