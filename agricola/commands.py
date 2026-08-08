@@ -65,14 +65,14 @@ def parse_commands(body: str, manifest: Manifest) -> list[Command]:
         if verb is CommandVerb.PROPAGATE:
             if not args:
                 raise CommandError(
-                    f"line {line_number}: propagate requires SDK targets or applicable"
+                    f"line {line_number}: propagate requires SDK targets or all"
                 )
-            if len(args) == 1 and args[0].lower() == "applicable":
-                commands.append(Command(verb=verb, applicable=True, line=line_number))
+            if len(args) == 1 and args[0].lower() == "all":
+                commands.append(Command(verb=verb, all_targets=True, line=line_number))
                 continue
-            if any(argument.lower() == "applicable" for argument in args):
+            if any(argument.lower() == "all" for argument in args):
                 raise CommandError(
-                    f"line {line_number}: applicable cannot be combined with SDK targets"
+                    f"line {line_number}: all cannot be combined with SDK targets"
                 )
             targets: list[str] = []
             for argument in args:

@@ -40,7 +40,7 @@ No checked-in schema copies need synchronization.
 - `canonical` and `spec`: repository names in `OWNER/REPO` form;
 - `sdks`: immutable target definitions keyed by lowercase target name;
 - `automation`: `pr` for managed propagation or `notify` for external targets;
-- repository, owners, changelog convention, verification commands, and capabilities for each target.
+- repository, owners, changelog convention, and verification commands for each target.
 
 Every `automation: pr` target must declare at least one verification command. The executor runs these commands after generation and before it receives downstream write credentials.
 
@@ -67,14 +67,7 @@ Each tracking issue contains the stable marker `<!-- agricola:source=OWNER/REPO#
 2. canonical behavior worth matching;
 3. incidental repository or TypeScript tooling files.
 
-Applicability is deterministic:
-
-- normative or conformance changes apply to every `automation: pr` target;
-- otherwise Agricola extracts declared capability signals from the PR title, body, and file paths;
-- an SDK is applicable when it declares every detected capability;
-- an SDK is not applicable when detected capabilities are missing;
-- with no recognized capability signal, applicability is unknown rather than guessed;
-- `automation: notify` targets remain notification-only.
+Agricola does not infer SDK applicability from keywords or feature tags. Authorized merge-time labels and maintainer commands are the only propagation decisions. Plans show the selected targets and the manifest's general target inventory; `automation: notify` targets remain notification-only.
 
 ## Commands
 
@@ -83,14 +76,14 @@ Applicability is deterministic:
 ```text
 @agricola plan
 @agricola propagate go rust
-@agricola propagate applicable
+@agricola propagate all
 @agricola status
 @agricola skip ruby reason="TS-only tooling"
 ```
 
 - `plan` regenerates the impact plan from the immutable merge-time label history.
 - `propagate <targets...>` queues explicit `automation: pr` targets.
-- `propagate applicable` queues every target deterministically classified as applicable.
+- `propagate all` queues every `automation: pr` target.
 - `status` queries GitHub for downstream pull requests already recorded in the ledger.
 - `skip` appends an idempotent, reason-required decision for one manifest target.
 

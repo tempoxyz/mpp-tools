@@ -309,13 +309,13 @@ class CommentTests(unittest.TestCase):
             assert repeated.reply is not None
             self.assertIn("already recorded", repeated.reply.body)
 
-    def test_propagate_applicable_uses_plan_classification(self) -> None:
+    def test_propagate_all_queues_every_pr_target(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             result = handle_comment(
                 FakeGitHub(),
                 manifest(),
                 DecisionLedger(directory),
-                self.event("@agricola propagate applicable"),
+                self.event("@agricola propagate all"),
             )
 
             self.assertEqual(

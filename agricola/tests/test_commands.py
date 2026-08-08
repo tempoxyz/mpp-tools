@@ -41,17 +41,17 @@ class CommandTests(unittest.TestCase):
         self.assertEqual(command.verb, CommandVerb.PROPAGATE)
         self.assertEqual(command.targets, ("go", "rust"))
 
-    def test_parses_applicable_propagation(self) -> None:
-        command = parse_commands("@agricola propagate Applicable", self.manifest)[0]
-        self.assertTrue(command.applicable)
+    def test_parses_all_propagation(self) -> None:
+        command = parse_commands("@agricola propagate All", self.manifest)[0]
+        self.assertTrue(command.all_targets)
 
     def test_rejects_notify_only_propagation(self) -> None:
         with self.assertRaisesRegex(CommandError, "does not support PR automation"):
             parse_commands("@agricola propagate ruby", self.manifest)
 
-    def test_rejects_mixed_applicable_propagation(self) -> None:
+    def test_rejects_mixed_all_propagation(self) -> None:
         with self.assertRaisesRegex(CommandError, "cannot be combined"):
-            parse_commands("@agricola propagate applicable go", self.manifest)
+            parse_commands("@agricola propagate all go", self.manifest)
 
     def test_rejects_unknown_target(self) -> None:
         with self.assertRaisesRegex(CommandError, "unknown SDK target"):

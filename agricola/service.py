@@ -29,7 +29,7 @@ from .models import (
     PropagationResult,
     SkipDecision,
 )
-from .planner import applicable_targets, build_tracking_issue, tracking_issue_title
+from .planner import build_tracking_issue, tracking_issue_title
 
 
 class GitHub(Protocol):
@@ -179,14 +179,7 @@ def handle_comment(
         elif command.verb is CommandVerb.PROPAGATE:
             created = ledger.ensure(change)
             changed_ledger = changed_ledger or created
-            targets = (
-                applicable_targets(change, manifest)
-                if command.applicable
-                else command.targets
-            )
-            if not targets:
-                replies.append("No SDKs are currently marked applicable.")
-                continue
+            targets = manifest.pr_targets() if command.all_targets else command.targets
             entry = ledger.read(change.repo, change.number)
             assert entry is not None
             recorded_targets = {decision.target for decision in entry.decisions}

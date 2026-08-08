@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import re
 from collections.abc import Iterable
 from enum import StrEnum
 from pathlib import PurePosixPath
 
 from .models import (
-    SDK,
     Automation,
     CanonicalChange,
     LabelResolution,
@@ -42,7 +40,6 @@ _INCIDENTAL_NAMES = {
     "eslint.config.mjs",
 }
 _INCIDENTAL_PREFIXES = (".github/", ".changeset/", "docs/site/", "scripts/release/")
-_WORD = re.compile(r"[a-z0-9]+")
 
 
 def classify_file(file: PullRequestFile) -> FileCategory:
@@ -73,69 +70,6 @@ def _section(title: str, files: Iterable[PullRequestFile], empty: str) -> list[s
     return lines
 
 
-def detected_capabilities(
-    change: CanonicalChange, manifest: Manifest
-) -> tuple[str, ...]:
-    change_words = _words(
-        " ".join((change.title, change.body, *(file.path for file in change.files)))
-    )
-    capabilities = {
-        capability for sdk in manifest.sdks.values() for capability in sdk.capabilities
-    }
-    return tuple(
-        sorted(
-            capability
-            for capability in capabilities
-            if change_words & _words(capability)
-        )
-    )
-
-
-def _words(value: str) -> set[str]:
-    return {_singular(word) for word in _WORD.findall(value.lower())}
-
-
-def _singular(word: str) -> str:
-    return word[:-1] if len(word) > 4 and word.endswith("s") else word
-
-
-def _applicability(
-    sdk: SDK,
-    signals: tuple[str, ...],
-    *,
-    normative_change: bool,
-) -> str:
-    if sdk.automation is Automation.NOTIFY:
-        return "notify only"
-    if normative_change:
-        return "applicable: normative or conformance files changed"
-    if not signals:
-        return "applicability unknown: no declared capability signal detected"
-    missing = tuple(signal for signal in signals if signal not in sdk.capabilities)
-    if missing:
-        return "not applicable: missing declared " + ", ".join(
-            f"`{capability}`" for capability in missing
-        )
-    return "applicable: supports " + ", ".join(
-        f"`{capability}`" for capability in signals
-    )
-
-
-def applicable_targets(change: CanonicalChange, manifest: Manifest) -> tuple[str, ...]:
-    normative_change = any(
-        classify_file(file) is FileCategory.NORMATIVE for file in change.files
-    )
-    signals = detected_capabilities(change, manifest)
-    return tuple(
-        name
-        for name, sdk in manifest.sdks.items()
-        if sdk.automation is Automation.PR
-        and (
-            normative_change or (signals and not (set(signals) - set(sdk.capabilities)))
-        )
-    )
-
-
 def build_tracking_issue(
     change: CanonicalChange, labels: LabelResolution, manifest: Manifest
 ) -> str:
@@ -144,7 +78,6 @@ def build_tracking_issue(
     }
     for file in change.files:
         categories[classify_file(file)].append(file)
-    capability_signals = detected_capabilities(change, manifest)
 
     lines = [
         change.marker,
@@ -194,29 +127,21 @@ def build_tracking_issue(
         lines.append(f"- Error: **{error}**")
     for note in labels.notes:
         lines.append(f"- Conflict resolution: {note}")
-    lines.extend(["", "## SDK applicability", ""])
-    lines.append(
-        "- Detected capability signals: "
-        + (", ".join(f"`{capability}`" for capability in capability_signals) or "none")
+    pr_targets = ", ".join(f"`{target}`" for target in manifest.pr_targets())
+    notify_targets = ", ".join(
+        f"`{name}`"
+        for name, sdk in manifest.sdks.items()
+        if sdk.automation is Automation.NOTIFY
     )
-    lines.append("")
-    for name, sdk in manifest.sdks.items():
-        disposition = _applicability(
-            sdk,
-            capability_signals,
-            normative_change=bool(categories[FileCategory.NORMATIVE]),
-        )
-        authorization = (
-            "selected by authorized label" if name in labels.targets else "not selected"
-        )
-        capabilities = (
-            ", ".join(f"`{capability}`" for capability in sdk.capabilities)
-            or "not declared"
-        )
-        lines.append(
-            f"- **{name}** (`{sdk.repo}`): {disposition}; {authorization}. "
-            f"Capabilities: {capabilities}."
-        )
+    lines.extend(
+        [
+            "",
+            "## Target inventory",
+            "",
+            f"- Draft PR automation: {pr_targets or 'none'}.",
+            f"- Notification only: {notify_targets or 'none'}.",
+        ]
+    )
     lines.extend(
         [
             "",
@@ -225,7 +150,7 @@ def build_tracking_issue(
             "```text",
             "@agricola plan",
             "@agricola propagate <sdk> [<sdk> ...]",
-            "@agricola propagate applicable",
+            "@agricola propagate all",
             "@agricola status",
             '@agricola skip <sdk> reason="..."',
             "```",

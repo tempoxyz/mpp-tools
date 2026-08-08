@@ -70,7 +70,6 @@ class SDK(FrozenModel):
     owners: tuple[Login, ...]
     changelog: Changelog
     verify: tuple[NonEmpty, ...]
-    capabilities: tuple[NonEmpty, ...]
 
     @model_validator(mode="after")
     def require_pr_verification(self) -> SDK:
@@ -114,6 +113,11 @@ class Manifest(FrozenModel):
             return self.sdks[name]
         except KeyError as exc:
             raise ValueError(f"unknown SDK target: {name}") from exc
+
+    def pr_targets(self) -> tuple[str, ...]:
+        return tuple(
+            name for name, sdk in self.sdks.items() if sdk.automation is Automation.PR
+        )
 
 
 class Source(FrozenModel):
@@ -233,7 +237,7 @@ class Command:
     verb: CommandVerb
     target: str | None = None
     targets: tuple[str, ...] = ()
-    applicable: bool = False
+    all_targets: bool = False
     reason: str | None = None
     line: int = 1
 
