@@ -282,7 +282,7 @@ class VectorRunnerJsonArtifactTest(unittest.TestCase):
         failing = [check for check in output["checks"] if check["status"] == "FAILURE"]
         self.assertTrue(any("vector-file-error" in check["id"] for check in failing))
 
-    def test_all_version_skipped_selection_passes(self) -> None:
+    def test_all_version_skipped_selection_fails(self) -> None:
         import vector_runner as vector_runner_module
 
         fake_adapter = AdapterConfig(name="fake", command=["true"], capabilities=[])
@@ -323,11 +323,14 @@ class VectorRunnerJsonArtifactTest(unittest.TestCase):
                 vector_runner_module.discover_vector_files = original_discover_vectors
                 vector_runner_module.discover_adapters = original_discover_adapters
 
-        self.assertTrue(success)
+        self.assertFalse(success)
         output = json.loads(stdout.getvalue())
-        self.assertEqual(output["status"], "pass")
-        self.assertEqual(output["num_checks"], 0)
+        self.assertEqual(output["status"], "fail")
+        self.assertEqual(output["num_checks"], 1)
         self.assertEqual(output["skipped"], 1)
+        failing = [c for c in output["checks"] if c["status"] == "FAILURE"]
+        self.assertEqual(len(failing), 1)
+        self.assertIn("version-skipped", failing[0]["error"])
 
 
 if __name__ == "__main__":
