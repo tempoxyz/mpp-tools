@@ -18,6 +18,7 @@
         "server.verify",
         "tempo.fee_payer.cosign",
         "tempo.receipt.verify",
+        "tempo.proof.typed_data",
         "http.payment_request",
         "stripe.external_id_binding"
       ]
@@ -172,6 +173,44 @@
           }
         }
       ]
+    },
+    "TempoProofInput": {
+      "type": "object",
+      "required": ["chainId", "challengeId", "realm"],
+      "additionalProperties": false,
+      "properties": {
+        "chainId": { "type": "integer", "minimum": 0 },
+        "challengeId": { "type": "string", "minLength": 1 },
+        "realm": { "type": "string" }
+      }
+    },
+    "TempoProofTypedData": {
+      "type": "object",
+      "required": ["domain", "types", "primaryType", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "domain": {
+          "type": "object",
+          "required": ["name", "version", "chainId"],
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string" },
+            "version": { "type": "string" },
+            "chainId": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "types": { "$ref": "#/$defs/JsonObject" },
+        "primaryType": { "type": "string" },
+        "message": {
+          "type": "object",
+          "required": ["challengeId", "realm"],
+          "additionalProperties": false,
+          "properties": {
+            "challengeId": { "type": "string", "minLength": 1 },
+            "realm": { "type": "string" }
+          }
+        }
+      }
     },
     "HttpPaymentMode": {
       "type": "string",

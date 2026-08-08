@@ -20,6 +20,7 @@
     "base64url.decode",
     "challenge.id",
     "http.payment_request",
-    "stripe.external_id_binding"
+    "stripe.external_id_binding",
+    "tempo.proof.typed_data"
   ]
 }

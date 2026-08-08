@@ -61,6 +61,10 @@
       "then": { "properties": { "input": { "$ref": "protocol.schema.json#/$defs/StripeExternalIdBindingInput" } } }
     },
     {
+      "if": { "properties": { "op": { "const": "tempo.proof.typed_data" } }, "required": ["op"] },
+      "then": { "properties": { "input": { "$ref": "protocol.schema.json#/$defs/TempoProofInput" } } }
+    },
+    {
       "if": { "properties": { "op": { "const": "http.payment_request" } }, "required": ["op"] },
       "then": { "properties": { "input": { "$ref": "protocol.schema.json#/$defs/HttpPaymentRequest" } } }
     },
