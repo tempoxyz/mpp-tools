@@ -49,6 +49,17 @@
         "redirect_to_port_offset": { "type": "integer" },
         "expected_signature": { "type": "string" },
         "body": { "type": "string" },
+        "headers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "source": {
+          "anyOf": [
+            { "$ref": "protocol.schema.json#/$defs/JsonObject" },
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        },
         "retry_body": { "type": "string" },
         "initial_query": { "type": "string" },
         "retry_query": { "type": "string" },
@@ -57,6 +68,7 @@
         "expect_retry_after": { "type": "string" },
         "expect_error_type": { "type": "string" },
         "expect_error_message_contains": { "type": "string" },
+        "expect_response_name": { "type": "string" },
         "challenge_path": { "type": "string" },
         "redirect_to": { "type": "string" },
         "mode": { "$ref": "protocol.schema.json#/$defs/HttpPaymentMode" },
@@ -81,7 +93,22 @@
         "server_only": { "type": "boolean" },
         "skip_authorization": { "type": "boolean" },
         "verify_body_preserved": { "type": "boolean" }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "anyOf": [
+              { "required": ["headers"] },
+              { "required": ["source"] },
+              { "required": ["expect_response_name"] }
+            ]
+          },
+          "then": {
+            "required": ["client_flow"],
+            "properties": { "client_flow": { "const": true } }
+          }
+        }
+      ]
     }
   }
 }

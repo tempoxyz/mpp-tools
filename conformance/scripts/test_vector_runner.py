@@ -110,6 +110,20 @@ class VectorRunnerHelperTest(unittest.TestCase):
                 {"sdkVersions": {"rust": 0.12}}, self.adapter
             )
 
+    def test_scenario_adapters_reject_unknown_name(self) -> None:
+        self.runner.known_adapter_names = {"python", "rust"}
+
+        with self.assertRaisesRegex(ValueError, "adapters contains unknown names: pyhton"):
+            self.runner.scenario_adapters({"adapters": ["pyhton"]})
+
+    def test_scenario_adapters_accept_registered_names(self) -> None:
+        self.runner.known_adapter_names = {"python", "rust"}
+
+        self.assertEqual(
+            self.runner.scenario_adapters({"adapters": ["python"]}),
+            ["python"],
+        )
+
     def test_run_vector_file_skips_nonmatching_sdk_version(self) -> None:
         vector = {
             "version": "2.0.0",
@@ -121,6 +135,7 @@ class VectorRunnerHelperTest(unittest.TestCase):
                     "name": "future_rule",
                     "description": "Only applies to a future SDK version",
                     "tags": ["version"],
+                    "object": {},
                     "wire": "unused",
                     "tests": {"parse": True},
                     "sdkVersions": {"python": ">0.9.1"},
@@ -266,6 +281,7 @@ class VectorRunnerJsonArtifactTest(unittest.TestCase):
                     "name": "future_rule",
                     "description": "Only applies to a future SDK version",
                     "tags": ["version"],
+                    "object": {},
                     "wire": "unused",
                     "tests": {"parse": True},
                     "sdkVersions": {"fake": ">0.9.1"},

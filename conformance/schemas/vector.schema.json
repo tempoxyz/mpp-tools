@@ -33,6 +33,41 @@
       "items": { "$ref": "#/$defs/Scenario" }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "commands": { "required": ["operation"] }
+        }
+      },
+      "then": {
+        "properties": {
+          "scenarios": {
+            "items": { "required": ["input", "expected"] }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "commands": {
+            "anyOf": [
+              { "required": ["parse"] },
+              { "required": ["format"] }
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "scenarios": {
+            "items": { "required": ["tests"] }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "ExpectedError": {
       "type": "object",
