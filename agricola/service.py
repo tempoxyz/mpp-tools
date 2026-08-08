@@ -37,6 +37,7 @@ from .models import (
     PropagateDecision,
     PropagationOutcome,
     PropagationRequest,
+    PropagationRevision,
     PropagationSkip,
     Source,
     SkipDecision,
@@ -64,6 +65,9 @@ class GitHub(Protocol):
     ) -> dict[str, object]: ...
     def source_from_body(self, body: str) -> tuple[str, int]: ...
     def pull_status(self, reference: str) -> str: ...
+    def pull_revision(
+        self, reference: str, expected_branch: str
+    ) -> PropagationRevision: ...
 
 
 @dataclass(frozen=True)
@@ -213,6 +217,8 @@ def handle_comment(
     replies: list[str] = []
     propagations: list[PropagationRequest] = []
     queued_targets: set[str] = set()
+    scheduled_targets: set[str] = set()
+    comment_id = str(comment.get("id") or event.get("delivery_id") or "unknown")
     for command in commands:
         if command.verb is CommandVerb.PLAN:
             replies.append(f"Regenerated the impact plan for `{change.source_id}`.")
@@ -223,30 +229,76 @@ def handle_comment(
             entry = ledger.read(change.repo, change.number)
             assert entry is not None
             recorded_targets = {decision.target for decision in entry.decisions}
-            fresh_targets = tuple(
-                target
-                for target in targets
-                if target not in recorded_targets and target not in queued_targets
-            )
-            requested = _requests_for_targets(
-                client,
-                change,
-                fresh_targets,
-                {target: author for target in targets},
-                manifest,
-                {
-                    "number": issue_number,
-                    "html_url": str(issue.get("html_url") or "https://github.com"),
-                },
-                issue_body,
-                entry.decisions,
-            )
-            propagations.extend(requested)
-            queued_targets.update(request.target for request in requested)
+            recorded_prs = {
+                decision.target: decision.pr
+                for decision in entry.decisions
+                if decision.pr is not None
+            }
             for target in targets:
+                if target in scheduled_targets:
+                    replies.append(f"Fix for `{target}` is already queued.")
+                    continue
                 if target in recorded_targets:
-                    replies.append(f"Fix for `{target}` is already recorded.")
-                elif target in fresh_targets:
+                    reference = recorded_prs.get(target)
+                    if command.instruction is None:
+                        replies.append(f"Fix for `{target}` is already recorded.")
+                        continue
+                    if reference is None:
+                        replies.append(
+                            f"Cannot revise `{target}` because no pull request was recorded."
+                        )
+                        continue
+                    branch = f"agricola/{change.source_id.replace('#', '-')}"
+                    try:
+                        revision = client.pull_revision(reference, branch)
+                    except GitHubError as exc:
+                        replies.append(f"Cannot revise `{target}`: {exc}.")
+                        continue
+                    propagations.append(
+                        _request_for_target(
+                            client,
+                            change,
+                            target,
+                            author,
+                            manifest,
+                            issue,
+                            issue_body,
+                            instruction=command.instruction,
+                            revision=revision,
+                            idempotency_key=(
+                                f"revise:{change.source_id}:{target}:{comment_id}:"
+                                f"{command.line}"
+                            ),
+                        )
+                    )
+                    scheduled_targets.add(target)
+                    replies.append(
+                        f"Queued revision of `{target}` using PR feedback and CI failures."
+                    )
+                    continue
+                requested = _requests_for_targets(
+                    client,
+                    change,
+                    (target,),
+                    {target: author},
+                    manifest,
+                    {
+                        "number": issue_number,
+                        "html_url": str(issue.get("html_url") or "https://github.com"),
+                    },
+                    issue_body,
+                    entry.decisions,
+                )
+                requested = tuple(
+                    request.model_copy(
+                        update={"instruction": command.instruction}, deep=True
+                    )
+                    for request in requested
+                )
+                propagations.extend(requested)
+                if requested:
+                    queued_targets.add(target)
+                    scheduled_targets.add(target)
                     replies.append(f"Queued fix for `{target}`.")
                 else:
                     replies.append(f"Fix for `{target}` is already queued.")
@@ -257,7 +309,6 @@ def handle_comment(
                 events = client.label_events(change.repo, change.number)
                 labels = resolve_labels(events, change.merged_at, manifest)
                 ledger.ensure(change, labels=labels.labels)
-            comment_id = comment.get("id") or event.get("delivery_id") or "unknown"
             decision = SkipDecision(
                 target=command.target,
                 decision=DecisionKind.SKIP,
@@ -361,12 +412,19 @@ def record_propagations(
                 at=result.at,
             )
             message = (
-                f"Opened draft PR for `{request.target}`: [{result.pr}]({result.url})."
+                f"Revised draft PR for `{request.target}`: [{result.pr}]({result.url})."
+                if request.revision is not None
+                else f"Opened draft PR for `{request.target}`: "
+                f"[{result.pr}]({result.url})."
             )
         canonical = isinstance(request.source, Source)
-        appended = ledger.append_source(request.source, decision) if canonical else False
+        appended = (
+            ledger.append_source(request.source, decision)
+            if canonical and request.revision is None
+            else False
+        )
         changed = changed or appended
-        if canonical and not appended:
+        if canonical and not appended and request.revision is None:
             message = f"Already recorded: {message[0].lower()}{message[1:]}"
         replies.setdefault(request.tracking_issue, []).append(message)
         issue_results.setdefault(request.tracking_issue, []).append(result)
@@ -432,7 +490,9 @@ def _handle_audit_comment(
         str(issue.get("body") or ""), context, manifest
     )
     recorded = recorded_propagations(issue_body)
-    requested: list[str] = []
+    initial_targets: list[str] = []
+    requests: list[tuple[str, str | None, PropagationRevision | None]] = []
+    scheduled_targets: set[str] = set()
     replies: list[str] = []
     for command in commands:
         if command.verb is CommandVerb.STATUS:
@@ -459,15 +519,32 @@ def _handle_audit_comment(
         if not targets:
             replies.append("No affected SDK supports draft PR automation.")
         for target in targets:
-            if target in recorded:
-                replies.append(f"Remediation for `{target}` is already recorded.")
-            elif target in requested:
+            if target in scheduled_targets:
                 replies.append(f"Remediation for `{target}` is already queued.")
+                continue
+            reference = recorded.get(target)
+            if reference is not None:
+                if command.instruction is None:
+                    replies.append(f"Remediation for `{target}` is already recorded.")
+                    continue
+                branch = f"agricola/{context.id.lower()}"
+                try:
+                    revision = client.pull_revision(reference, branch)
+                except GitHubError as exc:
+                    replies.append(f"Cannot revise `{target}`: {exc}.")
+                    continue
+                requests.append((target, command.instruction, revision))
+                scheduled_targets.add(target)
+                replies.append(
+                    f"Queued revision of `{target}` using PR feedback and CI failures."
+                )
             else:
-                requested.append(target)
+                initial_targets.append(target)
+                requests.append((target, command.instruction, None))
+                scheduled_targets.add(target)
                 replies.append(f"Queued remediation for `{target}`.")
 
-    updated_body = queued_propagations(issue_body, requested)
+    updated_body = queued_propagations(issue_body, initial_targets)
     issue_url = str(issue.get("html_url") or issue.get("url") or "")
     title = str(issue.get("title") or context.id)
     summary = title.split(": ", 1)[-1]
@@ -483,22 +560,32 @@ def _handle_audit_comment(
             source_url=issue_url,
             target=target,
             target_repo=context.affected[target].repo,
-            target_base_sha=context.affected[target].sha,
+            target_base_sha=(
+                revision.head_sha
+                if revision is not None
+                else context.affected[target].sha
+            ),
             tracking_issue=issue_number,
             tracking_issue_url=issue_url,
             by=author,
-            idempotency_key=f"audit:{context.id}:{target}",
+            idempotency_key=(
+                f"revise:audit:{context.id}:{target}:{revision.head_sha[:12]}"
+                if revision is not None
+                else f"audit:{context.id}:{target}"
+            ),
             branch=f"agricola/{context.id.lower()}",
             verify=manifest.target(target).verify,
             changelog=manifest.target(target).changelog,
             owners=manifest.target(target).owners,
             plan=updated_body,
+            instruction=instruction,
+            revision=revision,
         )
-        for target in requested
+        for target, instruction, revision in requests
     )
     update = (
         PendingIssueUpdate(issue_number=issue_number, body=updated_body)
-        if requested or updated_body != str(issue.get("body") or "")
+        if initial_targets or updated_body != str(issue.get("body") or "")
         else None
     )
     return CommentResult(
@@ -530,31 +617,61 @@ def _requests_for_targets(
     for target in targets:
         if target in decided:
             continue
-        sdk = manifest.target(target)
         requests.append(
-            PropagationRequest(
-                source={
-                    "repo": change.repo,
-                    "pr": change.number,
-                    "sha": change.sha,
-                },
-                source_title=change.title,
-                source_url=change.url,
-                target=target,
-                target_repo=sdk.repo,
-                target_base_sha=client.repository_head(sdk.repo),
-                tracking_issue=issue_number,
-                tracking_issue_url=issue_url,
-                by=actors[target],
-                idempotency_key=f"propagate:{change.source_id}:{target}",
-                branch=f"agricola/{change.source_id.replace('#', '-')}",
-                verify=sdk.verify,
-                changelog=sdk.changelog,
-                owners=sdk.owners,
-                plan=plan,
+            _request_for_target(
+                client,
+                change,
+                target,
+                actors[target],
+                manifest,
+                {"number": issue_number, "html_url": issue_url},
+                plan,
             )
         )
     return tuple(requests)
+
+
+def _request_for_target(
+    client: GitHub,
+    change: CanonicalChange,
+    target: str,
+    actor: str,
+    manifest: Manifest,
+    issue: dict[str, object],
+    plan: str,
+    *,
+    instruction: str | None = None,
+    revision: PropagationRevision | None = None,
+    idempotency_key: str | None = None,
+) -> PropagationRequest:
+    sdk = manifest.target(target)
+    return PropagationRequest(
+        source={
+            "repo": change.repo,
+            "pr": change.number,
+            "sha": change.sha,
+        },
+        source_title=change.title,
+        source_url=change.url,
+        target=target,
+        target_repo=sdk.repo,
+        target_base_sha=(
+            revision.head_sha
+            if revision is not None
+            else client.repository_head(sdk.repo)
+        ),
+        tracking_issue=int(str(issue["number"])),
+        tracking_issue_url=str(issue.get("html_url") or issue.get("url") or ""),
+        by=actor,
+        idempotency_key=(idempotency_key or f"propagate:{change.source_id}:{target}"),
+        branch=f"agricola/{change.source_id.replace('#', '-')}",
+        verify=sdk.verify,
+        changelog=sdk.changelog,
+        owners=sdk.owners,
+        plan=plan,
+        instruction=instruction,
+        revision=revision,
+    )
 
 
 def _object(value: dict[str, object], key: str) -> dict[str, object]:

@@ -61,10 +61,25 @@ jobs:
           permission-issues: read
           permission-pull-requests: read
 
+      - name: Create downstream repository read token
+        if: github.event_name == 'issue_comment'
+        id: downstream-read-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ vars.AGRICOLA_APP_ID }}
+          private-key: ${{ secrets.AGRICOLA_APP_PRIVATE_KEY }}
+          owner: tempoxyz
+          repositories: |
+            mpp-rs
+            pympp
+          permission-contents: read
+          permission-pull-requests: read
+
       - name: Process event
         id: process
         env:
           AGRICOLA_CANONICAL_TOKEN: ${{ steps.canonical-token.outputs.token }}
+          AGRICOLA_SDK_TOKEN: ${{ steps.downstream-read-token.outputs.token }}
         run: |
           result="$RUNNER_TEMP/agricola-result.json"
           if [ "${{ github.event_name }}" = "issue_comment" ]; then
@@ -150,7 +165,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ matrix.request.target_repo }}
-          ref: ${{ matrix.request.target_base_sha }}
+          ref: ${{ matrix.request.revision && matrix.request.revision.head_sha || matrix.request.target_base_sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -172,6 +187,32 @@ jobs:
           git -C .agricola/canonical checkout --detach "$source_sha"
           git clone --depth 1 https://github.com/tempoxyz/mpp-specs.git .agricola/spec
 
+      - name: Create revision feedback token
+        if: matrix.request.revision != null
+        id: revision-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ vars.AGRICOLA_APP_ID }}
+          private-key: ${{ secrets.AGRICOLA_APP_PRIVATE_KEY }}
+          owner: tempoxyz
+          repositories: |
+            mpp-rs
+            pympp
+          permission-actions: read
+          permission-checks: read
+          permission-contents: read
+          permission-issues: read
+          permission-pull-requests: read
+
+      - name: Collect revision feedback
+        if: matrix.request.revision != null
+        env:
+          GH_TOKEN: ${{ steps.revision-token.outputs.token }}
+        run: |
+          pip install .agricola/control
+          agricola collect-revision-feedback .agricola/request.json \
+            --output .agricola/revision.md
+
       - name: Setup uv
         uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
@@ -192,6 +233,10 @@ jobs:
         run: |
           git add --all
           if git diff --cached --quiet --; then
+            if [ "$(jq -r '.revision != null' .agricola/request.json)" = "true" ]; then
+              echo "Codex produced no revision changes" >&2
+              exit 1
+            fi
             reason="$(sed -n 's/^AGRICOLA_SKIP: //p' .agricola/codex-output.md | tail -n 1)"
             if [ -z "$reason" ]; then
               echo "Codex produced no downstream changes or explicit skip reason" >&2
@@ -209,6 +254,15 @@ jobs:
           else
             git diff --cached --binary --output="$RUNNER_TEMP/changes.patch" --
           fi
+          if [ "$(jq -r '.revision != null' .agricola/request.json)" = "true" ]; then
+            summary="$(sed -n 's/^AGRICOLA_SUMMARY: //p' .agricola/codex-output.md | tail -n 1)"
+            if [ -z "$summary" ]; then
+              echo "Codex produced no revision summary" >&2
+              exit 1
+            fi
+            printf '%s\n' "$summary" > "$RUNNER_TEMP/revision-summary.txt"
+            git diff --cached --stat -- > "$RUNNER_TEMP/revision-stat.txt"
+          fi
 
       - name: Upload generated patch
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -223,6 +277,16 @@ jobs:
           name: agricola-result-${{ matrix.request.target }}-${{ matrix.request.tracking_issue }}
           path: ${{ runner.temp }}/results/*.json
           if-no-files-found: ignore
+
+      - name: Upload revision summary
+        if: matrix.request.revision != null
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: agricola-summary-${{ matrix.request.target }}-${{ matrix.request.tracking_issue }}
+          path: |
+            ${{ runner.temp }}/revision-summary.txt
+            ${{ runner.temp }}/revision-stat.txt
+          if-no-files-found: error
 
   verify:
     name: verify (${{ matrix.request.target }})
@@ -239,7 +303,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ matrix.request.target_repo }}
-          ref: ${{ matrix.request.target_base_sha }}
+          ref: ${{ matrix.request.revision && matrix.request.revision.head_sha || matrix.request.target_base_sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -308,6 +372,13 @@ jobs:
           name: agricola-patch-${{ matrix.request.target }}-${{ matrix.request.tracking_issue }}
           path: ${{ runner.temp }}/patch
 
+      - name: Download revision summary
+        if: matrix.request.revision != null
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: agricola-summary-${{ matrix.request.target }}-${{ matrix.request.tracking_issue }}
+          path: ${{ runner.temp }}/summary
+
       - name: Inspect verified patch
         id: patch
         run: |
@@ -329,6 +400,7 @@ jobs:
             mpp-rs
             pympp
           permission-contents: write
+          permission-issues: write
           permission-pull-requests: write
 
       - name: Checkout downstream SDK
@@ -336,7 +408,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ matrix.request.target_repo }}
-          ref: ${{ matrix.request.target_base_sha }}
+          ref: ${{ matrix.request.revision && matrix.request.revision.head_sha || matrix.request.target_base_sha }}
           token: ${{ steps.downstream-token.outputs.token }}
           fetch-depth: 0
 
@@ -384,6 +456,15 @@ jobs:
             <<< "$candidates")"
           state="$(jq -r 'if .merged_at then "MERGED" else (.state // "" | ascii_upcase) end' \
             <<< "$existing")"
+          expected_pr="$(jq -r '.revision.pr // empty' .agricola/request.json)"
+          if [ -n "$expected_pr" ] && [ "$expected_pr" != "$repo#$(jq -r .number <<< "$existing")" ]; then
+            echo "Recorded revision PR does not match the stable branch" >&2
+            exit 1
+          fi
+          if [ -n "$expected_pr" ] && [ "$state" != "OPEN" ]; then
+            echo "Recorded revision PR is no longer open" >&2
+            exit 1
+          fi
           if [ "$state" = "MERGED" ]; then
             url="$(jq -r .html_url <<< "$existing")"
             number="$(jq -r .number <<< "$existing")"
@@ -391,14 +472,21 @@ jobs:
             echo "Existing Agricola PR is closed; use retry after reopening it" >&2
             exit 1
           else
+            was_ready=false
             if [ "$state" = "OPEN" ] && [ "$(jq -r .draft <<< "$existing")" != "true" ]; then
-              gh pr ready --undo "$(jq -r .number <<< "$existing")" --repo "$repo"
+              was_ready=true
             fi
-            if remote="$(git ls-remote --heads origin "refs/heads/$branch" | cut -f1)" && [ -n "$remote" ]; then
+            revision_head="$(jq -r '.revision.head_sha // empty' .agricola/request.json)"
+            if [ -n "$revision_head" ]; then
+              git push origin "HEAD:refs/heads/$branch"
+            elif remote="$(git ls-remote --heads origin "refs/heads/$branch" | cut -f1)" && [ -n "$remote" ]; then
               git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch"
               git push --force-with-lease="refs/heads/$branch:$remote" origin "HEAD:refs/heads/$branch"
             else
               git push origin "HEAD:refs/heads/$branch"
+            fi
+            if [ "$was_ready" = "true" ]; then
+              gh pr ready --undo "$(jq -r .number <<< "$existing")" --repo "$repo"
             fi
             if [ "$state" = "OPEN" ]; then
               url="$(jq -r .html_url <<< "$existing")"
@@ -409,6 +497,26 @@ jobs:
                 --body-file "$RUNNER_TEMP/pr-body.md")"
               number="$(gh pr view "$url" --repo "$repo" --json number --jq .number)"
             fi
+          fi
+          if [ -n "$expected_pr" ]; then
+            {
+              echo '<!-- agricola:revision-summary -->'
+              echo 'Agricola updated this pull request from the latest review feedback and failing CI.'
+              echo
+              echo '### Summary of changes'
+              echo
+              sed 's/^/- /' "$RUNNER_TEMP/summary/revision-summary.txt"
+              echo
+              echo '### Changed files'
+              echo
+              echo '```text'
+              cat "$RUNNER_TEMP/summary/revision-stat.txt"
+              echo '```'
+              echo
+              echo "Requested from ${{ matrix.request.tracking_issue_url }}."
+            } > "$RUNNER_TEMP/revision-comment.md"
+            gh pr comment "$number" --repo "$repo" \
+              --body-file "$RUNNER_TEMP/revision-comment.md"
           fi
           mkdir -p "$RUNNER_TEMP/results"
           jq -n \

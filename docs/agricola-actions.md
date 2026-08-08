@@ -2,7 +2,7 @@
 
 Agricola propagation runs from [`.github/workflows/agricola.yml`](../.github/workflows/agricola.yml), and the head-to-head SDK audit runs from [`.github/workflows/agricola-audit.yml`](../.github/workflows/agricola-audit.yml). The repository-scoped `GITHUB_TOKEN` manages control-plane issues and state; a GitHub App supplies short-lived cross-repository tokens; the official OpenAI action generates downstream patches and performs read-only semantic audits.
 
-Both semantic analysis and downstream generation explicitly use `gpt-5.6-sol`. Downstream verification installs the pinned `uv` version before running manifest commands such as `uv run pytest`.
+Both semantic analysis and downstream generation explicitly use `gpt-5.6-sol`. Downstream verification installs the pinned `uv` version before running manifest commands such as `uv sync --all-extras --dev` and `uv run pytest`.
 
 ## Triggers
 
@@ -29,10 +29,12 @@ Grant repository permissions:
 | Permission | Access | Used for |
 | --- | --- | --- |
 | Contents | Read and write | Read canonical commits; create downstream branches. |
-| Issues | Read | Read canonical label timeline events. |
+| Issues | Read and write | Read canonical label events and trusted PR comments; post revision summaries. |
 | Pull requests | Read and write | Read canonical metadata; create downstream draft pull requests. |
+| Actions | Read | Read failed downstream GitHub Actions logs during revision. |
+| Checks | Read | Read downstream check summaries and annotations during revision. |
 
-The workflow requests only read access when minting the `wevm/mppx` token and only contents/pull-request write access when minting the `tempoxyz` token. Adding a new target requires updating both `sdks.yaml` and the downstream repository list in the workflow.
+The workflow requests only read access when minting the `wevm/mppx` token. For `tempoxyz` targets it mints separate read tokens for recorded PR state and revision feedback, then requests contents, issues, and pull-request write access only after verification. Adding a new target requires updating both `sdks.yaml` and the downstream repository list in the workflow.
 
 Configure `tempoxyz/mpp-tools` with:
 
@@ -59,9 +61,9 @@ In repository Actions settings, enable workflow write access and allow Actions t
 Propagation is split into credential boundaries:
 
 1. `run` reads canonical state with a read-only App token and persists the cursor/tracking plan with `GITHUB_TOKEN`.
-2. `generate` checks out the request's pinned downstream base commit without persisted credentials. The OpenAI API key is passed only to the official generation action, whose proxy keeps it out of the generated process environment.
-3. `verify` checks out the same base commit, receives only the generated binary patch, and runs reviewed manifest commands in a separate, secretless job. An explicit no-op skips verification.
-4. `publish` checks out the same base commit only after verification, mints a short-lived target token, applies the verified patch, and creates or updates the stable draft pull request. No-op targets never request write credentials.
+2. `generate` checks out the pinned downstream base or exact recorded PR head without persisted credentials. For revisions, a short-lived read token gathers bounded trusted-author review feedback and failed CI before Sol runs. The token is not passed to the generation action. Sol runs the reviewed manifest commands before emitting a patch.
+3. `verify` checks out the same base or PR head, receives only the generated binary patch, and independently repeats the reviewed manifest commands in a separate, secretless job. An explicit initial-generation no-op skips verification.
+4. `publish` checks out the same base or PR head only after verification, mints a short-lived target token, applies the verified patch, and creates or updates the stable draft pull request. Revisions fast-forward the exact recorded head and post a concise change summary. No-op targets never request write credentials.
 5. `record` persists every successful pull-request reference or explicit skip, including successful matrix entries when another target fails, updates the state pull request, and then posts replies.
 
 Downstream code never runs in a job containing downstream write credentials. Generated changes remain drafts and are never auto-merged.
@@ -77,6 +79,7 @@ Downstream code never runs in a job containing downstream write credentials. Gen
 7. On a tracking issue, run `/agricola fix <target>` and confirm the eyes reaction, generation, verification, a downstream draft pull request, and a recorded ledger decision.
 8. Run the SDK audit manually and confirm the `[Agricola] SDK drift audit` index links one issue per finding and records every exact audited commit.
 9. On an affected PR-enabled finding, copy and post `/agricola fix` and confirm the finding links the resulting draft remediation pull request.
+10. Add a review comment or failing check to that draft, post `/agricola fix "address the review and CI"` on its tracking issue, and confirm the same PR receives an incremental commit and summary comment.
 
 The initial cursor starts fifteen minutes in the past. Because each poll replays a one-hour overlap, the first API read covers approximately the previous 75 minutes. To backfill a different window, update the state pull request with a reviewed `ledger/cursor.json` containing a timezone-aware ISO 8601 `merged_at`; polling begins one hour before it.
 
@@ -88,7 +91,7 @@ The maintainer allowlist lives in [`sdks.yaml`](../sdks.yaml). Agricola reconstr
 
 Commands use deferred issue updates and replies so acknowledgements follow their corresponding state change. Canonical-change tables reflect the durable decision ledger. Audit-finding tables retain linked remediation pull requests across later audit runs. Skip decisions use the comment ID and line number. Canonical propagation branches use `agricola/<canonical-repo>-<pr-number>`; audit remediation branches use `agricola/<finding-id>`. Replaying a poll, comment, job, or state overlap therefore reuses existing work instead of opening duplicate pull requests.
 
-On an audit-finding issue, `/agricola fix` generates, verifies, and opens or updates draft fixes for all affected PR-enabled SDKs. Optional target names narrow the request. `/agricola status` reports the linked remediation pull requests. Every actionable finding includes a copy-ready quick command, and valid maintainer commands receive an eyes reaction when processing begins. The issue embeds the exact audited canonical and target commits used by the request; `plan` and `skip` are not accepted on finding issues. The former `@agricola` prefix and `propagate` spelling remain compatibility aliases.
+On an audit-finding issue, `/agricola fix` generates, verifies, and opens draft fixes for all affected PR-enabled SDKs. Optional target names narrow the request. Once a PR is recorded, `/agricola fix "instruction"` ingests unresolved owner/member/collaborator review feedback plus failed checks and Actions logs, revises the exact current head, verifies it, fast-forwards the same branch, and posts a summary. `/agricola status` reports linked remediation pull requests. Every actionable finding includes a copy-ready quick command, and valid maintainer commands receive an eyes reaction when processing begins. The issue embeds the exact audited canonical and target commits used by initial generation; `plan` and `skip` are not accepted on finding issues. The former `@agricola` prefix and `propagate` spelling remain compatibility aliases.
 
 ## Manual poll
 

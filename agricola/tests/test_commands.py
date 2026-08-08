@@ -51,6 +51,28 @@ class CommandTests(unittest.TestCase):
         command = parse_commands("/agricola fix rust", self.manifest)[0]
         self.assertEqual(command.targets, ("rust",))
 
+    def test_parses_quoted_fix_instruction_for_all_targets(self) -> None:
+        command = parse_commands(
+            '/agricola fix "address review comments and CI"', self.manifest
+        )[0]
+        self.assertTrue(command.all_targets)
+        self.assertEqual(command.instruction, "address review comments and CI")
+
+    def test_parses_targeted_fix_instruction(self) -> None:
+        command = parse_commands(
+            '/agricola fix rust "use the existing error type"', self.manifest
+        )[0]
+        self.assertEqual(command.targets, ("rust",))
+        self.assertEqual(command.instruction, "use the existing error type")
+
+    def test_unquoted_fix_instruction_is_an_unknown_target(self) -> None:
+        with self.assertRaisesRegex(CommandError, "unknown SDK target"):
+            parse_commands("/agricola fix address-comments", self.manifest)
+
+    def test_rejects_empty_fix_instruction(self) -> None:
+        with self.assertRaisesRegex(CommandError, "must not be empty"):
+            parse_commands('/agricola fix ""', self.manifest)
+
     def test_accepts_legacy_prefix_and_propagation_spellings(self) -> None:
         for body in (
             "@agricola propagate go",

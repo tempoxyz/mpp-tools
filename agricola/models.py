@@ -280,8 +280,15 @@ class Command:
     target: str | None = None
     targets: tuple[str, ...] = ()
     all_targets: bool = False
+    instruction: str | None = None
     reason: str | None = None
     line: int = 1
+
+
+class PropagationRevision(FrozenModel):
+    pr: PullRequestRef
+    url: NonEmpty
+    head_sha: Sha
 
 
 class PropagationRequest(FrozenModel):
@@ -300,6 +307,18 @@ class PropagationRequest(FrozenModel):
     changelog: Changelog
     owners: tuple[Login, ...] = ()
     plan: NonEmpty
+    instruction: NonEmpty | None = None
+    revision: PropagationRevision | None = None
+
+    @model_validator(mode="after")
+    def require_revision_instruction_and_head(self) -> PropagationRequest:
+        if self.revision is None:
+            return self
+        if self.instruction is None:
+            raise ValueError("revision requires an instruction")
+        if self.target_base_sha != self.revision.head_sha:
+            raise ValueError("revision head must equal target_base_sha")
+        return self
 
 
 class PropagationResult(FrozenModel):
@@ -338,6 +357,12 @@ class PropagationSkip(FrozenModel):
         if value.tzinfo is None:
             raise ValueError("timestamp must include a timezone")
         return value.astimezone(UTC)
+
+    @model_validator(mode="after")
+    def forbid_revision_skip(self) -> PropagationSkip:
+        if self.request.revision is not None:
+            raise ValueError("revision cannot be skipped")
+        return self
 
 
 PropagationOutcome = Annotated[

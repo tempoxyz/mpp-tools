@@ -43,9 +43,7 @@ class AuditError(ValueError):
 
 
 class GitHub(Protocol):
-    def find_tracking_issues(
-        self, marker: str
-    ) -> tuple[dict[str, object], ...]: ...
+    def find_tracking_issues(self, marker: str) -> tuple[dict[str, object], ...]: ...
     def create_issue(
         self, title: str, body: str, labels: Sequence[str] = ()
     ) -> dict[str, object]: ...
@@ -384,9 +382,7 @@ def build_audit_report(
     )
 
 
-def render_audit_report(
-    report: AuditReport, manifest: Manifest
-) -> PendingAuditReport:
+def render_audit_report(report: AuditReport, manifest: Manifest) -> PendingAuditReport:
     timestamp = report.generated_at.isoformat().replace("+00:00", "Z")
     snapshots = {
         snapshot.target: snapshot for snapshot in (report.canonical, *report.targets)
@@ -536,9 +532,7 @@ def _render_finding_issue(
             for target in finding.affected
         },
     )
-    context_marker = (
-        f"{AUDIT_FINDING_CONTEXT_PREFIX}{context.model_dump_json()} -->"
-    )
+    context_marker = f"{AUDIT_FINDING_CONTEXT_PREFIX}{context.model_dump_json()} -->"
     lines = [
         marker,
         context_marker,
@@ -702,8 +696,10 @@ def audit_finding_context_from_body(body: str) -> AuditFindingContext | None:
             re.MULTILINE,
         )
     }
-    affected_targets = () if affected is None else tuple(
-        re.findall(r"`([a-z][a-z0-9-]*)`", affected.group(1))
+    affected_targets = (
+        ()
+        if affected is None
+        else tuple(re.findall(r"`([a-z][a-z0-9-]*)`", affected.group(1)))
     )
     if (
         finding_id is None
@@ -739,7 +735,7 @@ def _finding_command_lines(affected: Iterable[str], manifest: Manifest) -> list[
     if enabled:
         rows.extend(
             [
-                "| `fix [sdk...]` | Generates, verifies, and opens or updates draft fixes for named affected SDKs, or all when omitted. | `/agricola fix` |",
+                '| `fix [sdk...] ["instruction"]` | Opens fixes for affected SDKs; for a recorded PR, ingests unresolved review feedback and failed CI, applies the quoted instruction, verifies, and updates that PR. | `/agricola fix "address the review comments"` |',
             ]
         )
     rows.append(
