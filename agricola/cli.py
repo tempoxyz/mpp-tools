@@ -29,6 +29,7 @@ from .github import GitHubClient
 from .ledger import AuditStore, CursorStore, DecisionLedger, LedgerError
 from .manifest import ManifestError, load_manifest, print_schemas
 from .models import (
+    AuditSemanticResult,
     PendingIssueUpdate,
     PendingReply,
     PendingAuditReport,
@@ -45,6 +46,10 @@ def parser() -> argparse.ArgumentParser:
     subcommands = result.add_subparsers(dest="command", required=True)
     subcommands.add_parser("validate", help="validate the manifest and ledger")
     subcommands.add_parser("schema", help="print generated JSON Schemas")
+    subcommands.add_parser(
+        "audit-semantic-schema",
+        help="print the structured semantic audit result schema",
+    )
 
     poller = subcommands.add_parser(
         "poll", help="process merged canonical pull requests"
@@ -122,8 +127,11 @@ def parser() -> argparse.ArgumentParser:
     snapshot.add_argument("--target", required=True)
     snapshot.add_argument("--repo", required=True)
     snapshot.add_argument("--sha", required=True)
+    snapshot.add_argument("--canonical-sha")
     snapshot.add_argument("--adapter-manifest", required=True)
     snapshot.add_argument("--results", required=True)
+    snapshot.add_argument("--semantic-results")
+    snapshot.add_argument("--semantic-error")
 
     builder = subcommands.add_parser(
         "build-audit", help="cluster snapshots and render the audit roll-up"
@@ -164,6 +172,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     if args.command == "schema":
         print(print_schemas(), end="")
+        return 0
+    if args.command == "audit-semantic-schema":
+        print(json.dumps(AuditSemanticResult.model_json_schema(), indent=2))
         return 0
     if args.command == "deliver-reply":
         try:
@@ -211,6 +222,13 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
     if args.command == "audit-snapshot":
+        semantic_result = None
+        semantic_error = args.semantic_error
+        if args.semantic_results:
+            try:
+                semantic_result = read_json_object(args.semantic_results)
+            except AuditError as exc:
+                semantic_error = f"{args.target}: semantic review unreadable: {exc}"
         try:
             snapshot = snapshot_from_conformance(
                 target=args.target,
@@ -218,6 +236,9 @@ def main(argv: list[str] | None = None) -> int:
                 sha=args.sha,
                 adapter_manifest=read_json_object(args.adapter_manifest),
                 results=read_json_object(args.results),
+                canonical_sha=args.canonical_sha,
+                semantic_result=semantic_result,
+                semantic_error=semantic_error,
             )
         except (AuditError, ValidationError) as exc:
             print(f"audit snapshot error: {exc}", file=sys.stderr)

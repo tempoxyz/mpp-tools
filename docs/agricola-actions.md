@@ -1,6 +1,6 @@
 # Agricola Actions setup
 
-Agricola propagation runs from [`.github/workflows/agricola.yml`](../.github/workflows/agricola.yml), and the head-to-head SDK audit runs from [`.github/workflows/agricola-audit.yml`](../.github/workflows/agricola-audit.yml). The repository-scoped `GITHUB_TOKEN` manages control-plane issues and state; a GitHub App supplies short-lived cross-repository tokens; the official OpenAI action generates downstream patches.
+Agricola propagation runs from [`.github/workflows/agricola.yml`](../.github/workflows/agricola.yml), and the head-to-head SDK audit runs from [`.github/workflows/agricola-audit.yml`](../.github/workflows/agricola-audit.yml). The repository-scoped `GITHUB_TOKEN` manages control-plane issues and state; a GitHub App supplies short-lived cross-repository tokens; the official OpenAI action generates downstream patches and performs read-only semantic audits.
 
 ## Triggers
 
@@ -10,7 +10,7 @@ Agricola propagation runs from [`.github/workflows/agricola.yml`](../.github/wor
 | `workflow_dispatch` | Run the poller manually. |
 | New `issue_comment` containing `@agricola` | Handle a tracking-issue command. `@agricola` must be the first token on a line. |
 
-The audit workflow runs every Monday at 09:00 UTC and supports `workflow_dispatch`. It checks out the current default-branch head of `mppx` and every manifest SDK, runs the shared vectors, compares conformance-adapter capabilities, clusters matching fingerprints, and updates one roll-up issue. It is read-only outside `mpp-tools` and never invokes downstream publication.
+The audit workflow runs every Monday at 09:00 UTC and supports `workflow_dispatch`. For each manifest SDK, it checks out the exact current heads of that repository and `mppx`, runs an open-ended read-only Codex comparison, and requires schema-validated findings with linked code evidence. Shared vectors and conformance-adapter capabilities remain deterministic supporting signals. Agricola clusters matching `semantic:`, `vector:`, and `capability:` fingerprints and updates one roll-up issue. It is read-only outside `mpp-tools` and never invokes downstream publication.
 
 One concurrency group serializes all triggers. Runs execute trusted code from the current default branch. Ledger state is restored from `agricola/state`; the changelog-style updater creates or updates at most one state pull request. Merge it to checkpoint state on the default branch. Do not close or edit it manually. Code from the state branch is never executed.
 
@@ -38,7 +38,7 @@ Configure `tempoxyz/mpp-tools` with:
 | --- | --- | --- |
 | Repository variable | `AGRICOLA_APP_ID` | GitHub App ID. |
 | Actions secret | `AGRICOLA_APP_PRIVATE_KEY` | Complete GitHub App private key in PEM format. |
-| Actions secret | `OPENAI_API_KEY` | API key used by the generation action. |
+| Actions secret | `OPENAI_API_KEY` | API key used by downstream generation and semantic SDK audits. |
 
 Do not merge the executor until all three values are present. The poll job mints the canonical token on every run, so missing App configuration stops even a manual poll rather than silently accepting unverifiable label actors.
 
@@ -109,3 +109,4 @@ The Actions page also exposes **Run workflow** through `workflow_dispatch`.
 - A command has no reply: inspect state persistence. Replies are intentionally skipped after failed ledger updates.
 - The state pull request is not updated: confirm workflow write access and permission to create pull requests.
 - An audit target is incomplete: inspect its SDK-tagged audit job. Missing snapshots are reported in the roll-up and make the workflow fail after the issue is updated.
+- A semantic audit is incomplete: confirm `OPENAI_API_KEY` is configured and inspect the SDK-tagged `Compare SDK implementation to canonical mppx` step. The deterministic snapshot is still reported, but the audit remains unhealthy until the open-ended comparison succeeds.

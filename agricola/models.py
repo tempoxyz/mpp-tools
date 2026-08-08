@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
+from pathlib import PurePosixPath
 from types import MappingProxyType
 from typing import Annotated, Literal
 
@@ -34,6 +35,10 @@ PullRequestRef = Annotated[
     StringConstraints(pattern=r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[1-9][0-9]*$"),
 ]
 FindingId = Annotated[str, StringConstraints(pattern=r"^AGR-[0-9]{4}-[0-9]{3,}$")]
+SemanticFingerprint = Annotated[
+    str,
+    StringConstraints(pattern=r"^semantic:[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*$"),
+]
 
 
 class FrozenModel(BaseModel):
@@ -324,6 +329,18 @@ class AuditCheckStatus(StrEnum):
     FAILURE = "FAILURE"
 
 
+class AuditSeverity(StrEnum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class AuditConfidence(StrEnum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
 class AuditObservation(FrozenModel):
     fingerprint: NonEmpty
     status: AuditCheckStatus
@@ -331,12 +348,64 @@ class AuditObservation(FrozenModel):
     reference: str | None = None
 
 
+class AuditCodeEvidence(FrozenModel):
+    path: NonEmpty
+    line: PositiveInt | None
+    symbol: str | None
+    behavior: NonEmpty
+
+    @field_validator("path")
+    @classmethod
+    def require_repository_relative_path(cls, value: str) -> str:
+        path = PurePosixPath(value)
+        if (
+            not path.parts
+            or path.is_absolute()
+            or ".." in path.parts
+            or path.parts[0] == ".audit"
+        ):
+            raise ValueError("path must be relative to the audited repository")
+        return value
+
+
+class AuditSemanticFinding(FrozenModel):
+    fingerprint: SemanticFingerprint
+    title: NonEmpty
+    description: NonEmpty
+    severity: AuditSeverity
+    confidence: AuditConfidence
+    canonical: AuditCodeEvidence
+    target: AuditCodeEvidence
+    spec_reference: str | None
+    suggested_test: NonEmpty
+
+
+class AuditSemanticResult(FrozenModel):
+    schema_version: Literal[1]
+    target: TargetName
+    canonical_sha: Sha
+    target_sha: Sha
+    summary: NonEmpty
+    findings: tuple[AuditSemanticFinding, ...]
+
+    @model_validator(mode="after")
+    def require_unique_findings(self) -> AuditSemanticResult:
+        fingerprints = [finding.fingerprint for finding in self.findings]
+        if len(fingerprints) != len(set(fingerprints)):
+            raise ValueError("semantic finding fingerprints must be unique")
+        return self
+
+
 class AuditSnapshot(FrozenModel):
-    target: NonEmpty
+    target: TargetName
     repo: RepoName
     sha: Sha
     capabilities: frozenset[NonEmpty]
     observations: tuple[AuditObservation, ...]
+    semantic_reviewed: bool = False
+    semantic_summary: NonEmpty | None = None
+    semantic_findings: tuple[AuditSemanticFinding, ...] = ()
+    semantic_error: NonEmpty | None = None
     errors: tuple[NonEmpty, ...] = ()
 
     @model_validator(mode="after")
@@ -344,6 +413,17 @@ class AuditSnapshot(FrozenModel):
         fingerprints = [item.fingerprint for item in self.observations]
         if len(fingerprints) != len(set(fingerprints)):
             raise ValueError("audit observation fingerprints must be unique")
+        semantic_fingerprints = [
+            finding.fingerprint for finding in self.semantic_findings
+        ]
+        if len(semantic_fingerprints) != len(set(semantic_fingerprints)):
+            raise ValueError("semantic finding fingerprints must be unique")
+        if self.semantic_reviewed != (self.semantic_summary is not None):
+            raise ValueError("completed semantic review requires a summary")
+        if self.semantic_findings and not self.semantic_reviewed:
+            raise ValueError("semantic findings require a completed review")
+        if self.semantic_reviewed and self.semantic_error is not None:
+            raise ValueError("completed semantic review cannot contain an error")
         return self
 
 
@@ -375,6 +455,11 @@ class AuditRegistry(FrozenModel):
         return self
 
 
+class AuditSemanticEvidence(FrozenModel):
+    target: TargetName
+    finding: AuditSemanticFinding
+
+
 class AuditFinding(FrozenModel):
     id: FindingId
     fingerprint: NonEmpty
@@ -383,6 +468,9 @@ class AuditFinding(FrozenModel):
     affected: tuple[NonEmpty, ...] = Field(min_length=1)
     clean: tuple[NonEmpty, ...] = ()
     likely_origin: NonEmpty
+    severity: AuditSeverity | None = None
+    confidence: AuditConfidence | None = None
+    semantic_evidence: tuple[AuditSemanticEvidence, ...] = ()
 
 
 class AuditReport(FrozenModel):

@@ -5,10 +5,7 @@ on:
     - cron: "0 9 * * 1"
   workflow_dispatch:
 
-permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+permissions: {}
 
 concurrency:
   group: agricola-control-plane
@@ -17,8 +14,13 @@ concurrency:
 jobs:
   prepare:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       canonical-repo: ${{ steps.matrix.outputs.canonical-repo }}
+      canonical-sha: ${{ steps.matrix.outputs.canonical-sha }}
+      spec-repo: ${{ steps.matrix.outputs.spec-repo }}
+      spec-sha: ${{ steps.matrix.outputs.spec-sha }}
       matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -33,13 +35,26 @@ jobs:
         run: |
           pip install .
           matrix="$(agricola audit-matrix | jq -c .)"
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-          echo "canonical-repo=$(python -c 'from agricola.manifest import load_manifest; print(load_manifest().canonical.repo)')" >> "$GITHUB_OUTPUT"
+          canonical_repo="$(python -c 'from agricola.manifest import load_manifest; print(load_manifest().canonical.repo)')"
+          spec_repo="$(python -c 'from agricola.manifest import load_manifest; print(load_manifest().spec.repo)')"
+          canonical_sha="$(git ls-remote "https://github.com/${canonical_repo}.git" HEAD | cut -f1)"
+          spec_sha="$(git ls-remote "https://github.com/${spec_repo}.git" HEAD | cut -f1)"
+          test -n "$canonical_sha"
+          test -n "$spec_sha"
+          {
+            echo "matrix=$matrix"
+            echo "canonical-repo=$canonical_repo"
+            echo "canonical-sha=$canonical_sha"
+            echo "spec-repo=$spec_repo"
+            echo "spec-sha=$spec_sha"
+          } >> "$GITHUB_OUTPUT"
 
   canonical:
     name: audit (typescript reference)
     needs: prepare
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout audit control plane
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -48,6 +63,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ needs.prepare.outputs.canonical-repo }}
+          ref: ${{ needs.prepare.outputs.canonical-sha }}
           path: .audit/sdk
           fetch-depth: 1
           persist-credentials: false
@@ -111,6 +127,8 @@ jobs:
     name: audit (${{ matrix.target }})
     needs: prepare
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
@@ -123,6 +141,24 @@ jobs:
         with:
           repository: ${{ matrix.repo }}
           path: .audit/sdk
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout canonical SDK head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ needs.prepare.outputs.canonical-repo }}
+          ref: ${{ needs.prepare.outputs.canonical-sha }}
+          path: .audit/canonical
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout specification head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ needs.prepare.outputs.spec-repo }}
+          ref: ${{ needs.prepare.outputs.spec-sha }}
+          path: .audit/spec
           fetch-depth: 1
           persist-credentials: false
 
@@ -154,20 +190,56 @@ jobs:
           uv run --locked --project conformance python conformance/scripts/vector_runner.py \
             --adapter "${{ matrix.target }}" \
             --output json \
-            > "$RUNNER_TEMP/target-results.json"
+            > .audit/vector-results.json
           status=$?
           set -e
           echo "${{ matrix.target }} vector runner exited $status"
 
+      - name: Prepare semantic review
+        run: |
+          jq -n \
+            --arg target "${{ matrix.target }}" \
+            --arg canonical_repo "${{ needs.prepare.outputs.canonical-repo }}" \
+            --arg canonical_sha "$(git -C .audit/canonical rev-parse HEAD)" \
+            --arg target_repo "${{ matrix.repo }}" \
+            --arg target_sha "$(git -C .audit/sdk rev-parse HEAD)" \
+            '{target: $target, canonical_repo: $canonical_repo, canonical_sha: $canonical_sha, target_repo: $target_repo, target_sha: $target_sha}' \
+            > .audit/context.json
+          agricola audit-semantic-schema > .audit/semantic-output.schema.json
+
+      - name: Compare SDK implementation to canonical mppx
+        id: semantic
+        continue-on-error: true
+        uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .github/agricola/audit.md
+          output-file: .audit/semantic-result.json
+          output-schema-file: .audit/semantic-output.schema.json
+          permission-profile: ":read-only"
+          safety-strategy: drop-sudo
+          codex-args: '["--ephemeral"]'
+
       - name: Build SDK snapshot
+        env:
+          SEMANTIC_OUTCOME: ${{ steps.semantic.outcome }}
         run: |
           mkdir -p "$RUNNER_TEMP/snapshots"
+          semantic_args=(
+            --semantic-error
+            "${{ matrix.target }}: semantic review action ${SEMANTIC_OUTCOME}"
+          )
+          if [ "$SEMANTIC_OUTCOME" = success ] && [ -s .audit/semantic-result.json ]; then
+            semantic_args=(--semantic-results .audit/semantic-result.json)
+          fi
           agricola audit-snapshot \
             --target "${{ matrix.target }}" \
             --repo "${{ matrix.repo }}" \
             --sha "$(git -C .audit/sdk rev-parse HEAD)" \
+            --canonical-sha "$(git -C .audit/canonical rev-parse HEAD)" \
             --adapter-manifest "conformance/adapters/${{ matrix.target }}/adapter.json" \
-            --results "$RUNNER_TEMP/target-results.json" \
+            --results .audit/vector-results.json \
+            "${semantic_args[@]}" \
             > "$RUNNER_TEMP/snapshots/${{ matrix.target }}.json"
 
       - name: Upload SDK snapshot
@@ -182,6 +254,10 @@ jobs:
     needs: [prepare, canonical, target]
     if: always() && needs.prepare.result == 'success'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
     env:
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       STATE_BRANCH: agricola/state
