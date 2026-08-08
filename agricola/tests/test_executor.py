@@ -65,14 +65,21 @@ class ExecutorTests(unittest.TestCase):
         self.assertIn("## Summary", body)
         self.assertIn("## Key design considerations", body)
         self.assertIn("agricola:source=wevm/mppx#412 target=go", body)
+        self.assertIn("Propagate **Add refunds**", body)
+        self.assertIn("Agricola ticket #207", body)
+        self.assertIn("wevm/mppx@abc1234567", body)
+        self.assertIn("tempoxyz/mpp-go@def4567890", body)
         self.assertNotIn("## Testing", body)
 
     def test_renders_audit_finding_pr_metadata(self) -> None:
         body = pull_request_body(audit_request())
 
         self.assertIn("agricola:audit-finding=AGR-2026-022 target=go", body)
-        self.assertIn("Resolve [AGR-2026-022]", body)
-        self.assertIn("tracking issue #97", body)
+        self.assertIn("fix: select a supported challenge intent", body)
+        self.assertIn("semantic:challenge/select-intent", body)
+        self.assertIn("Agricola ticket #97", body)
+        self.assertIn("wevm/mppx@abc1234567", body)
+        self.assertIn("tempoxyz/mpp-go@def4567890", body)
 
     @patch("agricola.executor.subprocess.run")
     def test_runs_manifest_commands_in_order(self, run) -> None:

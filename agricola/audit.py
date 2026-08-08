@@ -735,11 +735,11 @@ def _finding_command_lines(affected: Iterable[str], manifest: Manifest) -> list[
     if enabled:
         rows.extend(
             [
-                '| `fix [sdk...] ["instruction"]` | Opens fixes for affected SDKs; for a recorded PR, ingests unresolved review feedback and failed CI, applies the quoted instruction, verifies, and updates that PR. | `/agricola fix "address the review comments"` |',
+                '| `fix [sdk...] ["instruction"]` | Opens fixes for affected SDKs; for a recorded PR, ingests unresolved review feedback and failed CI, applies the quoted instruction, verifies, and updates that PR. | `/ag fix "address the review comments"` |',
             ]
         )
     rows.append(
-        "| `status` | Reports the current state of linked remediation pull requests. | `/agricola status` |"
+        "| `status` | Reports the current state of linked remediation pull requests. | `/ag status` |"
     )
     return rows
 

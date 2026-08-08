@@ -151,7 +151,7 @@ def quick_fix_lines() -> list[str]:
         "Use GitHub's copy button, then post this command as a comment:",
         "",
         "```text",
-        "/agricola fix",
+        "/ag fix",
         "```",
     ]
 
@@ -320,14 +320,14 @@ def build_tracking_issue(
             "",
             *quick_fix_lines(),
             "",
-            "Post one of these as an issue comment. `/agricola` must be the first token on the line.",
+            "Post one of these as an issue comment. `/ag` must be the first token on the line.",
             "",
             "| Command | What it does | Example |",
             "| --- | --- | --- |",
-            "| `plan` | Rebuilds this impact plan from the immutable merge-time snapshot. | `/agricola plan` |",
-            '| `fix [sdk...] ["instruction"]` | Queues named PR-enabled SDKs, or every PR-enabled SDK when omitted. For a recorded PR, a quoted instruction revises it using review feedback and failed CI. | `/agricola fix python "address the review comments"` |',
-            "| `status` | Reports the current state of recorded downstream PRs. | `/agricola status` |",
-            '| `skip <sdk> reason="..."` | Records why one SDK should not receive this change. | `/agricola skip go reason="Not applicable to this transport"` |',
+            "| `plan` | Rebuilds this impact plan from the immutable merge-time snapshot. | `/ag plan` |",
+            '| `fix [sdk...] ["instruction"]` | Queues named PR-enabled SDKs, or every PR-enabled SDK when omitted. For a recorded PR, a quoted instruction revises it using review feedback and failed CI. | `/ag fix python "address the review comments"` |',
+            "| `status` | Reports the current state of recorded downstream PRs. | `/ag status` |",
+            '| `skip <sdk> reason="..."` | Records why one SDK should not receive this change. | `/ag skip go reason="Not applicable to this transport"` |',
             "",
             "Generated changes remain draft until a maintainer reviews and merges them.",
         ]

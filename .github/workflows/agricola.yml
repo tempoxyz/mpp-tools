@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: write
-  issues: write
   pull-requests: write
 
 concurrency:
@@ -18,7 +17,7 @@ concurrency:
 
 jobs:
   run:
-    if: github.event_name != 'issue_comment' || contains(github.event.comment.body, '/agricola') || contains(github.event.comment.body, '@agricola')
+    if: github.event_name != 'issue_comment' || contains(github.event.comment.body, '/ag')
     runs-on: ubuntu-latest
     outputs:
       has-propagations: ${{ steps.process.outputs.has-propagations }}
@@ -26,7 +25,6 @@ jobs:
     env:
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       STATE_BRANCH: agricola/state
-      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -48,6 +46,16 @@ jobs:
         run: |
           pip install .
           agricola validate
+
+      - name: Create control repository token
+        id: control-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ vars.AGRICOLA_APP_ID }}
+          private-key: ${{ secrets.AGRICOLA_APP_PRIVATE_KEY }}
+          owner: tempoxyz
+          repositories: mpp-tools
+          permission-issues: write
 
       - name: Create canonical repository token
         id: canonical-token
@@ -78,6 +86,7 @@ jobs:
       - name: Process event
         id: process
         env:
+          GH_TOKEN: ${{ steps.control-token.outputs.token }}
           AGRICOLA_CANONICAL_TOKEN: ${{ steps.canonical-token.outputs.token }}
           AGRICOLA_SDK_TOKEN: ${{ steps.downstream-read-token.outputs.token }}
         run: |
@@ -107,6 +116,8 @@ jobs:
       - name: Acknowledge accepted command
         if: github.event_name == 'issue_comment' && steps.process.outputs.accepted-command == 'true'
         continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.control-token.outputs.token }}
         run: |
           gh api --method POST \
             "repos/$GITHUB_REPOSITORY/issues/comments/${{ github.event.comment.id }}/reactions" \
@@ -142,6 +153,8 @@ jobs:
 
       - name: Deliver command reply
         if: github.event_name == 'issue_comment'
+        env:
+          GH_TOKEN: ${{ steps.control-token.outputs.token }}
         run: |
           if [ -f "$RUNNER_TEMP/agricola-issue-update.json" ]; then
             agricola deliver-issue-update "$RUNNER_TEMP/agricola-issue-update.json"
@@ -590,7 +603,6 @@ jobs:
     env:
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       STATE_BRANCH: agricola/state
-      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -654,7 +666,19 @@ jobs:
           add-paths: ledger
           delete-branch: true
 
+      - name: Create control repository token
+        id: control-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ vars.AGRICOLA_APP_ID }}
+          private-key: ${{ secrets.AGRICOLA_APP_PRIVATE_KEY }}
+          owner: tempoxyz
+          repositories: mpp-tools
+          permission-issues: write
+
       - name: Update tracking issues and deliver publication replies
+        env:
+          GH_TOKEN: ${{ steps.control-token.outputs.token }}
         run: |
           for update in "$RUNNER_TEMP"/issue-updates/*.json; do
             [ -e "$update" ] || continue

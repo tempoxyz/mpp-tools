@@ -1,6 +1,6 @@
 # Agricola Actions setup
 
-Agricola propagation runs from [`.github/workflows/agricola.yml`](../.github/workflows/agricola.yml), and the head-to-head SDK audit runs from [`.github/workflows/agricola-audit.yml`](../.github/workflows/agricola-audit.yml). The repository-scoped `GITHUB_TOKEN` manages control-plane issues and state; a GitHub App supplies short-lived cross-repository tokens; the official OpenAI action generates downstream patches and performs read-only semantic audits.
+Agricola propagation runs from [`.github/workflows/agricola.yml`](../.github/workflows/agricola.yml), and the head-to-head SDK audit runs from [`.github/workflows/agricola-audit.yml`](../.github/workflows/agricola-audit.yml). The repository-scoped `GITHUB_TOKEN` manages state, while a GitHub App supplies short-lived tokens for control-plane issue activity and cross-repository access. The official OpenAI action generates downstream patches and performs read-only semantic audits.
 
 Both semantic analysis and downstream generation explicitly use `gpt-5.6-sol`. Downstream verification installs the pinned `uv` version before running manifest commands such as `uv sync --all-extras --dev` and `uv run pytest`.
 
@@ -10,7 +10,7 @@ Both semantic analysis and downstream generation explicitly use `gpt-5.6-sol`. D
 | --- | --- |
 | Ten-minute schedule | Poll merged `wevm/mppx` pull requests. GitHub may delay scheduled jobs. |
 | `workflow_dispatch` | Run the poller manually. |
-| New `issue_comment` containing `/agricola` | Handle a tracking-issue command. `/agricola` must be the first token on a line. |
+| New `issue_comment` containing `/ag` | Handle a tracking-issue command. `/ag` must be the first token on a line; `/agricola` remains an alias. |
 
 The audit workflow runs every Monday at 09:00 UTC and supports `workflow_dispatch`. For each manifest SDK, it checks out the exact current heads of that repository and `mppx`, runs an open-ended read-only Codex comparison, and requires schema-validated findings with linked code evidence. Shared vectors and conformance-adapter capabilities remain deterministic supporting signals. Agricola clusters matching `semantic:`, `vector:`, and `capability:` fingerprints, maintains one issue per finding, and updates a roll-up index. The audit itself is read-only outside `mpp-tools`; downstream publication requires a maintainer's explicit command on a finding issue.
 
@@ -29,12 +29,12 @@ Grant repository permissions:
 | Permission | Access | Used for |
 | --- | --- | --- |
 | Contents | Read and write | Read canonical commits; create downstream branches. |
-| Issues | Read and write | Read canonical label events and trusted PR comments; post revision summaries. |
+| Issues | Read and write | Read canonical label events and trusted PR comments; create audit issues and post App-attributed replies and revision summaries. |
 | Pull requests | Read and write | Read canonical metadata; create downstream draft pull requests. |
 | Actions | Read | Read failed downstream GitHub Actions logs during revision. |
 | Checks | Read | Read downstream check summaries and annotations during revision. |
 
-The workflow requests only read access when minting the `wevm/mppx` token. For `tempoxyz` targets it mints separate read tokens for recorded PR state and revision feedback, then requests contents, issues, and pull-request write access only after verification. Adding a new target requires updating both `sdks.yaml` and the downstream repository list in the workflow.
+The workflow requests only read access when minting the `wevm/mppx` token. It mints an issues-write token scoped to `mpp-tools` so issue activity uses the App identity and icon. For `tempoxyz` targets it mints separate read tokens for recorded PR state and revision feedback, then requests contents, issues, and pull-request write access only after verification. Adding a new target requires updating both `sdks.yaml` and the downstream repository list in the workflow. Configure the App's public logo in its GitHub settings to control the displayed avatar.
 
 Configure `tempoxyz/mpp-tools` with:
 
@@ -51,8 +51,9 @@ Do not merge the executor until all three values are present. The poll job mints
 The workflow's top-level permissions allow the control-plane `GITHUB_TOKEN` to:
 
 - write contents for the state branch;
-- create and update tracking issues and replies;
 - maintain the state pull request.
+
+Short-lived GitHub App tokens create and update tracking issues, audit issues, reactions, and replies.
 
 In repository Actions settings, enable workflow write access and allow Actions to create pull requests. No direct default-branch push or branch-rule exception is required.
 
@@ -60,7 +61,7 @@ In repository Actions settings, enable workflow write access and allow Actions t
 
 Propagation is split into credential boundaries:
 
-1. `run` reads canonical state with a read-only App token and persists the cursor/tracking plan with `GITHUB_TOKEN`.
+1. `run` reads canonical state with a read-only App token, uses a control-repository App token for issue activity, and persists ledger state with `GITHUB_TOKEN`.
 2. `generate` checks out the pinned downstream base or exact recorded PR head without persisted credentials. For revisions, a short-lived read token gathers bounded trusted-author review feedback and failed CI before Sol runs. The token is not passed to the generation action. Sol runs the reviewed manifest commands before emitting a patch.
 3. `verify` checks out the same base or PR head, receives only the generated binary patch, and independently repeats the reviewed manifest commands in a separate, secretless job. An explicit initial-generation no-op skips verification.
 4. `publish` checks out the same base or PR head only after verification, mints a short-lived target token, applies the verified patch, and creates or updates the stable draft pull request. Revisions fast-forward the exact recorded head and post a concise change summary. No-op targets never request write credentials.
@@ -76,10 +77,10 @@ Downstream code never runs in a job containing downstream write credentials. Gen
 4. Add `AGRICOLA_APP_ID`, `AGRICOLA_APP_PRIVATE_KEY`, and `OPENAI_API_KEY` to `mpp-tools`.
 5. Enable workflow write access and pull-request creation.
 6. Run the workflow manually and confirm the poll succeeds and the state pull request contains `ledger/cursor.json`.
-7. On a tracking issue, run `/agricola fix <target>` and confirm the eyes reaction, generation, verification, a downstream draft pull request, and a recorded ledger decision.
+7. On a tracking issue, run `/ag fix <target>` and confirm the eyes reaction, generation, verification, a downstream draft pull request, and a recorded ledger decision.
 8. Run the SDK audit manually and confirm the `[Agricola] SDK drift audit` index links one issue per finding and records every exact audited commit.
-9. On an affected PR-enabled finding, copy and post `/agricola fix` and confirm the finding links the resulting draft remediation pull request.
-10. Add a review comment or failing check to that draft, post `/agricola fix "address the review and CI"` on its tracking issue, and confirm the same PR receives an incremental commit and summary comment.
+9. On an affected PR-enabled finding, copy and post `/ag fix` and confirm the finding links the resulting draft remediation pull request.
+10. Add a review comment or failing check to that draft, post `/ag fix "address the review and CI"` on its tracking issue, and confirm the same PR receives an incremental commit and summary comment.
 
 The initial cursor starts fifteen minutes in the past. Because each poll replays a one-hour overlap, the first API read covers approximately the previous 75 minutes. To backfill a different window, update the state pull request with a reviewed `ledger/cursor.json` containing a timezone-aware ISO 8601 `merged_at`; polling begins one hour before it.
 
@@ -91,7 +92,7 @@ The maintainer allowlist lives in [`sdks.yaml`](../sdks.yaml). Agricola reconstr
 
 Commands use deferred issue updates and replies so acknowledgements follow their corresponding state change. Canonical-change tables reflect the durable decision ledger. Audit-finding tables retain linked remediation pull requests across later audit runs. Skip decisions use the comment ID and line number. Canonical propagation branches use `agricola/<canonical-repo>-<pr-number>`; audit remediation branches use `agricola/<finding-id>`. Replaying a poll, comment, job, or state overlap therefore reuses existing work instead of opening duplicate pull requests.
 
-On an audit-finding issue, `/agricola fix` generates, verifies, and opens draft fixes for all affected PR-enabled SDKs. Optional target names narrow the request. Once a PR is recorded, `/agricola fix "instruction"` ingests unresolved owner/member/collaborator review feedback plus failed checks and Actions logs, revises the exact current head, verifies it, fast-forwards the same branch, and posts a summary. `/agricola status` reports linked remediation pull requests. Every actionable finding includes a copy-ready quick command, and valid maintainer commands receive an eyes reaction when processing begins. The issue embeds the exact audited canonical and target commits used by initial generation; `plan` and `skip` are not accepted on finding issues. The former `@agricola` prefix and `propagate` spelling remain compatibility aliases.
+On an audit-finding issue, `/ag fix` generates, verifies, and opens draft fixes for all affected PR-enabled SDKs. Optional target names narrow the request. Once a PR is recorded, `/ag fix "instruction"` ingests unresolved owner/member/collaborator review feedback plus failed checks and Actions logs, revises the exact current head, verifies it, fast-forwards the same branch, and posts a summary. `/ag status` reports linked remediation pull requests. Every actionable finding includes a copy-ready quick command, and valid maintainer commands receive an eyes reaction when processing begins. `/agricola` and the `propagate` spelling remain compatibility aliases.
 
 ## Manual poll
 
