@@ -10,7 +10,7 @@ Agricola runs from [`.github/workflows/agricola.yml`](../.github/workflows/agric
 | `workflow_dispatch` | Run the poller manually. |
 | New `issue_comment` containing `@agricola` | Validate and handle a tracking-issue command. The parser still requires `@agricola` as the first token on a line. |
 
-One concurrency group serializes all triggers. Runs execute trusted code from the repository's current default branch rather than assuming `main`. Durable ledger data is restored from `agricola/state`, and the changelogs-style PR updater keeps one open state pull request current. Code from the state branch is never executed.
+One concurrency group serializes all triggers. Runs execute trusted code from the repository's current default branch rather than assuming `main`. Durable ledger data is restored from `agricola/state`, and the changelogs-style PR updater keeps one open state pull request current. The state PR is an automation-owned materialized view: leave it open and do not merge or edit it. Code from the state branch is never executed.
 
 ## Required permissions
 
@@ -34,6 +34,8 @@ The canonical repository must be publicly readable by this token. Private or cro
 6. Run `agricola validate` locally or inspect the workflow's validation step.
 
 The initial cursor starts fifteen minutes in the past. Because every poll also replays a one-hour overlap, the first API read covers approximately the previous 75 minutes. To intentionally backfill a different window, update the state PR with a reviewed `ledger/cursor.json` containing a timezone-aware ISO 8601 `merged_at` timestamp; polling begins one hour before that value.
+
+Ledger-only state PR updates are ignored by the repository's CI and SDK conformance workflow triggers. Agricola implementation changes still run the dedicated Agricola tests, while mixed or conformance-affecting changes retain their normal conformance scope.
 
 ## Labels and authorization
 

@@ -60,9 +60,12 @@ jobs:
           token: ${{ github.token }}
           base: ${{ env.DEFAULT_BRANCH }}
           branch: ${{ env.STATE_BRANCH }}
-          commit-message: "chore: update Agricola state"
-          title: "chore: update Agricola state"
+          commit-message: "chore(agricola): update state"
+          title: "chore(agricola): update state"
           body: |
+            > [!IMPORTANT]
+            > This pull request is maintained by automation. Leave it open; do not merge, close, or edit it manually.
+
             ## Motivation
 
             Persist Agricola's durable cursor and decision ledger through the repository's required pull-request path.
