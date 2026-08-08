@@ -2,6 +2,8 @@
 
 Agricola propagation runs from [`.github/workflows/agricola.yml`](../.github/workflows/agricola.yml), and the head-to-head SDK audit runs from [`.github/workflows/agricola-audit.yml`](../.github/workflows/agricola-audit.yml). The repository-scoped `GITHUB_TOKEN` manages control-plane issues and state; a GitHub App supplies short-lived cross-repository tokens; the official OpenAI action generates downstream patches and performs read-only semantic audits.
 
+Both semantic analysis and downstream generation explicitly use `gpt-5.6-sol`. Downstream verification installs the pinned `uv` version before running manifest commands such as `uv run pytest`.
+
 ## Triggers
 
 | Trigger | Behavior |
