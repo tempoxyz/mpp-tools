@@ -60,9 +60,12 @@ jobs:
           token: ${{ github.token }}
           base: ${{ env.DEFAULT_BRANCH }}
           branch: ${{ env.STATE_BRANCH }}
-          commit-message: "chore: update Agricola state"
-          title: "chore: update Agricola state"
+          commit-message: "chore(agricola): update state"
+          title: "chore(agricola): update state"
           body: |
+            > [!IMPORTANT]
+            > This pull request is maintained by automation. Merge it to checkpoint state on the default branch; do not close or edit it manually.
+
             ## Motivation
 
             Persist Agricola's durable cursor and decision ledger through the repository's required pull-request path.
@@ -77,7 +80,7 @@ jobs:
             - workflow code always executes from the protected default branch
             - this pull request is updated in place as state advances
           add-paths: ledger
-          delete-branch: false
+          delete-branch: true
 
       - name: Deliver command reply
         if: github.event_name == 'issue_comment'

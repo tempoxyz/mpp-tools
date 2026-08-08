@@ -153,7 +153,7 @@ SDK pins live in package-manager manifests and lockfiles where the ecosystem sup
 | Ruby | `mpp-rb` | `adapters/ruby/Gemfile` / `Gemfile.lock` |
 | Java | `com.github.stripe:mpp-java` | `adapters/java/build.gradle` / `gradle.lockfile` |
 
-Dependabot checks all configured package managers daily and opens PRs when updates are available. Every PR runs vector and flow conformance in CI, so dependency bump PRs are gated by the same compatibility suite.
+Dependabot checks all configured package managers daily and opens PRs when updates are available. Pull requests that change conformance or adapter files run the affected vector and flow checks; shared conformance changes run the complete matrix. Agricola-only pull requests skip SDK conformance and run the dedicated Agricola checks instead. Ledger-only state PRs are ignored at the workflow trigger level.
 
 The Java adapter currently pins `mpp-java` to an exact JitPack commit because `mpp-java` does not publish versioned Maven releases yet. Update `adapters/java/build.gradle` manually and run `make update-java` when changing that pin.
 

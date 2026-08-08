@@ -93,7 +93,7 @@ Commands in canonical or downstream repositories require cross-repository event 
 
 ## State and recovery
 
-The poller creates `ledger/cursor.json` on its first run. In GitHub Actions, ledger data is restored from `agricola/state`, and a stable state pull request is updated in place like a changelogs release PR. Executable code always comes from the protected default branch. The initial cursor starts fifteen minutes behind the current time; combined with the one-hour replay overlap, the first API read covers approximately the previous 75 minutes. This prevents both a deployment race and an unbounded historical issue flood. Later polls keep the one-hour overlap and deduplicate against ledger snapshots.
+The poller creates `ledger/cursor.json` on its first run. In GitHub Actions, ledger data is restored from `agricola/state`, and a stable state pull request is updated in place like a changelogs release PR. At most one state PR is open: merge it to checkpoint the ledger on the default branch, and the next state change creates or updates its successor. Do not close or edit state PRs manually. Executable code always comes from the protected default branch. The initial cursor starts fifteen minutes behind the current time; combined with the one-hour replay overlap, the first API read covers approximately the previous 75 minutes. This prevents both a deployment race and an unbounded historical issue flood. Later polls keep the one-hour overlap and deduplicate against ledger snapshots.
 
 Ledger filenames identify the canonical repository and pull request. Entries contain immutable source metadata, the authorized merge-time label snapshot, and discriminated decisions:
 
