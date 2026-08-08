@@ -879,7 +879,12 @@ class VectorRunner:
                         for line in r.error.split("\n"):
                             self.log(f"    {line}")
 
-        if not self.results and not self.version_skips:
+        if not self.results:
+            skip_detail = (
+                f" ({self.version_skips} scenario(s) were version-skipped)"
+                if self.version_skips
+                else ""
+            )
             self._record_result(
                 vector_file="runner",
                 test_type=TestType.BUILD,
@@ -889,7 +894,7 @@ class VectorRunner:
                 description="Runner executes at least one conformance check",
                 expected="at least one conformance check",
                 actual=0,
-                error="No conformance checks were executed",
+                error=f"No conformance checks were executed{skip_detail}",
             )
 
         # Compute summary
