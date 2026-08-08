@@ -11,7 +11,12 @@ from unittest.mock import patch
 
 from agricola.cli import main
 from agricola.ledger import DecisionLedger
-from agricola.models import LabelResolution, PropagationRequest, PropagationResult
+from agricola.models import (
+    LabelResolution,
+    PropagationRequest,
+    PropagationResult,
+    PropagationSkip,
+)
 from agricola.planner import build_tracking_issue
 from agricola.tests.helpers import change, manifest
 from agricola.tests.test_service import FakeGitHub
@@ -129,6 +134,59 @@ class CliTests(unittest.TestCase):
             assert updated_body is not None
             self.assertIn("Skipped — TS-only tooling", updated_body)
             self.assertIn("Recorded skip", client.comments[0][1])
+
+    def test_records_explicit_generation_skip(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            results = root / "results"
+            results.mkdir()
+            ledger = DecisionLedger(root / "ledger")
+            ledger.ensure(change())
+            request = PropagationRequest(
+                source={"repo": "wevm/mppx", "pr": 412, "sha": "abc1234567"},
+                source_title="Change relay key",
+                source_url="https://github.com/wevm/mppx/pull/412",
+                target="go",
+                target_repo="tempoxyz/mpp-go",
+                target_base_sha="def4567890",
+                tracking_issue=207,
+                tracking_issue_url="https://github.com/tempoxyz/mpp-tools/issues/207",
+                by="maintainer",
+                idempotency_key="propagate:mppx#412:go",
+                branch="agricola/mppx-412",
+                verify=("make test",),
+                changelog="keep-a-changelog",
+                plan=build_tracking_issue(
+                    change(),
+                    LabelResolution(("agricola:go",), ("go",)),
+                    manifest(),
+                ),
+            )
+            outcome = PropagationSkip(
+                request=request,
+                reason="relay API is not implemented",
+            )
+            (results / "go.json").write_text(outcome.model_dump_json())
+
+            with redirect_stdout(StringIO()):
+                exit_code = main(
+                    [
+                        "--ledger",
+                        str(root / "ledger"),
+                        "record-propagations",
+                        str(results),
+                        "--reply-directory",
+                        str(root / "replies"),
+                        "--issue-update-directory",
+                        str(root / "updates"),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            entry = ledger.read("wevm/mppx", 412)
+            assert entry is not None
+            self.assertEqual(entry.decisions[0].decision, "skip")
+            self.assertEqual(entry.decisions[0].reason, "relay API is not implemented")
 
 
 if __name__ == "__main__":

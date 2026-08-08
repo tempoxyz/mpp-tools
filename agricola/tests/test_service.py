@@ -7,7 +7,13 @@ from datetime import UTC, datetime
 
 from agricola.github import GitHubError
 from agricola.ledger import CursorStore, DecisionLedger
-from agricola.models import Cursor, LabelAction, LabelEvent, PropagationResult
+from agricola.models import (
+    Cursor,
+    LabelAction,
+    LabelEvent,
+    PropagationResult,
+    PropagationSkip,
+)
 from agricola.service import handle_comment, poll, record_propagations
 from agricola.tests.helpers import change, manifest
 
@@ -338,6 +344,44 @@ class CommentTests(unittest.TestCase):
             self.assertEqual(
                 tuple(request.target for request in result.propagations),
                 ("go", "rust"),
+            )
+
+    def test_records_published_and_skipped_outcomes_together(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeGitHub()
+            ledger = DecisionLedger(directory)
+            queued = handle_comment(
+                client,
+                manifest(),
+                ledger,
+                self.event("@agricola propagate all"),
+            )
+            go, rust = queued.propagations
+
+            changed, replies, updates = record_propagations(
+                ledger,
+                (
+                    PropagationResult(
+                        request=go,
+                        pr="tempoxyz/mpp-go#88",
+                        url="https://github.com/tempoxyz/mpp-go/pull/88",
+                    ),
+                    PropagationSkip(
+                        request=rust,
+                        reason="relay API is not implemented",
+                    ),
+                ),
+            )
+
+            self.assertTrue(changed)
+            self.assertIn("Opened draft PR", replies[0].body)
+            self.assertIn("Skipped `rust`", replies[0].body)
+            self.assertIn("| `rust` | pr | Skipped — relay API", updates[0].body)
+            entry = ledger.read("wevm/mppx", 412)
+            assert entry is not None
+            self.assertEqual(
+                tuple(decision.decision for decision in entry.decisions),
+                ("propagate", "skip"),
             )
 
     def test_duplicate_propagation_commands_queue_target_once(self) -> None:

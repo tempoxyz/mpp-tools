@@ -11,6 +11,8 @@ from .models import (
     DecisionKind,
     LabelResolution,
     Manifest,
+    PropagationOutcome,
+    PropagationResult,
     PullRequestFile,
 )
 
@@ -120,12 +122,27 @@ def _propagation_table(
     return rows
 
 
-def record_propagation_links(body: str, results: Iterable[tuple[str, str, str]]) -> str:
+def record_propagation_outcomes(
+    body: str, outcomes: Iterable[PropagationOutcome]
+) -> str:
     lines = body.splitlines()
-    replacements = {
-        target: _table_row(target, "pr", "Recorded", f"[{pr}]({url})")
-        for target, pr, url in results
-    }
+    replacements = {}
+    for outcome in outcomes:
+        if isinstance(outcome, PropagationResult):
+            replacement = _table_row(
+                outcome.request.target,
+                "pr",
+                "Recorded",
+                f"[{outcome.pr}]({outcome.url})",
+            )
+        else:
+            reason = outcome.reason.replace("|", "\\|")
+            replacement = _table_row(
+                outcome.request.target,
+                "pr",
+                f"Skipped — {reason}",
+            )
+        replacements[outcome.request.target] = replacement
     if _PROPAGATION_TABLE_START not in lines or _PROPAGATION_TABLE_END not in lines:
         return body
     for index, line in enumerate(lines):

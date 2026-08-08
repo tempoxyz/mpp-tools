@@ -55,6 +55,11 @@ class DecisionKind(StrEnum):
     SKIP = "skip"
 
 
+class PropagationOutcomeKind(StrEnum):
+    PUBLISHED = "published"
+    SKIPPED = "skipped"
+
+
 class LabelAction(StrEnum):
     LABELED = "labeled"
     UNLABELED = "unlabeled"
@@ -261,6 +266,9 @@ class PropagationRequest(FrozenModel):
 
 
 class PropagationResult(FrozenModel):
+    outcome: Literal[PropagationOutcomeKind.PUBLISHED] = (
+        PropagationOutcomeKind.PUBLISHED
+    )
     request: PropagationRequest
     pr: PullRequestRef
     url: NonEmpty
@@ -279,6 +287,26 @@ class PropagationResult(FrozenModel):
         if repository != self.request.target_repo:
             raise ValueError(f"pr must belong to {self.request.target_repo}")
         return self
+
+
+class PropagationSkip(FrozenModel):
+    outcome: Literal[PropagationOutcomeKind.SKIPPED] = PropagationOutcomeKind.SKIPPED
+    request: PropagationRequest
+    reason: NonEmpty
+    at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @field_validator("at")
+    @classmethod
+    def require_aware_timestamp(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("timestamp must include a timezone")
+        return value.astimezone(UTC)
+
+
+PropagationOutcome = Annotated[
+    PropagationResult | PropagationSkip,
+    Field(discriminator="outcome"),
+]
 
 
 class PendingReply(FrozenModel):
