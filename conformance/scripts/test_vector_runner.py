@@ -112,10 +112,15 @@ class VectorRunnerHelperTest(unittest.TestCase):
 
     def test_run_vector_file_skips_nonmatching_sdk_version(self) -> None:
         vector = {
+            "version": "2.0.0",
+            "description": "SDK version filtering fixture",
+            "spec_ref": "test",
             "commands": {"parse": "parse-www-authenticate"},
             "scenarios": [
                 {
                     "name": "future_rule",
+                    "description": "Only applies to a future SDK version",
+                    "tags": ["version"],
                     "wire": "unused",
                     "tests": {"parse": True},
                     "sdkVersions": {"python": ">0.9.1"},
@@ -206,10 +211,13 @@ class VectorRunnerJsonArtifactTest(unittest.TestCase):
                 self.runner.run_vector_file(self.adapter, vector_path)
             return stdout.getvalue()
 
-    def test_vector_without_commands_does_not_write_to_stdout(self) -> None:
-        printed = self.run_vector_file_capturing_stdout(json.dumps({"scenarios": []}))
+    def test_invalid_vector_does_not_write_to_stdout(self) -> None:
+        stdout = io.StringIO()
+        with self.assertRaisesRegex(ValueError, "failed schema validation"):
+            with contextlib.redirect_stdout(stdout):
+                self.run_vector_file_capturing_stdout(json.dumps({"scenarios": []}))
 
-        self.assertEqual(printed, "")
+        self.assertEqual(stdout.getvalue(), "")
 
     def test_missing_vector_file_does_not_write_to_stdout(self) -> None:
         stdout = io.StringIO()
@@ -249,10 +257,15 @@ class VectorRunnerJsonArtifactTest(unittest.TestCase):
 
         fake_adapter = AdapterConfig(name="fake", command=["true"], capabilities=[])
         vector = {
+            "version": "2.0.0",
+            "description": "SDK version filtering fixture",
+            "spec_ref": "test",
             "commands": {"parse": "parse-www-authenticate"},
             "scenarios": [
                 {
                     "name": "future_rule",
+                    "description": "Only applies to a future SDK version",
+                    "tags": ["version"],
                     "wire": "unused",
                     "tests": {"parse": True},
                     "sdkVersions": {"fake": ">0.9.1"},
