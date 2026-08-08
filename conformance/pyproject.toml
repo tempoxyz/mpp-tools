@@ -4,7 +4,6 @@ version = "0.0.1"
 description = "Cross-SDK MPP conformance runner"
 requires-python = ">=3.12"
 dependencies = [
-    "deepdiff>=8.6.1,<9",
     "jsonschema>=4.26.0,<5",
     "semantic-version>=2.10.0,<3",
 ]
