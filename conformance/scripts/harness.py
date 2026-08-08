@@ -42,7 +42,71 @@ def load_json(path: Path) -> Any:
 def load_vector(path: Path) -> dict[str, Any]:
     vector = load_json(path)
     validate_value(vector, "vector.schema.json", str(path))
+    validate_vector_scenarios(vector, str(path))
     return vector
+
+
+def validate_vector_scenarios(vector: dict[str, Any], label: str) -> None:
+    commands = vector["commands"]
+    parse_command = commands.get("parse")
+    format_command = commands.get("format")
+    generate_command = commands.get("generate")
+    operation = commands.get("operation")
+    is_base64url = bool(
+        (parse_command and parse_command.startswith("base64url-"))
+        or (format_command and format_command.startswith("base64url-"))
+    )
+    input_field = "decoded" if is_base64url else "object"
+    wire_field = "encoded" if is_base64url else "wire"
+
+    for index, scenario in enumerate(vector["scenarios"]):
+        scenario_label = f"{label} scenario {index} ({scenario['name']})"
+        if operation:
+            continue
+
+        tests = scenario.get("tests", {})
+        if generate_command:
+            unsupported = set(tests) - {"generate"}
+            if unsupported:
+                names = ", ".join(sorted(unsupported))
+                raise ValueError(f"{scenario_label} has unsupported tests: {names}")
+            if "input" not in scenario:
+                raise ValueError(f"{scenario_label} requires input")
+            if "expected" not in scenario and "generate" not in tests:
+                raise ValueError(f"{scenario_label} requires expected or tests.generate")
+            continue
+
+        supported_tests = set()
+        if parse_command:
+            supported_tests.add("parse")
+        if format_command:
+            supported_tests.add("format")
+        if parse_command and format_command:
+            supported_tests.add("roundtrip")
+        selected_tests = set(tests)
+        unsupported = selected_tests - supported_tests
+        if unsupported:
+            names = ", ".join(sorted(unsupported))
+            raise ValueError(f"{scenario_label} has unsupported tests: {names}")
+        if not selected_tests:
+            raise ValueError(f"{scenario_label} has no tests supported by its commands")
+
+        if "parse" in tests:
+            if wire_field not in scenario:
+                raise ValueError(f"{scenario_label} parse test requires {wire_field}")
+            if tests["parse"] is True and input_field not in scenario:
+                raise ValueError(
+                    f"{scenario_label} successful parse test requires {input_field}"
+                )
+        if "format" in tests:
+            if input_field not in scenario:
+                raise ValueError(f"{scenario_label} format test requires {input_field}")
+            if tests["format"] is True and wire_field not in scenario:
+                raise ValueError(
+                    f"{scenario_label} successful format test requires {wire_field}"
+                )
+        if "roundtrip" in tests and input_field not in scenario:
+            raise ValueError(f"{scenario_label} roundtrip test requires {input_field}")
 
 
 def load_flow_cases(path: Path = FLOW_CASES_PATH) -> list[dict[str, Any]]:

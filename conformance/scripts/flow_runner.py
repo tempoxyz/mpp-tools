@@ -713,8 +713,22 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    load_flow_cases()
-    adapters = discover_adapters()
+    try:
+        load_flow_cases()
+        adapters = discover_adapters()
+    except Exception as exc:
+        if args.output != "json":
+            raise
+        results = [
+            RunResult(
+                adapter=args.adapter,
+                name="data-validation",
+                passed=False,
+                error=str(exc),
+            )
+        ]
+        output_json(results, passed=0, failed=1, total=1)
+        return 1
     base_url = f"http://127.0.0.1:{args.port}"
     env = os.environ.copy()
     env["MPP_FLOW_PORT"] = str(args.port)

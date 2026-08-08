@@ -17,6 +17,7 @@ from harness import (
     load_json,
     load_vector,
     validate_value,
+    validate_vector_scenarios,
     write_flow_results,
 )
 
@@ -96,8 +97,46 @@ class RepositoryDataSchemaTests(unittest.TestCase):
         vector = load_json(VECTORS_DIR / "authorization.json")
         del vector["scenarios"][0]["object"]
 
-        with self.assertRaisesRegex(ValueError, "is not valid under any of the given schemas"):
-            validate_value(vector, "vector.schema.json", "vector")
+        with self.assertRaisesRegex(ValueError, "successful parse test requires object"):
+            validate_vector_scenarios(vector, "vector")
+
+    def test_roundtrip_requires_only_input_object(self) -> None:
+        vector = load_json(VECTORS_DIR / "authorization.json")
+        scenario = vector["scenarios"][0]
+        scenario["tests"] = {"roundtrip": True}
+        del scenario["wire"]
+
+        validate_vector_scenarios(vector, "vector")
+
+    def test_parse_format_rejects_unsupported_generate_test(self) -> None:
+        vector = load_json(VECTORS_DIR / "authorization.json")
+        vector["scenarios"][0]["tests"] = {"generate": True}
+
+        with self.assertRaisesRegex(ValueError, "unsupported tests: generate"):
+            validate_vector_scenarios(vector, "vector")
+
+    def test_header_parse_requires_wire_not_encoded(self) -> None:
+        vector = load_json(VECTORS_DIR / "authorization.json")
+        scenario = vector["scenarios"][0]
+        scenario["encoded"] = scenario.pop("wire")
+
+        with self.assertRaisesRegex(ValueError, "parse test requires wire"):
+            validate_vector_scenarios(vector, "vector")
+
+    def test_base64url_parse_requires_encoded_not_wire(self) -> None:
+        vector = load_json(VECTORS_DIR / "base64url.json")
+        scenario = vector["scenarios"][0]
+        scenario["wire"] = scenario.pop("encoded")
+
+        with self.assertRaisesRegex(ValueError, "parse test requires encoded"):
+            validate_vector_scenarios(vector, "vector")
+
+    def test_client_fields_require_client_flow(self) -> None:
+        document = load_json(FLOW_CASES_PATH)
+        document["cases"][0]["source"] = "test-source"
+
+        with self.assertRaisesRegex(ValueError, "'client_flow' is a required property"):
+            validate_value(document, "flow-cases.schema.json", "flows")
 
     def test_flow_result_rejects_invalid_date_time(self) -> None:
         document = {

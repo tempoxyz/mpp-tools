@@ -93,7 +93,22 @@
         "server_only": { "type": "boolean" },
         "skip_authorization": { "type": "boolean" },
         "verify_body_preserved": { "type": "boolean" }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "anyOf": [
+              { "required": ["headers"] },
+              { "required": ["source"] },
+              { "required": ["expect_response_name"] }
+            ]
+          },
+          "then": {
+            "required": ["client_flow"],
+            "properties": { "client_flow": { "const": true } }
+          }
+        }
+      ]
     }
   }
 }
