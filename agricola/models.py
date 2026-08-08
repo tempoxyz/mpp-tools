@@ -488,10 +488,18 @@ class AuditReport(FrozenModel):
         return value.astimezone(UTC)
 
 
+class PendingAuditFindingIssue(FrozenModel):
+    id: FindingId
+    marker: NonEmpty
+    title: NonEmpty
+    body: NonEmpty
+
+
 class PendingAuditReport(FrozenModel):
     title: NonEmpty
     body: NonEmpty
     healthy: bool
+    finding_issues: tuple[PendingAuditFindingIssue, ...] = ()
 
 
 class Cursor(FrozenModel):

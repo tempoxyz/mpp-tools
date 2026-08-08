@@ -26,7 +26,44 @@ from agricola.models import (
     AuditSnapshot,
 )
 from agricola.tests.helpers import manifest
-from agricola.tests.test_service import FakeGitHub
+
+
+class AuditGitHub:
+    def __init__(self, issues: tuple[dict[str, object], ...] = ()) -> None:
+        self.issues = [dict(issue) for issue in issues]
+        self.updated: list[tuple[int, str | None, str | None, str | None]] = []
+
+    def find_tracking_issues(self, marker: str) -> tuple[dict[str, object], ...]:
+        return tuple(
+            issue
+            for issue in self.issues
+            if marker in str(issue.get("body") or "")
+        )
+
+    def create_issue(self, title: str, body: str, labels=()):
+        number = max(
+            (int(str(issue["number"])) for issue in self.issues), default=0
+        ) + 1
+        issue: dict[str, object] = {
+            "number": number,
+            "title": title,
+            "body": body,
+            "state": "open",
+            "html_url": f"https://github.com/tempoxyz/mpp-tools/issues/{number}",
+        }
+        self.issues.append(issue)
+        return issue
+
+    def update_issue(self, number, *, title=None, body=None, state=None):
+        issue = next(item for item in self.issues if item["number"] == number)
+        if title is not None:
+            issue["title"] = title
+        if body is not None:
+            issue["body"] = body
+        if state is not None:
+            issue["state"] = state
+        self.updated.append((number, title, body, state))
+        return issue
 
 
 def observation(
@@ -275,7 +312,7 @@ class AuditTests(unittest.TestCase):
         self.assertEqual(finding.clean, ("rust",))
         self.assertEqual(finding.summary, "Check " + check)
 
-    def test_assigns_stable_ids_and_renders_one_rollup(self) -> None:
+    def test_assigns_stable_ids_and_renders_finding_issues(self) -> None:
         check = "vector:www-authenticate/basic/parse"
         canonical = snapshot("typescript", observations=(observation(check),))
         go = snapshot(
@@ -302,6 +339,9 @@ class AuditTests(unittest.TestCase):
             self.assertIn(AUDIT_MARKER, pending.body)
             self.assertIn("AGR-2026-001", pending.body)
             self.assertIn("`go`", pending.body)
+            self.assertEqual(len(pending.finding_issues), 1)
+            self.assertIn("## How to action", pending.finding_issues[0].body)
+            self.assertIn("gh workflow run agricola-audit.yml", pending.finding_issues[0].body)
 
     def test_rollup_links_semantic_source_evidence(self) -> None:
         canonical = snapshot("typescript")
@@ -314,8 +354,9 @@ class AuditTests(unittest.TestCase):
                 manifest(), (canonical, go, rust, ruby), AuditStore(directory)
             )
 
-        body = render_audit_report(report).body
-        self.assertIn("semantic:receipt/verification-order", body)
+        pending = render_audit_report(report)
+        body = pending.finding_issues[0].body
+        self.assertIn("semantic:receipt/verification-order", pending.body)
         self.assertIn("wevm/mppx/blob/typescript1234567/src/receipt.ts#L42", body)
         self.assertIn("tempoxyz/mpp-rs/blob/rust1234567/src/receipt.rs#L27", body)
 
@@ -358,14 +399,115 @@ class AuditTests(unittest.TestCase):
         )
 
     def test_delivery_updates_existing_rollup(self) -> None:
-        client = FakeGitHub()
-        client.tracking = {"number": 42, "body": AUDIT_MARKER}
+        client = AuditGitHub(
+            (
+                {
+                    "number": 42,
+                    "body": AUDIT_MARKER,
+                    "state": "open",
+                    "html_url": "https://github.com/tempoxyz/mpp-tools/issues/42",
+                },
+            )
+        )
         pending = render_audit_report(AuditReportFixture.complete())
 
         deliver_audit_report(client, pending)
 
         self.assertEqual(client.updated[0][0], 42)
         self.assertIn(AUDIT_MARKER, client.updated[0][2] or "")
+
+    def test_delivery_creates_durable_finding_and_links_rollup(self) -> None:
+        check = "vector:www-authenticate/basic/parse"
+        canonical = snapshot("typescript", observations=(observation(check),))
+        go = snapshot(
+            "go", observations=(observation(check, AuditCheckStatus.FAILURE),)
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            report = build_audit_report(
+                manifest(),
+                (canonical, go, snapshot("rust"), snapshot("ruby")),
+                AuditStore(directory),
+                at=datetime(2026, 8, 8, 18, 0, tzinfo=UTC),
+            )
+        client = AuditGitHub()
+
+        rollup = deliver_audit_report(client, render_audit_report(report))
+
+        finding = next(
+            issue for issue in client.issues if "agricola:audit-finding" in str(issue["body"])
+        )
+        self.assertIn("AGR-2026-001", str(finding["title"]))
+        self.assertIn(f"[AGR-2026-001]({finding['html_url']})", str(rollup["body"]))
+
+    def test_healthy_delivery_closes_resolved_findings(self) -> None:
+        marker = "<!-- agricola:audit-finding=AGR-2026-001 -->"
+        client = AuditGitHub(
+            (
+                {
+                    "number": 7,
+                    "body": marker,
+                    "state": "open",
+                    "html_url": "https://github.com/tempoxyz/mpp-tools/issues/7",
+                },
+            )
+        )
+        pending = render_audit_report(AuditReportFixture.complete())
+
+        deliver_audit_report(client, pending)
+
+        self.assertEqual(client.issues[0]["state"], "closed")
+
+    def test_delivery_reopens_recurring_finding(self) -> None:
+        check = "vector:www-authenticate/basic/parse"
+        canonical = snapshot("typescript", observations=(observation(check),))
+        go = snapshot(
+            "go", observations=(observation(check, AuditCheckStatus.FAILURE),)
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            pending = render_audit_report(
+                build_audit_report(
+                    manifest(),
+                    (canonical, go, snapshot("rust"), snapshot("ruby")),
+                    AuditStore(directory),
+                    at=datetime(2026, 8, 8, 18, 0, tzinfo=UTC),
+                )
+            )
+        finding = pending.finding_issues[0]
+        client = AuditGitHub(
+            (
+                {
+                    "number": 7,
+                    "body": finding.body,
+                    "state": "closed",
+                    "html_url": "https://github.com/tempoxyz/mpp-tools/issues/7",
+                },
+            )
+        )
+
+        deliver_audit_report(client, pending)
+
+        self.assertEqual(client.issues[0]["state"], "open")
+        self.assertEqual(len(client.issues), 2)
+
+    def test_incomplete_delivery_preserves_unobserved_findings(self) -> None:
+        marker = "<!-- agricola:audit-finding=AGR-2026-001 -->"
+        client = AuditGitHub(
+            (
+                {
+                    "number": 7,
+                    "body": marker,
+                    "state": "open",
+                    "html_url": "https://github.com/tempoxyz/mpp-tools/issues/7",
+                },
+            )
+        )
+        pending = render_audit_report(AuditReportFixture.complete()).model_copy(
+            update={"healthy": False}
+        )
+
+        deliver_audit_report(client, pending)
+
+        self.assertEqual(client.issues[0]["state"], "open")
 
     @staticmethod
     def vector_check(status: str) -> dict[str, object]:

@@ -174,6 +174,27 @@ class GitHubApiTests(unittest.TestCase):
         self.assertIn("repos/tempoxyz/mpp-tools/issues", endpoint)
         self.assertTrue(options["paginate"])
 
+    def test_tracking_issue_listing_returns_every_marker_match(self) -> None:
+        marker = "<!-- agricola:audit"
+        client = StubClient(
+            [
+                [
+                    [
+                        {"number": 9, "body": "<!-- agricola:audit -->"},
+                        {
+                            "number": 10,
+                            "body": "<!-- agricola:audit-finding=AGR-2026-001 -->",
+                        },
+                        {"number": 11, "body": "unrelated"},
+                    ]
+                ]
+            ]
+        )
+
+        issues = client.find_tracking_issues(marker)
+
+        self.assertEqual([issue["number"] for issue in issues], [9, 10])
+
 
 if __name__ == "__main__":
     unittest.main()

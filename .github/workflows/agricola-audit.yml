@@ -326,7 +326,7 @@ jobs:
           add-paths: ledger
           delete-branch: true
 
-      - name: Update audit issue
+      - name: Reconcile audit issues
         run: agricola deliver-audit "$RUNNER_TEMP/audit-report.json"
 
       - name: Require complete audit

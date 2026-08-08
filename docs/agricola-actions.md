@@ -10,7 +10,7 @@ Agricola propagation runs from [`.github/workflows/agricola.yml`](../.github/wor
 | `workflow_dispatch` | Run the poller manually. |
 | New `issue_comment` containing `@agricola` | Handle a tracking-issue command. `@agricola` must be the first token on a line. |
 
-The audit workflow runs every Monday at 09:00 UTC and supports `workflow_dispatch`. For each manifest SDK, it checks out the exact current heads of that repository and `mppx`, runs an open-ended read-only Codex comparison, and requires schema-validated findings with linked code evidence. Shared vectors and conformance-adapter capabilities remain deterministic supporting signals. Agricola clusters matching `semantic:`, `vector:`, and `capability:` fingerprints and updates one roll-up issue. It is read-only outside `mpp-tools` and never invokes downstream publication.
+The audit workflow runs every Monday at 09:00 UTC and supports `workflow_dispatch`. For each manifest SDK, it checks out the exact current heads of that repository and `mppx`, runs an open-ended read-only Codex comparison, and requires schema-validated findings with linked code evidence. Shared vectors and conformance-adapter capabilities remain deterministic supporting signals. Agricola clusters matching `semantic:`, `vector:`, and `capability:` fingerprints, maintains one issue per finding, and updates a roll-up index. It is read-only outside `mpp-tools` and never invokes downstream publication.
 
 One concurrency group serializes all triggers. Runs execute trusted code from the current default branch. Ledger state is restored from `agricola/state`; the changelog-style updater creates or updates at most one state pull request. Merge it to checkpoint state on the default branch. Do not close or edit it manually. Code from the state branch is never executed.
 
@@ -73,7 +73,7 @@ Downstream code never runs in a job containing downstream write credentials. Gen
 5. Enable workflow write access and pull-request creation.
 6. Run the workflow manually and confirm the poll succeeds and the state pull request contains `ledger/cursor.json`.
 7. On a tracking issue, run `@agricola propagate <target>` and confirm generation, verification, a downstream draft pull request, and a recorded ledger decision.
-8. Run the SDK audit manually and confirm one `[Agricola] SDK drift audit` issue contains every target and exact audited commit.
+8. Run the SDK audit manually and confirm the `[Agricola] SDK drift audit` index links one issue per finding and records every exact audited commit.
 
 The initial cursor starts fifteen minutes in the past. Because each poll replays a one-hour overlap, the first API read covers approximately the previous 75 minutes. To backfill a different window, update the state pull request with a reviewed `ledger/cursor.json` containing a timezone-aware ISO 8601 `merged_at`; polling begins one hour before it.
 
@@ -90,10 +90,16 @@ Commands use deferred issue updates and replies so the tracking table and state-
 Run from the command line:
 
 ```bash
+# Trigger canonical-change polling on the current default branch.
 gh workflow run agricola.yml --repo tempoxyz/mpp-tools --ref main
+
+# Show the newest polling run and its status.
 gh run list --repo tempoxyz/mpp-tools --workflow agricola.yml --limit 1
 
+# Trigger a complete SDK drift audit against current repository heads.
 gh workflow run agricola-audit.yml --repo tempoxyz/mpp-tools --ref main
+
+# Show the newest audit run and its status.
 gh run list --repo tempoxyz/mpp-tools --workflow agricola-audit.yml --limit 1
 ```
 
@@ -110,3 +116,4 @@ The Actions page also exposes **Run workflow** through `workflow_dispatch`.
 - The state pull request is not updated: confirm workflow write access and permission to create pull requests.
 - An audit target is incomplete: inspect its SDK-tagged audit job. Missing snapshots are reported in the roll-up and make the workflow fail after the issue is updated.
 - A semantic audit is incomplete: confirm `OPENAI_API_KEY` is configured and inspect the SDK-tagged `Compare SDK implementation to canonical mppx` step. The deterministic snapshot is still reported, but the audit remains unhealthy until the open-ended comparison succeeds.
+- A resolved finding remains open: confirm the latest audit was healthy. Incomplete audits deliberately preserve issue state; a healthy run closes findings that no longer appear.

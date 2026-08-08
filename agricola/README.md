@@ -10,7 +10,7 @@ It:
 - creates one tracking issue per actionable canonical change;
 - accepts maintainer-only `plan`, `propagate`, `status`, and `skip` commands;
 - generates idiomatic downstream changes, runs each SDK's declared verification, and opens draft pull requests;
-- audits every SDK head against canonical `mppx`, clusters deterministic deltas, and updates one roll-up issue;
+- audits every SDK head against canonical `mppx`, clusters deltas, and maintains one issue per finding plus a roll-up index;
 - records immutable source snapshots and completed decisions under [`ledger/`](../ledger/).
 
 Agricola never auto-merges a downstream pull request. Maintainers retain review and merge control.
@@ -76,19 +76,13 @@ The tracking issue also contains a durable downstream propagation table. It list
 
 `@agricola` must be the first token on a line. Commands are accepted only from configured maintainers and only on Agricola tracking issues in `mpp-tools`.
 
-```text
-@agricola plan
-@agricola propagate go rust
-@agricola propagate all
-@agricola status
-@agricola skip ruby reason="TS-only tooling"
-```
-
-- `plan` regenerates the impact plan from the immutable merge-time label history.
-- `propagate <targets...>` queues explicit `automation: pr` targets.
-- `propagate all` queues every `automation: pr` target.
-- `status` queries GitHub for downstream pull requests already recorded in the ledger.
-- `skip` appends an idempotent, reason-required decision for one manifest target.
+| Command | What it does | Example comment |
+| --- | --- | --- |
+| `plan` | Regenerates the impact plan from immutable merge-time state. | `@agricola plan` |
+| `propagate <targets...>` | Queues named `automation: pr` targets. | `@agricola propagate go rust` |
+| `propagate all` | Queues every `automation: pr` target. | `@agricola propagate all` |
+| `status` | Queries GitHub for downstream PRs recorded in the ledger. | `@agricola status` |
+| `skip <target> reason="..."` | Records an idempotent, reason-required skip for one SDK. | `@agricola skip go reason="Not applicable to this transport"` |
 
 Commands in canonical or downstream repositories are not supported. Revision, retry, audit-finding actions, and downstream issue commands remain manual operations. A failed unpublished propagation can be retried by rerunning its workflow; a published stable branch is updated idempotently.
 
@@ -119,7 +113,7 @@ The weekly and manually dispatched audit is head-to-head and report-only. It use
 
 The first pass reviews each repository's current default-branch checkout independently against the exact canonical `mppx` head. A read-only Codex run explores both implementations and emits schema-validated `semantic:<area>/<behavior>` findings with source evidence. Shared protocol vectors and conformance-adapter capabilities provide deterministic supporting evidence. The second pass clusters equivalent findings under SDK-independent fingerprints such as `semantic:receipt/verification-order`, `capability:challenge.parse`, or `vector:www-authenticate/basic/parse`. Stable `AGR-<year>-<sequence>` IDs are assigned in [`ledger/audit.json`](../ledger/audit.json).
 
-One `[Agricola] SDK drift audit` issue is updated in place. It shows the exact audited commits, affected and clean SDKs, likely-origin heuristic, severity, confidence, and linked source evidence. Findings never create branches, pull requests, or downstream issues automatically. Semantic findings are advisory; deterministic conformance results remain independently visible.
+One `[Agricola] SDK drift audit` index is updated in place, and every stable finding gets its own issue with exact audited commits, affected and clean SDKs, likely-origin heuristic, severity, confidence, linked source evidence, a suggested test, and action instructions. A healthy audit closes issues whose fingerprints disappear and reopens recurring findings. Incomplete audits never close findings. Findings never create branches or pull requests automatically.
 
 ## State and recovery
 
@@ -140,23 +134,23 @@ State-changing replies are deferred until the state pull request has been update
 
 ## CLI reference
 
-| Command | Purpose |
-| --- | --- |
-| `agricola validate` | Validate the manifest, ledger, and cursor. |
-| `agricola schema` | Print generated manifest, ledger, and cursor JSON Schemas. |
-| `agricola poll` | Process merged canonical pull requests. |
-| `agricola handle-comment [event]` | Parse an `issue_comment` event; defaults to `GITHUB_EVENT_PATH`. |
-| `agricola deliver-reply <file>` | Deliver a reply deferred until after Git persistence. |
-| `agricola deliver-issue-update <file>` | Deliver a tracking issue body update deferred until after Git persistence. |
-| `agricola record-propagations <results>` | Record published pull requests or explicit skips and render deferred replies. |
-| `agricola audit-matrix` | Build the head-audit matrix from the manifest and conformance adapters. |
-| `agricola audit-semantic-schema` | Print the strict Codex semantic-review output schema. |
-| `agricola audit-snapshot` | Normalize one SDK's head conformance result. |
-| `agricola build-audit <snapshots>` | Cluster snapshots, assign stable finding IDs, and render the roll-up. |
-| `agricola deliver-audit <report>` | Create or update the single audit issue. |
-| `agricola verify-propagation <request>` | Run the target's reviewed verification commands. |
-| `agricola render-propagation <request>` | Render deterministic pull-request metadata. |
-| `agricola parse-command --author <login>` | Parse commands from standard input for diagnostics. |
+| Command | What it does | Example |
+| --- | --- | --- |
+| `agricola validate` | Validates the manifest and all durable ledger state. | `agricola validate` |
+| `agricola schema` | Prints generated manifest and ledger JSON Schemas. | `agricola schema > schemas.json` |
+| `agricola poll` | Processes newly merged canonical pull requests. | `agricola poll --control-repo tempoxyz/mpp-tools` |
+| `agricola handle-comment [event]` | Parses an `issue_comment` payload; defaults to `GITHUB_EVENT_PATH`. | `agricola handle-comment event.json` |
+| `agricola deliver-reply <file>` | Posts a reply deferred until after state persistence. | `agricola deliver-reply reply.json` |
+| `agricola deliver-issue-update <file>` | Applies a deferred tracking-issue body update. | `agricola deliver-issue-update update.json` |
+| `agricola record-propagations <results>` | Records published PRs or explicit skips and renders deferred updates. | `agricola record-propagations results --reply-directory replies --issue-update-directory updates` |
+| `agricola audit-matrix` | Builds the SDK audit matrix from the manifest and adapters. | `agricola audit-matrix --adapters conformance/adapters` |
+| `agricola audit-semantic-schema` | Prints the strict semantic-review output schema. | `agricola audit-semantic-schema > semantic.schema.json` |
+| `agricola audit-snapshot` | Normalizes one SDK's conformance and semantic results. | `agricola audit-snapshot --target go --repo tempoxyz/mpp-go --sha "$SHA" --adapter-manifest adapter.json --results results.json` |
+| `agricola build-audit <snapshots>` | Clusters snapshots, assigns stable IDs, and renders issue payloads. | `agricola build-audit snapshots --report-file audit.json` |
+| `agricola deliver-audit <report>` | Reconciles the roll-up index and per-finding GitHub issues. | `agricola deliver-audit audit.json --control-repo tempoxyz/mpp-tools` |
+| `agricola verify-propagation <request>` | Runs the target's reviewed verification commands. | `agricola verify-propagation request.json --root downstream-sdk` |
+| `agricola render-propagation <request>` | Renders deterministic downstream PR metadata. | `agricola render-propagation request.json --title-file title.txt --body-file body.md` |
+| `agricola parse-command --author <login>` | Parses issue commands from standard input for diagnostics. | `printf '%s\n' '@agricola status' \| agricola parse-command --author maintainer` |
 
 Live control-plane commands authenticate through `GH_TOKEN`; canonical polling can use a separate repository token:
 
