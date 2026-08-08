@@ -123,6 +123,7 @@ jobs:
           fi
 
   generate:
+    name: generate (${{ matrix.request.target }})
     needs: run
     if: needs.run.outputs.has-propagations == 'true'
     runs-on: ubuntu-latest
@@ -205,6 +206,7 @@ jobs:
           if-no-files-found: ignore
 
   verify:
+    name: verify (${{ matrix.request.target }})
     needs: [run, generate]
     if: needs.run.outputs.has-propagations == 'true'
     runs-on: ubuntu-latest
@@ -265,6 +267,7 @@ jobs:
           agricola verify-propagation .agricola/request.json
 
   publish:
+    name: publish (${{ matrix.request.target }})
     needs: [run, verify]
     if: needs.run.outputs.has-propagations == 'true'
     runs-on: ubuntu-latest
