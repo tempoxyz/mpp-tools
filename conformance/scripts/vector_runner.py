@@ -6,7 +6,7 @@ Reads test vectors from vectors/*.json, invokes each registered adapter,
 compares outputs to expected results, and produces a pass/fail summary.
 
 Usage:
-    python3 scripts/vector_runner.py [--adapter NAME] [--verbose] [--vector NAME]
+    uv run --locked python scripts/vector_runner.py [--adapter NAME] [--verbose] [--vector NAME]
 
 Options:
     --adapter NAME    Run only the specified adapter (default: all)

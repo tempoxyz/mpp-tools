@@ -169,19 +169,19 @@ make test-ruby
 make test-java
 
 # Single vector file
-python3 scripts/vector_runner.py --vector www-authenticate
+uv run --locked python scripts/vector_runner.py --vector www-authenticate
 
 # Filter by tag
-python3 scripts/vector_runner.py --tag happy-path
+uv run --locked python scripts/vector_runner.py --tag happy-path
 
 # Verbose output
-python3 scripts/vector_runner.py --verbose
+uv run --locked python scripts/vector_runner.py --verbose
 
 # JSON output (for CI)
-python3 scripts/vector_runner.py --output json
+uv run --locked python scripts/vector_runner.py --output json
 
 # Flow JSON output
-python3 scripts/flow_runner.py --output json
+uv run --locked python scripts/flow_runner.py --output json
 ```
 
 JSON output includes a `checks` array. Each check has a stable `id`, `name`,
@@ -298,8 +298,8 @@ make flow-sdk ADAPTER=rust
 
 - Node.js ≥ 20
 - Rust toolchain (for the Rust adapter)
-- Python ≥ 3.12 + [uv](https://github.com/astral-sh/uv) (for the Python adapter)
+- Python ≥ 3.12 + [uv](https://github.com/astral-sh/uv) (for the runner and Python adapter)
 - Go with toolchain auto-download enabled or Go ≥ 1.26 (for the Go adapter)
 - Ruby ≥ 3.3 + Bundler (for the `mpp-rb` adapter)
 - JDK 17 or newer (for the Java adapter; it builds Java 11 bytecode)
-- `python3 -m pip install -r requirements.txt` (for the test runner)
+- `uv sync --locked` (for the test runner)

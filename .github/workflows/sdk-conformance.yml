@@ -78,7 +78,7 @@ jobs:
         run: make install-runner
 
       - name: Point adapter at SDK checkout
-        run: python3 scripts/use_local_sdk.py --adapter "$ADAPTER" --sdk-path "$SDK_PATH"
+        run: uv run --locked python scripts/use_local_sdk.py --adapter "$ADAPTER" --sdk-path "$SDK_PATH"
         env:
           ADAPTER: ${{ steps.resolve.outputs.adapter }}
 
@@ -121,19 +121,19 @@ jobs:
           ADAPTER: ${{ steps.resolve.outputs.adapter }}
 
       - name: Run vector conformance
-        run: python3 scripts/vector_runner.py --adapter "$ADAPTER"
+        run: uv run --locked python scripts/vector_runner.py --adapter "$ADAPTER"
         env:
           ADAPTER: ${{ steps.resolve.outputs.adapter }}
 
       - name: Run flow conformance
         if: inputs.run-flows
-        run: python3 scripts/flow_runner.py --adapter "$ADAPTER"
+        run: uv run --locked python scripts/flow_runner.py --adapter "$ADAPTER"
         env:
           ADAPTER: ${{ steps.resolve.outputs.adapter }}
 
       - name: Run server verification conformance
         if: steps.resolve.outputs.adapter == 'go'
-        run: python3 scripts/server_verify_runner.py --adapter "$ADAPTER"
+        run: uv run --locked python scripts/server_verify_runner.py --adapter "$ADAPTER"
         env:
           ADAPTER: ${{ steps.resolve.outputs.adapter }}
 

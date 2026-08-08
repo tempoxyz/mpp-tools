@@ -7,6 +7,7 @@ RUBY ?= ruby
 BUNDLE ?= bundle
 ADAPTER ?=
 SDK_PATH ?=
+RUNNER_PYTHON ?= uv run --locked python
 
 # Default target
 all: install
@@ -50,11 +51,11 @@ install-runner: install-ts install-scripts
 use-local-sdk:
 	@test -n "$(ADAPTER)" || (echo "ADAPTER is required, e.g. ADAPTER=rust" >&2; exit 2)
 	@test -n "$(SDK_PATH)" || (echo "SDK_PATH is required, e.g. SDK_PATH=../mpp-rs" >&2; exit 2)
-	python3 scripts/use_local_sdk.py --adapter "$(ADAPTER)" --sdk-path "$(SDK_PATH)"
+	$(RUNNER_PYTHON) scripts/use_local_sdk.py --adapter "$(ADAPTER)" --sdk-path "$(SDK_PATH)"
 
 install-scripts:
 	@echo "→ Installing script dependencies..."
-	python3 -m pip install -q -r requirements.txt
+	uv sync --locked --python 3.12
 
 install-ts:
 	@echo "→ Installing TypeScript dependencies..."
@@ -89,89 +90,89 @@ test: test-all
 test-sdk:
 	@test -n "$(ADAPTER)" || (echo "ADAPTER is required, e.g. ADAPTER=rust" >&2; exit 2)
 	@echo "→ Running $(ADAPTER) vector conformance tests..."
-	python3 scripts/vector_runner.py --adapter "$(ADAPTER)"
+	$(RUNNER_PYTHON) scripts/vector_runner.py --adapter "$(ADAPTER)"
 
 flow:
 	@echo "→ Running flow conformance tests..."
-	python3 scripts/flow_runner.py
+	$(RUNNER_PYTHON) scripts/flow_runner.py
 
 flow-sdk:
 	@test -n "$(ADAPTER)" || (echo "ADAPTER is required, e.g. ADAPTER=rust" >&2; exit 2)
 	@echo "→ Running $(ADAPTER) flow conformance tests..."
-	python3 scripts/flow_runner.py --adapter "$(ADAPTER)"
+	$(RUNNER_PYTHON) scripts/flow_runner.py --adapter "$(ADAPTER)"
 
 server-verify:
 	@echo "→ Running server verification conformance tests..."
-	python3 scripts/server_verify_runner.py
+	$(RUNNER_PYTHON) scripts/server_verify_runner.py
 
 server-verify-sdk:
 	@test -n "$(ADAPTER)" || (echo "ADAPTER is required, e.g. ADAPTER=go" >&2; exit 2)
 	@echo "→ Running $(ADAPTER) server verification conformance tests..."
-	python3 scripts/server_verify_runner.py --adapter "$(ADAPTER)"
+	$(RUNNER_PYTHON) scripts/server_verify_runner.py --adapter "$(ADAPTER)"
 
 server-verify-go:
 	@echo "→ Running Go server verification conformance tests..."
-	python3 scripts/server_verify_runner.py --adapter go
+	$(RUNNER_PYTHON) scripts/server_verify_runner.py --adapter go
 
 flow-typescript:
 	@echo "→ Running TypeScript flow conformance tests..."
-	python3 scripts/flow_runner.py --adapter typescript
+	$(RUNNER_PYTHON) scripts/flow_runner.py --adapter typescript
 
 flow-rust:
 	@echo "→ Running Rust flow conformance tests..."
-	python3 scripts/flow_runner.py --adapter rust
+	$(RUNNER_PYTHON) scripts/flow_runner.py --adapter rust
 
 flow-python:
 	@echo "→ Running Python flow conformance tests..."
-	python3 scripts/flow_runner.py --adapter python
+	$(RUNNER_PYTHON) scripts/flow_runner.py --adapter python
 
 flow-go:
 	@echo "→ Running Go flow conformance tests..."
-	python3 scripts/flow_runner.py --adapter go
+	$(RUNNER_PYTHON) scripts/flow_runner.py --adapter go
 
 flow-ruby:
 	@echo "→ Running Ruby flow conformance tests..."
-	python3 scripts/flow_runner.py --adapter ruby
+	$(RUNNER_PYTHON) scripts/flow_runner.py --adapter ruby
 
 flow-java:
 	@echo "→ Running Java flow conformance tests..."
-	python3 scripts/flow_runner.py --adapter java
+	$(RUNNER_PYTHON) scripts/flow_runner.py --adapter java
 
 update-flow-golden:
 	@echo "→ Updating flow golden results..."
-	python3 scripts/flow_runner.py --update-golden
+	$(RUNNER_PYTHON) scripts/flow_runner.py --update-golden
 
 test-all:
 	@echo "→ Running conformance tests for all adapters..."
-	python3 scripts/vector_runner.py
+	$(RUNNER_PYTHON) scripts/vector_runner.py
 
 test-typescript:
 	@echo "→ Testing TypeScript (golden) adapter..."
-	python3 scripts/vector_runner.py --adapter typescript
+	$(RUNNER_PYTHON) scripts/vector_runner.py --adapter typescript
 
 test-rust:
 	@echo "→ Testing Rust adapter..."
-	python3 scripts/vector_runner.py --adapter rust
+	$(RUNNER_PYTHON) scripts/vector_runner.py --adapter rust
 
 test-python:
 	@echo "→ Testing Python adapter..."
-	python3 scripts/vector_runner.py --adapter python
+	$(RUNNER_PYTHON) scripts/vector_runner.py --adapter python
 
 test-go:
 	@echo "→ Testing Go adapter..."
-	python3 scripts/vector_runner.py --adapter go
+	$(RUNNER_PYTHON) scripts/vector_runner.py --adapter go
 
 test-ruby:
 	@echo "→ Testing Ruby adapter..."
-	python3 scripts/vector_runner.py --adapter ruby
+	$(RUNNER_PYTHON) scripts/vector_runner.py --adapter ruby
 
 test-java:
 	@echo "→ Testing Java adapter..."
-	python3 scripts/vector_runner.py --adapter java
+	$(RUNNER_PYTHON) scripts/vector_runner.py --adapter java
 
 test-json:
 	@echo "→ Running conformance tests (JSON output)..."
-	python3 scripts/vector_runner.py --output json
+	$(RUNNER_PYTHON) scripts/vector_runner.py --output json
 
 #------------------------------------------------------------------------------
 # Individual adapter CLI tests (for debugging)
@@ -189,7 +190,7 @@ test-parse-www-auth:
 #------------------------------------------------------------------------------
 
 clean:
-	rm -rf node_modules dist
+	rm -rf .venv node_modules dist
 	rm -f adapters/go/adapter
 	rm -rf adapters/go/.gocache
 	rm -rf adapters/rust/target
