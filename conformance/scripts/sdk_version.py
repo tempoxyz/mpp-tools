@@ -102,6 +102,15 @@ VERSIONS = {
 }
 
 
+def installed_version(adapter: str) -> str:
+    """Return only the installed SDK version for constraint evaluation."""
+    summary = VERSIONS[adapter]()
+    _, separator, version = summary.rpartition("@")
+    if not separator or not version:
+        raise RuntimeError(f"Could not parse SDK version from {summary!r}")
+    return version
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--adapter", required=True, choices=sorted(VERSIONS))

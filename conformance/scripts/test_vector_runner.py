@@ -16,7 +16,15 @@ from vector_runner import VectorRunner
 
 class VectorRunnerHelperTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.runner = VectorRunner(output_format="json")
+        self.resolved_adapters: list[str] = []
+
+        def resolve_version(adapter: str) -> str:
+            self.resolved_adapters.append(adapter)
+            return "0.9.1"
+
+        self.runner = VectorRunner(
+            output_format="json", sdk_version_resolver=resolve_version
+        )
         self.adapter = AdapterConfig(name="python", command=["python"], capabilities=[])
 
     def test_duration_limit_prefers_adapter_specific_value(self) -> None:
@@ -39,6 +47,89 @@ class VectorRunnerHelperTest(unittest.TestCase):
 
         self.assertFalse(passed)
         self.assertEqual(error, "duration exceeded: expected <= 5000 ms, got 5000.1 ms")
+
+    def test_scenario_version_constraint_applies_when_matching(self) -> None:
+        scenario = {"sdkVersions": {"python": ">0.9.0 <1.0.0"}}
+
+        applies, reason = self.runner.scenario_version_applies(scenario, self.adapter)
+
+        self.assertTrue(applies)
+        self.assertIsNone(reason)
+        self.assertEqual(self.resolved_adapters, ["python"])
+
+    def test_scenario_version_constraint_skips_when_not_matching(self) -> None:
+        scenario = {"sdkVersions": {"python": ">0.9.1"}}
+
+        applies, reason = self.runner.scenario_version_applies(scenario, self.adapter)
+
+        self.assertFalse(applies)
+        self.assertEqual(reason, "python@0.9.1 does not satisfy >0.9.1")
+
+    def test_scenario_version_constraint_ignores_unspecified_adapter(self) -> None:
+        scenario = {"sdkVersions": {"rust": ">=0.12.0"}}
+
+        applies, reason = self.runner.scenario_version_applies(scenario, self.adapter)
+
+        self.assertTrue(applies)
+        self.assertIsNone(reason)
+        self.assertEqual(self.resolved_adapters, [])
+
+    def test_scenario_version_resolver_is_cached_per_adapter(self) -> None:
+        scenario = {"sdkVersions": {"python": ">=0.9.0"}}
+
+        self.runner.scenario_version_applies(scenario, self.adapter)
+        self.runner.scenario_version_applies(scenario, self.adapter)
+
+        self.assertEqual(self.resolved_adapters, ["python"])
+
+    def test_scenario_version_constraints_require_an_object(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError, "sdkVersions must be an object keyed by adapter name"
+        ):
+            self.runner.scenario_version_applies(
+                {"sdkVersions": ">=0.9.0"}, self.adapter
+            )
+
+    def test_scenario_version_constraints_reject_unknown_adapter(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError, "sdkVersions contains unknown adapter keys: pyhton"
+        ):
+            self.runner.scenario_version_applies(
+                {"sdkVersions": {"pyhton": ">=0.9.0"}}, self.adapter
+            )
+
+    def test_scenario_version_constraint_requires_a_string(self) -> None:
+        with self.assertRaisesRegex(ValueError, "sdkVersions.python must be a string"):
+            self.runner.scenario_version_applies(
+                {"sdkVersions": {"python": 0.9}}, self.adapter
+            )
+
+    def test_scenario_version_constraints_validate_every_adapter_value(self) -> None:
+        with self.assertRaisesRegex(ValueError, "sdkVersions.rust must be a string"):
+            self.runner.scenario_version_applies(
+                {"sdkVersions": {"rust": 0.12}}, self.adapter
+            )
+
+    def test_run_vector_file_skips_nonmatching_sdk_version(self) -> None:
+        vector = {
+            "commands": {"parse": "parse-www-authenticate"},
+            "scenarios": [
+                {
+                    "name": "future_rule",
+                    "wire": "unused",
+                    "tests": {"parse": True},
+                    "sdkVersions": {"python": ">0.9.1"},
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            vector_path = Path(tmp) / "sample.json"
+            vector_path.write_text(json.dumps(vector), encoding="utf-8")
+
+            self.runner.run_vector_file(self.adapter, vector_path)
+
+        self.assertEqual(self.runner.results, [])
+        self.assertEqual(self.runner.version_skips, 1)
 
     def test_compare_adapter_response_checks_error_message_substring(self) -> None:
         expected = {
@@ -152,6 +243,47 @@ class VectorRunnerJsonArtifactTest(unittest.TestCase):
         self.assertEqual(output["status"], "fail")
         failing = [check for check in output["checks"] if check["status"] == "FAILURE"]
         self.assertTrue(any("vector-file-error" in check["id"] for check in failing))
+
+    def test_all_version_skipped_selection_passes(self) -> None:
+        import vector_runner as vector_runner_module
+
+        fake_adapter = AdapterConfig(name="fake", command=["true"], capabilities=[])
+        vector = {
+            "commands": {"parse": "parse-www-authenticate"},
+            "scenarios": [
+                {
+                    "name": "future_rule",
+                    "wire": "unused",
+                    "tests": {"parse": True},
+                    "sdkVersions": {"fake": ">0.9.1"},
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            vector_path = Path(tmp) / "future.json"
+            vector_path.write_text(json.dumps(vector), encoding="utf-8")
+            original_discover_vectors = vector_runner_module.discover_vector_files
+            original_discover_adapters = vector_runner_module.discover_adapters
+            vector_runner_module.discover_vector_files = lambda: {"future": vector_path}
+            vector_runner_module.discover_adapters = lambda: {"fake": fake_adapter}
+            runner = VectorRunner(
+                output_format="json", sdk_version_resolver=lambda _: "0.9.1"
+            )
+            try:
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout):
+                    success = runner.run(
+                        adapter_names=["fake"], vector_names=["future"]
+                    )
+            finally:
+                vector_runner_module.discover_vector_files = original_discover_vectors
+                vector_runner_module.discover_adapters = original_discover_adapters
+
+        self.assertTrue(success)
+        output = json.loads(stdout.getvalue())
+        self.assertEqual(output["status"], "pass")
+        self.assertEqual(output["num_checks"], 0)
+        self.assertEqual(output["skipped"], 1)
 
 
 if __name__ == "__main__":

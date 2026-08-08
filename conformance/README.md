@@ -60,6 +60,20 @@ Each vector file contains **scenarios** — individual test cases with a name, d
 
 Scenarios may optionally include `adapters` to restrict an edge case to specific SDK adapters, and `maxDurationMs` or `maxDurationMsByAdapter` to assert bounded execution for parser stress cases. Long stress inputs can use `wire` as `{ "prefix": "...", "repeat": "...", "count": 123, "suffix": "..." }` to keep fixtures reviewable.
 
+Use `sdkVersions` when a rule only applies to particular released SDK versions:
+
+```json
+{
+  "name": "rejects_weak_secret",
+  "sdkVersions": {
+    "typescript": ">0.8.15",
+    "rust": ">=0.12.0 <1.0.0"
+  }
+}
+```
+
+Constraints use npm-style SemVer syntax with `=`, `<`, `<=`, `>`, and `>=`. Whitespace-separated comparators are combined with AND. An adapter not named in `sdkVersions` still runs the scenario; combine `sdkVersions` with `adapters` to restrict both adapter and version. Unknown adapter keys, invalid constraints, and non-SemVer installed versions fail the suite instead of silently skipping coverage. Java constraints use the released version pinned in `adapters/java/build.gradle`.
+
 ### Test Types
 
 | Test | What It Checks |
@@ -275,8 +289,9 @@ make flow-sdk ADAPTER=rust
 
 1. Edit the appropriate vector file in `vectors/`
 2. Add a new scenario object to the `scenarios` array
-3. Run `make test` to verify all adapters pass
-4. Submit a PR
+3. Optionally use `adapters` and `sdkVersions` to define where the rule applies
+4. Run `make test` to verify all applicable adapters pass
+5. Submit a PR
 
 ## Prerequisites
 

@@ -24,12 +24,14 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from deepdiff import DeepDiff
 
 from conformance_checks import make_check
 from harness import AdapterClient, AdapterConfig, build_adapter, discover_adapters
+from sdk_version import installed_version
+from version_constraints import matches_constraint
 
 
 SCRIPT_DIR = Path(__file__).parent
@@ -168,10 +170,19 @@ class TestResult:
 class VectorRunner:
     """Runs conformance tests against registered adapters."""
 
-    def __init__(self, verbose: bool = False, output_format: str = "text"):
+    def __init__(
+        self,
+        verbose: bool = False,
+        output_format: str = "text",
+        sdk_version_resolver: Callable[[str], str] | None = None,
+    ):
         self.verbose = verbose
         self.output_format = output_format
         self.results: list[TestResult] = []
+        self.sdk_version_resolver = sdk_version_resolver or installed_version
+        self.sdk_versions: dict[str, str] = {}
+        self.known_adapter_names: set[str] | None = None
+        self.version_skips = 0
     
     def log(self, msg: str, end: str = "\n", flush: bool = False) -> None:
         """Print message only if output format is text."""
@@ -220,6 +231,42 @@ class VectorRunner:
             return int(per_adapter[adapter.name])
         value = scenario.get("maxDurationMs")
         return int(value) if value is not None else None
+
+    def scenario_version_constraints(self, scenario: dict[str, Any]) -> dict[str, str]:
+        constraints = scenario.get("sdkVersions")
+        if constraints is None:
+            return {}
+        if not isinstance(constraints, dict):
+            raise ValueError("sdkVersions must be an object keyed by adapter name")
+
+        if self.known_adapter_names is None:
+            self.known_adapter_names = set(discover_adapters())
+        unknown_adapters = set(constraints) - self.known_adapter_names
+        if unknown_adapters:
+            names = ", ".join(sorted(unknown_adapters))
+            raise ValueError(f"sdkVersions contains unknown adapter keys: {names}")
+
+        for adapter_name, expression in constraints.items():
+            if not isinstance(expression, str):
+                raise ValueError(f"sdkVersions.{adapter_name} must be a string")
+        return constraints
+
+    def scenario_version_applies(
+        self, scenario: dict[str, Any], adapter: AdapterConfig
+    ) -> tuple[bool, str | None]:
+        constraints = self.scenario_version_constraints(scenario)
+
+        expression = constraints.get(adapter.name)
+        if expression is None:
+            return True, None
+
+        if adapter.name not in self.sdk_versions:
+            self.sdk_versions[adapter.name] = self.sdk_version_resolver(adapter.name)
+        version = self.sdk_versions[adapter.name]
+        applies = matches_constraint(version, expression)
+        if applies:
+            return True, None
+        return False, f"{adapter.name}@{version} does not satisfy {expression}"
 
     def compare_duration(
         self, limit_ms: int | None, elapsed_ms: float
@@ -457,6 +504,8 @@ class VectorRunner:
         is_challenge_id = generate_cmd is not None
 
         for scenario in vectors.get("scenarios", []):
+            self.scenario_version_constraints(scenario)
+            name = scenario["name"]
             scenario_adapters = scenario.get("adapters")
             if scenario_adapters and adapter.name not in scenario_adapters:
                 continue
@@ -464,7 +513,13 @@ class VectorRunner:
             if tag_filter and tag_filter not in scenario.get("tags", []):
                 continue
 
-            name = scenario["name"]
+            applies, reason = self.scenario_version_applies(scenario, adapter)
+            if not applies:
+                self.version_skips += 1
+                if self.verbose:
+                    self.log(f"  {vector_name}::{name} SKIPPED ({reason})")
+                continue
+
             description = scenario.get("description")
             tags = scenario.get("tags", [])
             tests = scenario.get("tests", {})
@@ -658,6 +713,7 @@ class VectorRunner:
     ) -> bool:
         """Run all conformance tests."""
         adapters = discover_adapters()
+        self.known_adapter_names = set(adapters)
         if adapter_names is None:
             adapter_names = list(adapters.keys())
         
@@ -752,7 +808,7 @@ class VectorRunner:
                         for line in r.error.split("\n"):
                             self.log(f"    {line}")
 
-        if not self.results:
+        if not self.results and not self.version_skips:
             self._record_result(
                 vector_file="runner",
                 test_type=TestType.BUILD,
@@ -797,6 +853,7 @@ class VectorRunner:
             "num_checks": total,
             "passed": passed,
             "failed": failed,
+            "skipped": self.version_skips,
             "checks": [r.to_check() for r in self.results],
             "errors": errors,
         }
