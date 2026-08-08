@@ -342,7 +342,7 @@ class AuditTests(unittest.TestCase):
             self.assertEqual(len(pending.finding_issues), 1)
             self.assertIn("## How to action", pending.finding_issues[0].body)
             self.assertIn("## Agricola remediation", pending.finding_issues[0].body)
-            self.assertIn("```text\n/agricola fix\n```", pending.finding_issues[0].body)
+            self.assertIn("```text\n/ag fix\n```", pending.finding_issues[0].body)
             self.assertIn(
                 "gh workflow run agricola-audit.yml", pending.finding_issues[0].body
             )
@@ -352,10 +352,10 @@ class AuditTests(unittest.TestCase):
             self.assertEqual(tuple(context.affected), ("go",))
 
             legacy = pending.finding_issues[0].body.replace(
-                "/agricola fix", "@agricola propagate go"
+                "/ag fix", "@agricola propagate go"
             )
             updated = ensure_audit_remediation(legacy, context, manifest())
-            self.assertIn("```text\n/agricola fix\n```", updated)
+            self.assertIn("```text\n/ag fix\n```", updated)
             self.assertNotIn("@agricola propagate go", updated)
 
     def test_rollup_links_semantic_source_evidence(self) -> None:

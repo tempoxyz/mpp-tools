@@ -373,7 +373,7 @@ class CommentTests(unittest.TestCase):
                 FakeGitHub(),
                 manifest(),
                 DecisionLedger(directory),
-                self.event("/agricola fix"),
+                self.event("/ag fix"),
             )
 
             self.assertEqual(
@@ -387,7 +387,7 @@ class CommentTests(unittest.TestCase):
                 FakeGitHub(),
                 manifest(),
                 DecisionLedger(directory),
-                self.audit_event("/agricola fix"),
+                self.audit_event("/ag fix"),
             )
 
             self.assertEqual(len(result.propagations), 1)

@@ -43,9 +43,16 @@ class CommandTests(unittest.TestCase):
         self.assertEqual(command.targets, ("go", "rust"))
 
     def test_parses_short_fix_command(self) -> None:
-        command = parse_commands("/agricola fix", self.manifest)[0]
+        command = parse_commands("/ag fix", self.manifest)[0]
         self.assertEqual(command.verb, CommandVerb.PROPAGATE)
         self.assertTrue(command.all_targets)
+
+    def test_short_prefix_supports_targets_and_instructions(self) -> None:
+        command = parse_commands(
+            '/ag fix rust "address review comments and CI"', self.manifest
+        )[0]
+        self.assertEqual(command.targets, ("rust",))
+        self.assertEqual(command.instruction, "address review comments and CI")
 
     def test_parses_targeted_fix_command(self) -> None:
         command = parse_commands("/agricola fix rust", self.manifest)[0]
@@ -83,8 +90,11 @@ class CommandTests(unittest.TestCase):
                 self.assertEqual(command.targets, ("go",))
 
     def test_detects_only_command_line_prefixes(self) -> None:
+        self.assertTrue(has_command_line("/ag status"))
         self.assertTrue(has_command_line("/agricola status"))
         self.assertTrue(has_command_line("@agricola status"))
+        self.assertFalse(has_command_line("/agent status"))
+        self.assertFalse(has_command_line("please run /ag status"))
         self.assertFalse(has_command_line("please run /agricola status"))
 
     def test_parses_all_propagation(self) -> None:
