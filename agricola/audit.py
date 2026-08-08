@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from .ledger import AuditStore
 from .models import (
+    AuditFindingContext,
     AuditCheckStatus,
     AuditCodeEvidence,
     AuditConfidence,
@@ -23,14 +24,18 @@ from .models import (
     AuditSemanticResult,
     AuditSeverity,
     AuditSnapshot,
+    AuditTarget,
+    Automation,
     Manifest,
     PendingAuditFindingIssue,
     PendingAuditReport,
 )
+from .planner import preserve_propagation_state, propagation_table
 
 AUDIT_MARKER = "<!-- agricola:audit -->"
 AUDIT_TITLE = "[Agricola] SDK drift audit"
 AUDIT_FINDING_MARKER_PREFIX = "<!-- agricola:audit-finding="
+AUDIT_FINDING_CONTEXT_PREFIX = "<!-- agricola:audit-finding-context="
 
 
 class AuditError(ValueError):
@@ -379,7 +384,9 @@ def build_audit_report(
     )
 
 
-def render_audit_report(report: AuditReport) -> PendingAuditReport:
+def render_audit_report(
+    report: AuditReport, manifest: Manifest
+) -> PendingAuditReport:
     timestamp = report.generated_at.isoformat().replace("+00:00", "Z")
     snapshots = {
         snapshot.target: snapshot for snapshot in (report.canonical, *report.targets)
@@ -446,7 +453,7 @@ def render_audit_report(report: AuditReport) -> PendingAuditReport:
         ]
     )
     finding_issues = tuple(
-        _render_finding_issue(report, finding, snapshots, timestamp)
+        _render_finding_issue(report, finding, snapshots, timestamp, manifest)
         for finding in report.findings
     )
     return PendingAuditReport(
@@ -477,10 +484,14 @@ def deliver_audit_report(
         if issue is None:
             issue = client.create_issue(finding.title, finding.body)
         else:
+            body = preserve_propagation_state(
+                finding.body,
+                str(issue.get("body") or ""),
+            )
             issue = client.update_issue(
                 int(str(issue["number"])),
                 title=finding.title,
-                body=finding.body,
+                body=body,
                 state="open",
             )
         if url := issue.get("html_url"):
@@ -507,10 +518,30 @@ def _render_finding_issue(
     finding: AuditFinding,
     snapshots: Mapping[str, AuditSnapshot],
     timestamp: str,
+    manifest: Manifest,
 ) -> PendingAuditFindingIssue:
     marker = f"{AUDIT_FINDING_MARKER_PREFIX}{finding.id} -->"
+    context = AuditFindingContext(
+        id=finding.id,
+        fingerprint=finding.fingerprint,
+        canonical=AuditTarget(
+            repo=report.canonical.repo,
+            sha=report.canonical.sha,
+        ),
+        affected={
+            target: AuditTarget(
+                repo=snapshots[target].repo,
+                sha=snapshots[target].sha,
+            )
+            for target in finding.affected
+        },
+    )
+    context_marker = (
+        f"{AUDIT_FINDING_CONTEXT_PREFIX}{context.model_dump_json()} -->"
+    )
     lines = [
         marker,
+        context_marker,
         f"# {finding.id} — {finding.summary}",
         "",
         f"Last observed by the head-to-head audit at `{timestamp}`.",
@@ -594,6 +625,17 @@ def _render_finding_issue(
     lines.extend(
         [
             "",
+            "## Agricola remediation",
+            "",
+            "Use these commands on this issue to create or inspect draft fixes for "
+            "the affected SDKs.",
+            "",
+            *propagation_table(manifest, finding.affected),
+            "",
+            "| Command | What it does | Example |",
+            "| --- | --- | --- |",
+            *_finding_command_rows(finding.affected, manifest),
+            "",
             "## How to action",
             "",
             *action_steps,
@@ -628,6 +670,109 @@ def _finding_marker_from_body(body: str) -> str | None:
         body,
     )
     return match.group(0) if match else None
+
+
+def audit_finding_context_from_body(body: str) -> AuditFindingContext | None:
+    marker = _finding_marker_from_body(body)
+    if marker is None:
+        return None
+    encoded = re.search(
+        rf"^{re.escape(AUDIT_FINDING_CONTEXT_PREFIX)}(?P<context>.+) -->$",
+        body,
+        re.MULTILINE,
+    )
+    if encoded is not None:
+        try:
+            return AuditFindingContext.model_validate_json(encoded.group("context"))
+        except ValidationError as exc:
+            raise AuditError(f"invalid audit finding context: {exc}") from exc
+
+    finding_id = re.search(r"agricola:audit-finding=(AGR-[0-9]{4}-[0-9]{3,})", marker)
+    fingerprint = re.search(r"^- Fingerprint: `([^`]+)`$", body, re.MULTILINE)
+    affected = re.search(r"^- Affected SDKs: (.+)$", body, re.MULTILINE)
+    snapshots = {
+        match.group("target"): AuditTarget(
+            repo=match.group("repo"),
+            sha=match.group("sha"),
+        )
+        for match in re.finditer(
+            r"^\| `(?P<target>[a-z][a-z0-9-]*)` \| "
+            r"`(?P<repo>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)` \| "
+            r"\[`[^`]+`\]\(https://github\.com/[^/]+/[^/]+/commit/"
+            r"(?P<sha>[0-9a-fA-F]{7,40})\)",
+            body,
+            re.MULTILINE,
+        )
+    }
+    affected_targets = () if affected is None else tuple(
+        re.findall(r"`([a-z][a-z0-9-]*)`", affected.group(1))
+    )
+    if (
+        finding_id is None
+        or fingerprint is None
+        or "typescript" not in snapshots
+        or not affected_targets
+        or any(target not in snapshots for target in affected_targets)
+    ):
+        raise AuditError("audit finding issue is missing its pinned audit context")
+    return AuditFindingContext(
+        id=finding_id.group(1),
+        fingerprint=fingerprint.group(1),
+        canonical=snapshots["typescript"],
+        affected={target: snapshots[target] for target in affected_targets},
+    )
+
+
+def _finding_command_rows(
+    affected: Iterable[str], manifest: Manifest
+) -> list[str]:
+    enabled = tuple(
+        target
+        for target in affected
+        if manifest.target(target).automation is Automation.PR
+    )
+    rows = []
+    if enabled:
+        example_targets = " ".join(enabled)
+        rows.extend(
+            [
+                "| `propagate <sdk>...` | Generates, verifies, and opens or updates draft fixes for the named affected SDKs. | "
+                f"`@agricola propagate {example_targets}` |",
+                "| `propagate all` | Does the same for every PR-enabled SDK affected by this finding. | `@agricola propagate all` |",
+            ]
+        )
+    rows.append(
+        "| `status` | Reports the current state of linked remediation pull requests. | `@agricola status` |"
+    )
+    return rows
+
+
+def ensure_audit_remediation(
+    body: str,
+    context: AuditFindingContext,
+    manifest: Manifest,
+) -> str:
+    if "<!-- agricola:propagation-table:start -->" in body:
+        return body
+    section = "\n".join(
+        [
+            "## Agricola remediation",
+            "",
+            "Use these commands on this issue to create or inspect draft fixes for "
+            "the affected SDKs.",
+            "",
+            *propagation_table(manifest, context.affected),
+            "",
+            "| Command | What it does | Example |",
+            "| --- | --- | --- |",
+            *_finding_command_rows(context.affected, manifest),
+            "",
+        ]
+    )
+    separator = "\n## How to action\n"
+    if separator in body:
+        return body.replace(separator, f"\n{section}\n## How to action\n", 1)
+    return body.rstrip() + "\n\n" + section
 
 
 def _link_finding_issues(body: str, urls: Mapping[str, str]) -> str:

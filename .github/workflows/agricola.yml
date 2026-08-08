@@ -185,7 +185,7 @@ jobs:
               --arg reason "$reason" \
               --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
               '{outcome: $outcome, request: $request[0], reason: $reason, at: $at}' \
-              > "$RUNNER_TEMP/results/${{ matrix.request.target }}-${{ matrix.request.source.pr }}.json"
+              > "$RUNNER_TEMP/results/${{ matrix.request.target }}-${{ matrix.request.tracking_issue }}.json"
             : > "$RUNNER_TEMP/changes.patch"
           else
             git diff --cached --binary --output="$RUNNER_TEMP/changes.patch" --
@@ -194,14 +194,14 @@ jobs:
       - name: Upload generated patch
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: agricola-patch-${{ matrix.request.target }}-${{ matrix.request.source.pr }}
+          name: agricola-patch-${{ matrix.request.target }}-${{ matrix.request.tracking_issue }}
           path: ${{ runner.temp }}/changes.patch
           if-no-files-found: error
 
       - name: Upload explicit skip result
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: agricola-result-${{ matrix.request.target }}-${{ matrix.request.source.pr }}
+          name: agricola-result-${{ matrix.request.target }}-${{ matrix.request.tracking_issue }}
           path: ${{ runner.temp }}/results/*.json
           if-no-files-found: ignore
 
@@ -233,7 +233,7 @@ jobs:
       - name: Download generated patch
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: agricola-patch-${{ matrix.request.target }}-${{ matrix.request.source.pr }}
+          name: agricola-patch-${{ matrix.request.target }}-${{ matrix.request.tracking_issue }}
           path: ${{ runner.temp }}/patch
 
       - name: Inspect generated patch
@@ -280,7 +280,7 @@ jobs:
       - name: Download verified patch
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: agricola-patch-${{ matrix.request.target }}-${{ matrix.request.source.pr }}
+          name: agricola-patch-${{ matrix.request.target }}-${{ matrix.request.tracking_issue }}
           path: ${{ runner.temp }}/patch
 
       - name: Inspect verified patch
@@ -393,13 +393,13 @@ jobs:
             --arg url "$url" \
             --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             '{outcome: $outcome, request: $request[0], pr: $pr, url: $url, at: $at}' \
-            > "$RUNNER_TEMP/results/${{ matrix.request.target }}-${{ matrix.request.source.pr }}.json"
+            > "$RUNNER_TEMP/results/${{ matrix.request.target }}-${{ matrix.request.tracking_issue }}.json"
 
       - name: Upload propagation result
         if: steps.patch.outputs.has-changes == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: agricola-result-${{ matrix.request.target }}-${{ matrix.request.source.pr }}
+          name: agricola-result-${{ matrix.request.target }}-${{ matrix.request.tracking_issue }}
           path: ${{ runner.temp }}/results/*.json
           if-no-files-found: error
 

@@ -10,7 +10,12 @@ from agricola.executor import (
     pull_request_title,
     verify,
 )
-from agricola.models import PropagationRequest, PropagationResult, PropagationSkip
+from agricola.models import (
+    AuditSource,
+    PropagationRequest,
+    PropagationResult,
+    PropagationSkip,
+)
 
 
 def request() -> PropagationRequest:
@@ -32,6 +37,24 @@ def request() -> PropagationRequest:
     )
 
 
+def audit_request() -> PropagationRequest:
+    return request().model_copy(
+        update={
+            "source": AuditSource(
+                repo="wevm/mppx",
+                sha="abc1234567",
+                finding="AGR-2026-022",
+                fingerprint="semantic:challenge/select-intent",
+            ),
+            "source_title": "fix: select a supported challenge intent",
+            "source_url": "https://github.com/tempoxyz/mpp-tools/issues/97",
+            "tracking_issue": 97,
+            "tracking_issue_url": "https://github.com/tempoxyz/mpp-tools/issues/97",
+            "branch": "agricola/agr-2026-022",
+        }
+    )
+
+
 class ExecutorTests(unittest.TestCase):
     def test_renders_stable_draft_pr_metadata(self) -> None:
         title = pull_request_title(request())
@@ -43,6 +66,13 @@ class ExecutorTests(unittest.TestCase):
         self.assertIn("## Key design considerations", body)
         self.assertIn("agricola:source=wevm/mppx#412 target=go", body)
         self.assertNotIn("## Testing", body)
+
+    def test_renders_audit_finding_pr_metadata(self) -> None:
+        body = pull_request_body(audit_request())
+
+        self.assertIn("agricola:audit-finding=AGR-2026-022 target=go", body)
+        self.assertIn("Resolve [AGR-2026-022]", body)
+        self.assertIn("tracking issue #97", body)
 
     @patch("agricola.executor.subprocess.run")
     def test_runs_manifest_commands_in_order(self, run) -> None:

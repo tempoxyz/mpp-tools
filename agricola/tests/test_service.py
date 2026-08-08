@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from agricola.github import GitHubError
 from agricola.ledger import CursorStore, DecisionLedger
 from agricola.models import (
+    AuditSource,
     Cursor,
     LabelAction,
     LabelEvent,
@@ -239,6 +240,32 @@ class CommentTests(unittest.TestCase):
             },
         }
 
+    def audit_event(self, body: str, comment_id: int = 55):
+        event = self.event(body, comment_id=comment_id)
+        event["issue"] = {
+            "number": 97,
+            "title": "[Agricola] AGR-2026-022: Challenge selection differs",
+            "html_url": "https://github.com/tempoxyz/mpp-tools/issues/97",
+            "body": """<!-- agricola:audit-finding=AGR-2026-022 -->
+# AGR-2026-022 — Challenge selection differs
+
+## Audited heads
+
+| Target | Repository | Commit | Conformance | Semantic review |
+| --- | --- | --- | --- | --- |
+| `typescript` | `wevm/mppx` | [`b7ab48e38e3d`](https://github.com/wevm/mppx/commit/b7ab48e38e3dd9131c05e4e2a9f72f49838a21c9) | Complete | Reference |
+| `go` | `tempoxyz/mpp-go` | [`9cad840de723`](https://github.com/tempoxyz/mpp-go/commit/9cad840de723e52790878d63317f0f90468987fb) | Complete | Complete |
+
+## Finding
+
+- Fingerprint: `semantic:challenge-negotiation/select-supported-method-intent`
+- Affected SDKs: `go`
+
+## How to action
+""",
+        }
+        return event
+
     def test_plan_regenerates_issue(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             client = FakeGitHub()
@@ -345,6 +372,66 @@ class CommentTests(unittest.TestCase):
                 tuple(request.target for request in result.propagations),
                 ("go", "rust"),
             )
+
+    def test_audit_finding_queues_affected_sdk_remediation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = handle_comment(
+                FakeGitHub(),
+                manifest(),
+                DecisionLedger(directory),
+                self.audit_event("@agricola propagate go"),
+            )
+
+            self.assertEqual(len(result.propagations), 1)
+            request = result.propagations[0]
+            self.assertIsInstance(request.source, AuditSource)
+            assert isinstance(request.source, AuditSource)
+            self.assertEqual(request.source.finding, "AGR-2026-022")
+            self.assertEqual(request.source.repo, "wevm/mppx")
+            self.assertEqual(request.target_base_sha, "9cad840de723e52790878d63317f0f90468987fb")
+            self.assertEqual(request.branch, "agricola/agr-2026-022")
+            self.assertIsNotNone(result.issue_update)
+            assert result.issue_update is not None
+            self.assertIn("| `go` | pr | Queued |", result.issue_update.body)
+
+    def test_audit_finding_records_pr_without_canonical_ledger_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = DecisionLedger(directory)
+            queued = handle_comment(
+                FakeGitHub(),
+                manifest(),
+                ledger,
+                self.audit_event("@agricola propagate go"),
+            )
+
+            changed, replies, updates = record_propagations(
+                ledger,
+                (
+                    PropagationResult(
+                        request=queued.propagations[0],
+                        pr="tempoxyz/mpp-go#91",
+                        url="https://github.com/tempoxyz/mpp-go/pull/91",
+                    ),
+                ),
+            )
+
+            self.assertFalse(changed)
+            self.assertIn("Opened draft PR", replies[0].body)
+            self.assertIn("tempoxyz/mpp-go#91", updates[0].body)
+            self.assertIsNone(ledger.read("wevm/mppx", 97))
+
+    def test_audit_finding_rejects_unaffected_sdk(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = handle_comment(
+                FakeGitHub(),
+                manifest(),
+                DecisionLedger(directory),
+                self.audit_event("@agricola propagate rust"),
+            )
+
+            self.assertFalse(result.propagations)
+            assert result.reply is not None
+            self.assertIn("does not affect: rust", result.reply.body)
 
     def test_records_published_and_skipped_outcomes_together(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

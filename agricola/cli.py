@@ -327,7 +327,7 @@ def main(argv: list[str] | None = None) -> int:
                 load_snapshots(args.snapshots),
                 AuditStore(args.ledger),
             )
-            pending = render_audit_report(report)
+            pending = render_audit_report(report, manifest)
             Path(args.report_file).write_text(pending.model_dump_json(indent=2) + "\n")
         except (AuditError, LedgerError, OSError, ValidationError) as exc:
             print(f"audit report error: {exc}", file=sys.stderr)

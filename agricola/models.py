@@ -136,6 +136,38 @@ class Source(FrozenModel):
     sha: Sha
 
 
+class AuditSource(FrozenModel):
+    repo: RepoName
+    sha: Sha
+    finding: FindingId
+    fingerprint: NonEmpty
+
+
+class AuditTarget(FrozenModel):
+    repo: RepoName
+    sha: Sha
+
+
+class AuditFindingContext(FrozenModel):
+    id: FindingId
+    fingerprint: NonEmpty
+    canonical: AuditTarget
+    affected: Mapping[TargetName, AuditTarget] = Field(min_length=1)
+
+    @field_validator("affected", mode="after")
+    @classmethod
+    def freeze_affected(
+        cls, value: Mapping[str, AuditTarget]
+    ) -> Mapping[str, AuditTarget]:
+        return MappingProxyType(dict(value))
+
+    @field_serializer("affected")
+    def serialize_affected(
+        self, value: Mapping[str, AuditTarget]
+    ) -> dict[str, AuditTarget]:
+        return dict(value)
+
+
 class DecisionBase(FrozenModel):
     target: TargetName
     by: Login
@@ -253,7 +285,7 @@ class Command:
 
 
 class PropagationRequest(FrozenModel):
-    source: Source
+    source: Source | AuditSource
     source_title: NonEmpty
     source_url: NonEmpty
     target: TargetName

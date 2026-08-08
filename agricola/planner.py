@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Sequence
 from enum import StrEnum
 from pathlib import PurePosixPath
@@ -90,8 +91,11 @@ def _propagation_table(
     manifest: Manifest,
     selected_targets: Iterable[str],
     decisions: Sequence[Decision],
+    *,
+    targets: Iterable[str] | None = None,
 ) -> list[str]:
     selected = set(selected_targets)
+    visible = set(targets) if targets is not None else None
     by_target = {decision.target: decision for decision in decisions}
     rows = [
         _PROPAGATION_TABLE_START,
@@ -99,6 +103,8 @@ def _propagation_table(
         "| --- | --- | --- | --- |",
     ]
     for target, sdk in manifest.sdks.items():
+        if visible is not None and target not in visible:
+            continue
         decision = by_target.get(target)
         if decision is not None and decision.decision is DecisionKind.PROPAGATE:
             assert decision.pr is not None
@@ -122,10 +128,78 @@ def _propagation_table(
     return rows
 
 
+def propagation_table(
+    manifest: Manifest,
+    targets: Iterable[str],
+    *,
+    queued_targets: Iterable[str] = (),
+) -> list[str]:
+    """Render propagation state for a selected set of SDKs."""
+    selected = tuple(targets)
+    return _propagation_table(
+        manifest,
+        queued_targets,
+        (),
+        targets=selected,
+    )
+
+
+def queued_propagations(body: str, targets: Iterable[str]) -> str:
+    replacements = {
+        target: _table_row(target, "pr", "Queued") for target in targets
+    }
+    return _replace_propagation_rows(body, replacements)
+
+
+def recorded_propagations(body: str) -> dict[str, str]:
+    recorded: dict[str, str] = {}
+    pattern = re.compile(
+        r"^\| `(?P<target>[a-z][a-z0-9-]*)` \| pr \| Recorded \| "
+        r"\[(?P<reference>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[1-9][0-9]*)\]"
+    )
+    for line in body.splitlines():
+        if match := pattern.match(line):
+            recorded[match.group("target")] = match.group("reference")
+    return recorded
+
+
+def preserve_propagation_state(body: str, previous_body: str) -> str:
+    previous_rows = {
+        line.split(" |", 1)[0]: line
+        for line in previous_body.splitlines()
+        if line.startswith("| `")
+        and any(
+            status in line
+            for status in ("| Queued |", "| Recorded |", "| Skipped —")
+        )
+    }
+    replacements = {}
+    for line in body.splitlines():
+        if line.startswith("| `"):
+            key = line.split(" |", 1)[0]
+            if key in previous_rows:
+                target = key.removeprefix("| `").removesuffix("`")
+                replacements[target] = previous_rows[key]
+    return _replace_propagation_rows(body, replacements)
+
+
+def _replace_propagation_rows(body: str, replacements: dict[str, str]) -> str:
+    lines = body.splitlines()
+    if _PROPAGATION_TABLE_START not in lines or _PROPAGATION_TABLE_END not in lines:
+        return body
+    start = lines.index(_PROPAGATION_TABLE_START)
+    end = lines.index(_PROPAGATION_TABLE_END, start)
+    for index in range(start + 1, end):
+        for target, replacement in replacements.items():
+            if lines[index].startswith(f"| `{target}` |"):
+                lines[index] = replacement
+                break
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def record_propagation_outcomes(
     body: str, outcomes: Iterable[PropagationOutcome]
 ) -> str:
-    lines = body.splitlines()
     replacements = {}
     for outcome in outcomes:
         if isinstance(outcome, PropagationResult):
@@ -143,14 +217,7 @@ def record_propagation_outcomes(
                 f"Skipped — {reason}",
             )
         replacements[outcome.request.target] = replacement
-    if _PROPAGATION_TABLE_START not in lines or _PROPAGATION_TABLE_END not in lines:
-        return body
-    for index, line in enumerate(lines):
-        for target, replacement in replacements.items():
-            if line.startswith(f"| `{target}` |"):
-                lines[index] = replacement
-                break
-    return "\n".join(lines).rstrip() + "\n"
+    return _replace_propagation_rows(body, replacements)
 
 
 def build_tracking_issue(
