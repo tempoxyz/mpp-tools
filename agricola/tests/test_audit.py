@@ -17,7 +17,12 @@ from agricola.audit import (
 from agricola.ledger import AuditStore
 from agricola.models import (
     AuditCheckStatus,
+    AuditCodeEvidence,
+    AuditConfidence,
     AuditObservation,
+    AuditSemanticFinding,
+    AuditSemanticResult,
+    AuditSeverity,
     AuditSnapshot,
 )
 from agricola.tests.helpers import manifest
@@ -41,6 +46,8 @@ def snapshot(
     *,
     capabilities: tuple[str, ...] = ("challenge.parse", "receipt.parse"),
     observations: tuple[AuditObservation, ...] = (),
+    semantic_findings: tuple[AuditSemanticFinding, ...] = (),
+    semantic_reviewed: bool | None = None,
     errors: tuple[str, ...] = (),
 ) -> AuditSnapshot:
     repos = {
@@ -49,17 +56,67 @@ def snapshot(
         "rust": "tempoxyz/mpp-rs",
         "ruby": "stripe/mpp-rb",
     }
+    reviewed = (
+        target != "typescript" if semantic_reviewed is None else semantic_reviewed
+    )
     return AuditSnapshot(
         target=target,
         repo=repos[target],
         sha=f"{target}1234567",
         capabilities=frozenset(capabilities),
         observations=observations,
+        semantic_reviewed=reviewed,
+        semantic_summary="Repository comparison completed" if reviewed else None,
+        semantic_findings=semantic_findings,
         errors=errors,
     )
 
 
+def semantic_finding(
+    fingerprint: str = "semantic:receipt/verification-order",
+    *,
+    severity: AuditSeverity = AuditSeverity.MEDIUM,
+    confidence: AuditConfidence = AuditConfidence.HIGH,
+) -> AuditSemanticFinding:
+    return AuditSemanticFinding(
+        fingerprint=fingerprint,
+        title="Receipt verification order differs",
+        description="The SDK validates the signature after accepting the receipt.",
+        severity=severity,
+        confidence=confidence,
+        canonical=AuditCodeEvidence(
+            path="src/receipt.ts",
+            line=42,
+            symbol="verifyReceipt",
+            behavior="Verifies the signature before returning a receipt.",
+        ),
+        target=AuditCodeEvidence(
+            path="src/receipt.rs",
+            line=27,
+            symbol="verify_receipt",
+            behavior="Returns before signature verification.",
+        ),
+        spec_reference="MPP-4",
+        suggested_test="Reject a receipt with an invalid signature.",
+    )
+
+
 class AuditTests(unittest.TestCase):
+    def test_semantic_output_schema_is_strict(self) -> None:
+        schema = AuditSemanticResult.model_json_schema()
+        self.assertFalse(schema["additionalProperties"])
+        self.assertEqual(
+            set(schema["required"]),
+            {
+                "schema_version",
+                "target",
+                "canonical_sha",
+                "target_sha",
+                "summary",
+                "findings",
+            },
+        )
+
     def test_normalizes_conformance_results(self) -> None:
         result = snapshot_from_conformance(
             target="rust",
@@ -128,6 +185,77 @@ class AuditTests(unittest.TestCase):
             "likely canonical change that did not fan out",
         )
 
+    def test_normalizes_and_clusters_semantic_findings(self) -> None:
+        canonical_sha = "canonical123"
+        target_sha = "rust1234567"
+        raw_finding = semantic_finding().model_dump(mode="json")
+        rust = snapshot_from_conformance(
+            target="rust",
+            repo="tempoxyz/mpp-rs",
+            sha=target_sha,
+            canonical_sha=canonical_sha,
+            adapter_manifest={"capabilities": ["receipt.parse"]},
+            results={"checks": [self.vector_check("SUCCESS")]},
+            semantic_result={
+                "schema_version": 1,
+                "target": "rust",
+                "canonical_sha": canonical_sha,
+                "target_sha": target_sha,
+                "summary": "Compared public receipt behavior.",
+                "findings": [raw_finding],
+            },
+        )
+        go = snapshot("go", semantic_findings=(semantic_finding(),))
+        rust = rust.model_copy(
+            update={
+                "semantic_findings": (
+                    semantic_finding(
+                        severity=AuditSeverity.HIGH,
+                        confidence=AuditConfidence.LOW,
+                    ),
+                )
+            }
+        )
+        ruby = snapshot("ruby")
+
+        findings, errors = analyze_deltas(snapshot("typescript"), (go, rust, ruby))
+
+        self.assertFalse(errors)
+        semantic = next(
+            finding
+            for finding in findings
+            if finding.fingerprint == "semantic:receipt/verification-order"
+        )
+        self.assertEqual(semantic.affected, ("go", "rust"))
+        self.assertEqual(semantic.clean, ("ruby",))
+        self.assertEqual(semantic.severity, AuditSeverity.HIGH)
+        self.assertEqual(semantic.confidence, AuditConfidence.LOW)
+        self.assertEqual(
+            tuple(item.target for item in semantic.semantic_evidence),
+            ("go", "rust"),
+        )
+
+    def test_invalid_semantic_identity_marks_snapshot_incomplete(self) -> None:
+        result = snapshot_from_conformance(
+            target="rust",
+            repo="tempoxyz/mpp-rs",
+            sha="rust1234567",
+            canonical_sha="canonical123",
+            adapter_manifest={"capabilities": ["receipt.parse"]},
+            results={"checks": [self.vector_check("SUCCESS")]},
+            semantic_result={
+                "schema_version": 1,
+                "target": "rust",
+                "canonical_sha": "wrong-sha",
+                "target_sha": "rust1234567",
+                "summary": "Compared implementations.",
+                "findings": [],
+            },
+        )
+
+        self.assertFalse(result.semantic_reviewed)
+        self.assertIn("canonical SHA does not match", result.semantic_error or "")
+
     def test_vector_clean_requires_an_explicit_success(self) -> None:
         check = "vector:www-authenticate/basic/parse"
         canonical = snapshot(
@@ -175,6 +303,22 @@ class AuditTests(unittest.TestCase):
             self.assertIn("AGR-2026-001", pending.body)
             self.assertIn("`go`", pending.body)
 
+    def test_rollup_links_semantic_source_evidence(self) -> None:
+        canonical = snapshot("typescript")
+        rust = snapshot("rust", semantic_findings=(semantic_finding(),))
+        go = snapshot("go")
+        ruby = snapshot("ruby")
+
+        with tempfile.TemporaryDirectory() as directory:
+            report = build_audit_report(
+                manifest(), (canonical, go, rust, ruby), AuditStore(directory)
+            )
+
+        body = render_audit_report(report).body
+        self.assertIn("semantic:receipt/verification-order", body)
+        self.assertIn("wevm/mppx/blob/typescript1234567/src/receipt.ts#L42", body)
+        self.assertIn("tempoxyz/mpp-rs/blob/rust1234567/src/receipt.rs#L27", body)
+
     def test_missing_snapshot_marks_report_incomplete(self) -> None:
         canonical = snapshot("typescript")
         with tempfile.TemporaryDirectory() as directory:
@@ -183,6 +327,20 @@ class AuditTests(unittest.TestCase):
         pending = render_audit_report(report)
         self.assertFalse(pending.healthy)
         self.assertIn("go: audit snapshot is missing", pending.body)
+
+    def test_missing_semantic_review_marks_report_incomplete(self) -> None:
+        canonical = snapshot("typescript")
+        go = snapshot("go", semantic_reviewed=False)
+        rust = snapshot("rust")
+        ruby = snapshot("ruby")
+        with tempfile.TemporaryDirectory() as directory:
+            report = build_audit_report(
+                manifest(), (canonical, go, rust, ruby), AuditStore(directory)
+            )
+
+        pending = render_audit_report(report)
+        self.assertFalse(pending.healthy)
+        self.assertIn("go: semantic review is missing", pending.body)
 
     def test_matrix_requires_every_manifest_adapter(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -208,6 +366,19 @@ class AuditTests(unittest.TestCase):
 
         self.assertEqual(client.updated[0][0], 42)
         self.assertIn(AUDIT_MARKER, client.updated[0][2] or "")
+
+    @staticmethod
+    def vector_check(status: str) -> dict[str, object]:
+        return {
+            "name": "receipt parse",
+            "description": "Parses receipt",
+            "status": status,
+            "details": {
+                "vector": "receipt",
+                "scenario": "basic",
+                "testType": "parse",
+            },
+        }
 
 
 class AuditReportFixture:

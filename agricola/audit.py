@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,9 +13,15 @@ from pydantic import ValidationError
 from .ledger import AuditStore
 from .models import (
     AuditCheckStatus,
+    AuditCodeEvidence,
+    AuditConfidence,
     AuditFinding,
     AuditObservation,
     AuditReport,
+    AuditSemanticEvidence,
+    AuditSemanticFinding,
+    AuditSemanticResult,
+    AuditSeverity,
     AuditSnapshot,
     Manifest,
     PendingAuditReport,
@@ -47,6 +53,9 @@ class FindingDraft:
     affected: tuple[str, ...]
     clean: tuple[str, ...]
     likely_origin: str
+    severity: AuditSeverity | None = None
+    confidence: AuditConfidence | None = None
+    semantic_evidence: tuple[AuditSemanticEvidence, ...] = ()
 
 
 @dataclass
@@ -55,6 +64,7 @@ class _FindingGroup:
     reference: str | None
     affected: set[str]
     clean: set[str]
+    semantic_evidence: dict[str, AuditSemanticFinding]
 
 
 def audit_matrix(
@@ -88,6 +98,9 @@ def snapshot_from_conformance(
     sha: str,
     adapter_manifest: Mapping[str, object],
     results: Mapping[str, object],
+    canonical_sha: str | None = None,
+    semantic_result: Mapping[str, object] | None = None,
+    semantic_error: str | None = None,
 ) -> AuditSnapshot:
     capabilities = adapter_manifest.get("capabilities")
     if not isinstance(capabilities, list) or not all(
@@ -140,12 +153,39 @@ def snapshot_from_conformance(
         )
     if not observations:
         errors.append(f"{target}: no protocol conformance checks completed")
+    semantic_reviewed = False
+    semantic_summary = None
+    semantic_findings: tuple[AuditSemanticFinding, ...] = ()
+    normalized_semantic_error = semantic_error
+    if semantic_result is not None:
+        try:
+            semantic = AuditSemanticResult.model_validate(semantic_result)
+            if semantic.target != target:
+                raise AuditError(
+                    f"semantic review target is {semantic.target}, expected {target}"
+                )
+            if semantic.target_sha != sha:
+                raise AuditError("semantic review target SHA does not match checkout")
+            if canonical_sha is None or semantic.canonical_sha != canonical_sha:
+                raise AuditError(
+                    "semantic review canonical SHA does not match checkout"
+                )
+            semantic_reviewed = True
+            semantic_summary = semantic.summary
+            semantic_findings = semantic.findings
+            normalized_semantic_error = None
+        except (AuditError, ValidationError) as exc:
+            normalized_semantic_error = f"{target}: invalid semantic review: {exc}"
     return AuditSnapshot(
         target=target,
         repo=repo,
         sha=sha,
         capabilities=frozenset(capabilities),
         observations=tuple(observations),
+        semantic_reviewed=semantic_reviewed,
+        semantic_summary=semantic_summary,
+        semantic_findings=semantic_findings,
+        semantic_error=normalized_semantic_error,
         errors=tuple(errors),
     )
 
@@ -156,6 +196,9 @@ def analyze_deltas(
 ) -> tuple[tuple[FindingDraft, ...], tuple[str, ...]]:
     errors = list(canonical.errors)
     errors.extend(error for target in targets for error in target.errors)
+    errors.extend(
+        target.semantic_error for target in targets if target.semantic_error is not None
+    )
     canonical_checks = {
         observation.fingerprint: observation for observation in canonical.observations
     }
@@ -186,6 +229,7 @@ def analyze_deltas(
                     for target in valid_targets
                     if capability in target.capabilities
                 },
+                semantic_evidence={},
             )
 
     for target in valid_targets:
@@ -204,6 +248,7 @@ def analyze_deltas(
                     reference=canonical_observation.reference,
                     affected=set(),
                     clean=set(),
+                    semantic_evidence={},
                 ),
             )
             group.affected.add(target.target)
@@ -221,10 +266,39 @@ def analyze_deltas(
             )
         )
 
+    semantic_targets = tuple(target for target in targets if target.semantic_reviewed)
+    semantic_names = {target.target for target in semantic_targets}
+    for target in semantic_targets:
+        for finding in target.semantic_findings:
+            group = groups.setdefault(
+                finding.fingerprint,
+                _FindingGroup(
+                    summary=finding.title,
+                    reference=(
+                        finding.spec_reference
+                        or f"{finding.canonical.path}:{finding.canonical.line or 1}"
+                    ),
+                    affected=set(),
+                    clean=set(),
+                    semantic_evidence={},
+                ),
+            )
+            group.affected.add(target.target)
+            group.semantic_evidence[target.target] = finding
+
+    for fingerprint, group in groups.items():
+        if fingerprint.startswith("semantic:"):
+            group.clean.update(semantic_names - group.affected)
+
     findings = []
     for fingerprint, group in sorted(groups.items()):
         affected = tuple(sorted(group.affected))
         clean = tuple(sorted(group.clean))
+        compared_targets = (
+            len(semantic_targets)
+            if fingerprint.startswith("semantic:")
+            else len(valid_targets)
+        )
         findings.append(
             FindingDraft(
                 fingerprint=fingerprint,
@@ -232,7 +306,13 @@ def analyze_deltas(
                 reference=group.reference,
                 affected=affected,
                 clean=clean,
-                likely_origin=_likely_origin(len(affected), len(valid_targets)),
+                likely_origin=_likely_origin(len(affected), compared_targets),
+                severity=_highest_severity(group.semantic_evidence.values()),
+                confidence=_lowest_confidence(group.semantic_evidence.values()),
+                semantic_evidence=tuple(
+                    AuditSemanticEvidence(target=target, finding=finding)
+                    for target, finding in sorted(group.semantic_evidence.items())
+                ),
             )
         )
     return tuple(findings), tuple(dict.fromkeys(errors))
@@ -254,9 +334,15 @@ def build_audit_report(
     targets = tuple(
         by_target[target] for target in manifest.sdks if target in by_target
     )
+    missing_semantic = [
+        target.target
+        for target in targets
+        if not target.semantic_reviewed and target.semantic_error is None
+    ]
     drafts, analysis_errors = analyze_deltas(canonical, targets)
     errors = (
         *(f"{target}: audit snapshot is missing" for target in missing),
+        *(f"{target}: semantic review is missing" for target in missing_semantic),
         *analysis_errors,
     )
     ids = store.assign((draft.fingerprint for draft in drafts), generated_at)
@@ -269,6 +355,9 @@ def build_audit_report(
             affected=draft.affected,
             clean=draft.clean,
             likely_origin=draft.likely_origin,
+            severity=draft.severity,
+            confidence=draft.confidence,
+            semantic_evidence=draft.semantic_evidence,
         )
         for draft in drafts
     )
@@ -283,6 +372,9 @@ def build_audit_report(
 
 def render_audit_report(report: AuditReport) -> PendingAuditReport:
     timestamp = report.generated_at.isoformat().replace("+00:00", "Z")
+    snapshots = {
+        snapshot.target: snapshot for snapshot in (report.canonical, *report.targets)
+    }
     lines = [
         AUDIT_MARKER,
         "# SDK drift audit",
@@ -293,8 +385,8 @@ def render_audit_report(report: AuditReport) -> PendingAuditReport:
         "",
         "## Audited heads",
         "",
-        "| Target | Repository | Commit | Health |",
-        "| --- | --- | --- | --- |",
+        "| Target | Repository | Commit | Conformance | Semantic review |",
+        "| --- | --- | --- | --- | --- |",
         _snapshot_row(report.canonical),
         *(_snapshot_row(target) for target in report.targets),
         "",
@@ -304,15 +396,17 @@ def render_audit_report(report: AuditReport) -> PendingAuditReport:
     if report.findings:
         lines.extend(
             [
-                "| Finding | Fingerprint | Affected | Clean | Likely origin |",
-                "| --- | --- | --- | --- | --- |",
+                "| Finding | Source | Fingerprint | Severity | Affected | Clean | Likely origin |",
+                "| --- | --- | --- | --- | --- | --- | --- |",
             ]
         )
         for finding in report.findings:
             lines.append(
-                "| {id} | `{fingerprint}` | {affected} | {clean} | {origin} |".format(
+                "| {id} | {source} | `{fingerprint}` | {severity} | {affected} | {clean} | {origin} |".format(
                     id=finding.id,
+                    source=_finding_source(finding.fingerprint),
                     fingerprint=_escape(finding.fingerprint),
+                    severity=finding.severity or "—",
                     affected=", ".join(f"`{item}`" for item in finding.affected),
                     clean=", ".join(f"`{item}`" for item in finding.clean) or "—",
                     origin=_escape(finding.likely_origin),
@@ -332,8 +426,46 @@ def render_audit_report(report: AuditReport) -> PendingAuditReport:
                     f"- Likely origin: {finding.likely_origin}",
                 ]
             )
+            if finding.semantic_evidence:
+                lines.extend(
+                    [
+                        f"- Severity: {finding.severity}",
+                        f"- Confidence: {finding.confidence}",
+                        "",
+                        "| SDK | Canonical evidence | SDK evidence | Suggested test |",
+                        "| --- | --- | --- | --- |",
+                    ]
+                )
+                for evidence in finding.semantic_evidence:
+                    target = snapshots[evidence.target]
+                    semantic = evidence.finding
+                    lines.append(
+                        "| `{target}` | {canonical} | {downstream} | {test} |".format(
+                            target=evidence.target,
+                            canonical=_evidence_link(
+                                report.canonical.repo,
+                                report.canonical.sha,
+                                semantic.canonical,
+                            ),
+                            downstream=_evidence_link(
+                                target.repo,
+                                target.sha,
+                                semantic.target,
+                            ),
+                            test=_escape(semantic.suggested_test),
+                        )
+                    )
+                for evidence in finding.semantic_evidence:
+                    lines.extend(
+                        [
+                            "",
+                            f"**{evidence.target}:** {evidence.finding.description}",
+                        ]
+                    )
     else:
-        lines.append("No deterministic capability or conformance deltas detected.")
+        lines.append(
+            "No capability, conformance, or semantic implementation deltas detected."
+        )
 
     lines.extend(["", "## Audit health", ""])
     if report.errors:
@@ -402,14 +534,59 @@ def _likely_origin(affected: int, total: int) -> str:
     return "shared downstream divergence"
 
 
+def _highest_severity(
+    findings: Iterable[AuditSemanticFinding],
+) -> AuditSeverity | None:
+    rank = {
+        AuditSeverity.LOW: 1,
+        AuditSeverity.MEDIUM: 2,
+        AuditSeverity.HIGH: 3,
+    }
+    return max(
+        (finding.severity for finding in findings),
+        key=rank.__getitem__,
+        default=None,
+    )
+
+
+def _lowest_confidence(
+    findings: Iterable[AuditSemanticFinding],
+) -> AuditConfidence | None:
+    rank = {
+        AuditConfidence.LOW: 1,
+        AuditConfidence.MEDIUM: 2,
+        AuditConfidence.HIGH: 3,
+    }
+    return min(
+        (finding.confidence for finding in findings),
+        key=rank.__getitem__,
+        default=None,
+    )
+
+
 def _escape(value: str) -> str:
-    return value.replace("|", "\\|")
+    return value.replace("\r", " ").replace("\n", " ").replace("|", "\\|")
 
 
 def _snapshot_row(snapshot: AuditSnapshot) -> str:
     link = f"https://github.com/{snapshot.repo}/commit/{snapshot.sha}"
-    health = "Incomplete" if snapshot.errors else "Complete"
+    conformance = "Incomplete" if snapshot.errors else "Complete"
+    if snapshot.target == "typescript":
+        semantic = "Reference"
+    else:
+        semantic = "Complete" if snapshot.semantic_reviewed else "Incomplete"
     return (
         f"| `{snapshot.target}` | `{snapshot.repo}` | "
-        f"[`{snapshot.sha[:12]}`]({link}) | {health} |"
+        f"[`{snapshot.sha[:12]}`]({link}) | {conformance} | {semantic} |"
     )
+
+
+def _finding_source(fingerprint: str) -> str:
+    return fingerprint.split(":", 1)[0]
+
+
+def _evidence_link(repo: str, sha: str, evidence: AuditCodeEvidence) -> str:
+    line = evidence.line or 1
+    url = f"https://github.com/{repo}/blob/{sha}/{evidence.path}#L{line}"
+    label = evidence.symbol or f"{evidence.path}:{line}"
+    return f"[{_escape(label)}]({url}) — {_escape(evidence.behavior)}"

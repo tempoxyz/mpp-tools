@@ -117,9 +117,9 @@ Generation and verification failures leave no decision, so the same request rema
 
 The weekly and manually dispatched audit is head-to-head and report-only. It uses `mppx` as the sole reference and evaluates every manifest SDK independently, including notification-only targets.
 
-The first pass runs shared protocol vectors against each repository's current default-branch checkout and compares the capabilities declared by its conformance adapter. The second pass clusters equivalent failures under SDK-independent fingerprints such as `capability:challenge.parse` or `vector:www-authenticate/basic/parse`. Stable `AGR-<year>-<sequence>` IDs are assigned in [`ledger/audit.json`](../ledger/audit.json).
+The first pass reviews each repository's current default-branch checkout independently against the exact canonical `mppx` head. A read-only Codex run explores both implementations and emits schema-validated `semantic:<area>/<behavior>` findings with source evidence. Shared protocol vectors and conformance-adapter capabilities provide deterministic supporting evidence. The second pass clusters equivalent findings under SDK-independent fingerprints such as `semantic:receipt/verification-order`, `capability:challenge.parse`, or `vector:www-authenticate/basic/parse`. Stable `AGR-<year>-<sequence>` IDs are assigned in [`ledger/audit.json`](../ledger/audit.json).
 
-One `[Agricola] SDK drift audit` issue is updated in place. It shows the exact audited commits, affected and clean SDKs, likely-origin heuristic, and incomplete jobs. Findings never create branches, pull requests, or downstream issues automatically. Codex semantic comparison is intentionally omitted because the specification requires deterministic evidence to remain authoritative.
+One `[Agricola] SDK drift audit` issue is updated in place. It shows the exact audited commits, affected and clean SDKs, likely-origin heuristic, severity, confidence, and linked source evidence. Findings never create branches, pull requests, or downstream issues automatically. Semantic findings are advisory; deterministic conformance results remain independently visible.
 
 ## State and recovery
 
@@ -150,6 +150,7 @@ State-changing replies are deferred until the state pull request has been update
 | `agricola deliver-issue-update <file>` | Deliver a tracking issue body update deferred until after Git persistence. |
 | `agricola record-propagations <results>` | Record published pull requests or explicit skips and render deferred replies. |
 | `agricola audit-matrix` | Build the head-audit matrix from the manifest and conformance adapters. |
+| `agricola audit-semantic-schema` | Print the strict Codex semantic-review output schema. |
 | `agricola audit-snapshot` | Normalize one SDK's head conformance result. |
 | `agricola build-audit <snapshots>` | Cluster snapshots, assign stable finding IDs, and render the roll-up. |
 | `agricola deliver-audit <report>` | Create or update the single audit issue. |
