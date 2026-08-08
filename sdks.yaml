@@ -20,7 +20,7 @@ sdks:
     repo: tempoxyz/mpp-rs
     automation: pr
     owners: [brendanjryan]
-    changelog: keep-a-changelog
+    changelog: fragment
     verify:
       - cargo test --features tempo,stripe,ws,server,client,axum,middleware,tower,utils,integration-stripe,integration-ws
 

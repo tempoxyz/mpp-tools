@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import cast
 
 from agricola.manifest import ManifestError, generated_schemas, load_manifest
-from agricola.models import Automation
+from agricola.models import Automation, Changelog
 
 
 class ManifestTests(unittest.TestCase):
@@ -16,6 +16,7 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(manifest.canonical.repo, "wevm/mppx")
         self.assertEqual(manifest.sdks["go"].automation, Automation.NOTIFY)
         self.assertEqual(manifest.pr_targets(), ("rust", "python"))
+        self.assertEqual(manifest.sdks["rust"].changelog, Changelog.FRAGMENT)
         self.assertEqual(manifest.sdks["ruby"].automation, Automation.NOTIFY)
 
     def test_rejects_pr_target_without_verification(self) -> None:

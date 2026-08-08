@@ -52,6 +52,7 @@ class Automation(StrEnum):
 
 class Changelog(StrEnum):
     KEEP_A_CHANGELOG = "keep-a-changelog"
+    FRAGMENT = "fragment"
     NONE = "none"
 
 
