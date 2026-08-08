@@ -4,10 +4,13 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from jsonschema import Draft202012Validator
 
 from harness import (
+    AdapterClient,
+    AdapterConfig,
     FLOW_CASES_PATH,
     FLOW_RESULTS_PATH,
     SCHEMA_STORE,
@@ -20,6 +23,62 @@ from harness import (
     validate_vector_scenarios,
     write_flow_results,
 )
+
+
+class AdapterClientValidationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.adapter = AdapterConfig(
+            name="test",
+            command=["test-adapter"],
+            capabilities=["challenge.format"],
+        )
+        self.client = AdapterClient(self.adapter)
+        self.invalid_challenge = {
+            "id": "",
+            "realm": "api.example.com",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {},
+        }
+
+    @patch("harness.subprocess.run")
+    def test_validates_operation_input_by_default(self, run) -> None:
+        with self.assertRaisesRegex(ValueError, "failed schema validation"):
+            self.client.call("challenge.format", self.invalid_challenge)
+
+        run.assert_not_called()
+
+    @patch("harness.subprocess.run")
+    def test_expected_failure_can_reach_adapter(self, run) -> None:
+        run.return_value.returncode = 0
+        run.return_value.stdout = json.dumps(
+            {
+                "ok": False,
+                "error": {"type": "format_error", "message": "id is required"},
+            }
+        )
+
+        result = self.client.call(
+            "challenge.format",
+            self.invalid_challenge,
+            validate_input=False,
+        )
+
+        self.assertEqual(result["error"]["type"], "format_error")
+        request = json.loads(run.call_args.kwargs["input"])
+        self.assertEqual(request["input"]["id"], "")
+
+    @patch("harness.subprocess.run")
+    def test_expected_failure_still_validates_request_envelope(self, run) -> None:
+        with self.assertRaisesRegex(ValueError, "Additional properties are not allowed"):
+            self.client.call(
+                "challenge.format",
+                self.invalid_challenge,
+                context={"unexpected": True},
+                validate_input=False,
+            )
+
+        run.assert_not_called()
 
 
 class RepositoryDataSchemaTests(unittest.TestCase):

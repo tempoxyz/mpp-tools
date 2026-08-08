@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tempo.xyz/mpp-tools/conformance/schemas/adapter-request-envelope.schema.json",
+  "title": "MPP Conformance Adapter Request Envelope",
+  "type": "object",
+  "required": ["schema", "op", "input"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": 1 },
+    "op": { "$ref": "protocol.schema.json#/$defs/Operation" },
+    "input": true,
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "caseName": { "type": "string" },
+        "vectorName": { "type": "string" },
+        "timeoutMs": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

@@ -155,6 +155,10 @@ func handleFormatWWWAuthenticate(input string) {
 		printJSON(commandResponse{Success: false, Error: err.Error(), ErrorType: "format_error"})
 		return
 	}
+	if challenge.ID == "" {
+		printJSON(commandResponse{Success: false, Error: "id must not be empty", ErrorType: "format_error"})
+		return
+	}
 
 	header, err := challenge.ToAuthenticateStrict(challenge.Realm)
 	if err != nil {

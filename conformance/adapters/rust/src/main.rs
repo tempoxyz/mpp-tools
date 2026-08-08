@@ -201,6 +201,11 @@ fn handle_parse_receipt(input: &str) {
 fn handle_format_www_authenticate(input: &str) {
     match serde_json::from_str::<Value>(input) {
         Ok(value) => {
+            let id = str_field(&value, "id");
+            if id.is_empty() {
+                print_error("id must not be empty", "format_error");
+                return;
+            }
             let request_obj = value.get("request").cloned().unwrap_or(json!({}));
             let request_b64 = match Base64UrlJson::from_value(&request_obj) {
                 Ok(b64) => b64,
@@ -211,7 +216,7 @@ fn handle_format_www_authenticate(input: &str) {
             };
 
             let challenge = PaymentChallenge {
-                id: str_field(&value, "id"),
+                id,
                 realm: str_field(&value, "realm"),
                 method: str_field(&value, "method").into(),
                 intent: str_field(&value, "intent").into(),
