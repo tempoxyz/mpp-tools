@@ -69,6 +69,8 @@ Each tracking issue contains the stable marker `<!-- agricola:source=OWNER/REPO#
 
 Agricola does not infer SDK applicability from keywords or feature tags. Authorized merge-time labels and maintainer commands are the only propagation decisions. Plans show the selected targets and the manifest's general target inventory; `automation: notify` targets remain notification-only.
 
+The tracking issue also contains a durable downstream propagation table. It lists every target as awaiting a decision, queued, skipped, notification-only, or recorded, and links each recorded downstream pull request. Table updates are delivered only after the corresponding ledger state has been persisted.
+
 ## Commands
 
 `@agricola` must be the first token on a line. Commands are accepted only from configured maintainers and only on Agricola tracking issues in `mpp-tools`.
@@ -132,6 +134,7 @@ State-changing replies are deferred until the state pull request has been update
 | `agricola poll` | Process merged canonical pull requests. |
 | `agricola handle-comment [event]` | Parse an `issue_comment` event; defaults to `GITHUB_EVENT_PATH`. |
 | `agricola deliver-reply <file>` | Deliver a reply deferred until after Git persistence. |
+| `agricola deliver-issue-update <file>` | Deliver a tracking issue body update deferred until after Git persistence. |
 | `agricola record-propagations <results>` | Record published pull requests and render deferred replies. |
 | `agricola verify-propagation <request>` | Run the target's reviewed verification commands. |
 | `agricola render-propagation <request>` | Render deterministic pull-request metadata. |

@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import unittest
 
-from agricola.models import LabelResolution, PullRequestFile
+from agricola.models import (
+    DecisionKind,
+    LabelResolution,
+    PropagateDecision,
+    PullRequestFile,
+    SkipDecision,
+)
 from agricola.planner import (
     FileCategory,
     build_tracking_issue,
@@ -37,6 +43,38 @@ class PlannerTests(unittest.TestCase):
         self.assertIn("Draft PR automation: `go`, `rust`", body)
         self.assertIn("Notification only: `ruby`", body)
         self.assertIn("@agricola propagate all", body)
+        self.assertIn("| `go` | pr | Queued | — |", body)
+        self.assertIn("| `rust` | pr | Awaiting decision | — |", body)
+        self.assertIn("| `ruby` | notify | Notification only | — |", body)
+
+    def test_plan_table_renders_recorded_decisions(self) -> None:
+        decisions = (
+            PropagateDecision(
+                target="go",
+                decision=DecisionKind.PROPAGATE,
+                by="maintainer",
+                pr="tempoxyz/mpp-go#88",
+                idempotency_key="propagate:mppx#412:go",
+            ),
+            SkipDecision(
+                target="rust",
+                decision=DecisionKind.SKIP,
+                by="maintainer",
+                reason="not | applicable",
+                idempotency_key="skip:mppx#412:rust",
+            ),
+        )
+
+        body = build_tracking_issue(
+            change(), LabelResolution((), ()), manifest(), decisions=decisions
+        )
+
+        self.assertIn(
+            "| `go` | pr | Recorded | "
+            "[tempoxyz/mpp-go#88](https://github.com/tempoxyz/mpp-go/pull/88) |",
+            body,
+        )
+        self.assertIn("| `rust` | pr | Skipped — not \\| applicable | — |", body)
 
     def test_plan_surfaces_label_errors(self) -> None:
         labels = LabelResolution(

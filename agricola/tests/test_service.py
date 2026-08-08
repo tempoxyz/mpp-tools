@@ -243,7 +243,11 @@ class CommentTests(unittest.TestCase):
                 self.event("@agricola plan"),
             )
             self.assertEqual(result.commands, 1)
-            self.assertEqual(client.updated[0][0], 207)
+            self.assertFalse(client.updated)
+            self.assertIsNotNone(result.issue_update)
+            assert result.issue_update is not None
+            self.assertEqual(result.issue_update.issue_number, 207)
+            self.assertIn("## Downstream propagation", result.issue_update.body)
             self.assertIsNotNone(result.reply)
             assert result.reply is not None
             self.assertIn("Regenerated", result.reply.body)
@@ -267,6 +271,8 @@ class CommentTests(unittest.TestCase):
             self.assertIsNotNone(second.reply)
             assert second.reply is not None
             self.assertIn("Already recorded", second.reply.body)
+            assert second.issue_update is not None
+            self.assertIn("Skipped — TS-only tooling", second.issue_update.body)
             self.assertFalse(client.comments)
 
     def test_propagate_queues_then_records_published_pr(self) -> None:
@@ -288,7 +294,7 @@ class CommentTests(unittest.TestCase):
             assert entry is not None
             self.assertFalse(entry.decisions)
 
-            changed, replies = record_propagations(
+            changed, replies, updates = record_propagations(
                 ledger,
                 (
                     PropagationResult(
@@ -302,6 +308,10 @@ class CommentTests(unittest.TestCase):
 
             self.assertTrue(changed)
             self.assertIn("mpp-go#88", replies[0].body)
+            self.assertIn(
+                "[tempoxyz/mpp-go#88](https://github.com/tempoxyz/mpp-go/pull/88)",
+                updates[0].body,
+            )
             entry = ledger.read("wevm/mppx", 412)
             assert entry is not None
             self.assertEqual(entry.decisions[0].pr, "tempoxyz/mpp-go#88")

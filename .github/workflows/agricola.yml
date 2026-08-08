@@ -69,7 +69,9 @@ jobs:
           result="$RUNNER_TEMP/agricola-result.json"
           if [ "${{ github.event_name }}" = "issue_comment" ]; then
             agricola handle-comment \
-              --reply-file "$RUNNER_TEMP/agricola-reply.json" > "$result"
+              --reply-file "$RUNNER_TEMP/agricola-reply.json" \
+              --issue-update-file "$RUNNER_TEMP/agricola-issue-update.json" \
+              > "$result"
           else
             agricola poll > "$result"
           fi
@@ -113,6 +115,9 @@ jobs:
       - name: Deliver command reply
         if: github.event_name == 'issue_comment'
         run: |
+          if [ -f "$RUNNER_TEMP/agricola-issue-update.json" ]; then
+            agricola deliver-issue-update "$RUNNER_TEMP/agricola-issue-update.json"
+          fi
           if [ -f "$RUNNER_TEMP/agricola-reply.json" ]; then
             agricola deliver-reply "$RUNNER_TEMP/agricola-reply.json"
           fi
@@ -387,7 +392,8 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/results"
           agricola record-propagations "$RUNNER_TEMP/results" \
-            --reply-directory "$RUNNER_TEMP/replies"
+            --reply-directory "$RUNNER_TEMP/replies" \
+            --issue-update-directory "$RUNNER_TEMP/issue-updates"
 
       - name: Persist propagation decisions
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
@@ -417,8 +423,12 @@ jobs:
           add-paths: ledger
           delete-branch: true
 
-      - name: Deliver publication replies
+      - name: Update tracking issues and deliver publication replies
         run: |
+          for update in "$RUNNER_TEMP"/issue-updates/*.json; do
+            [ -e "$update" ] || continue
+            agricola deliver-issue-update "$update"
+          done
           for reply in "$RUNNER_TEMP"/replies/*.json; do
             [ -e "$reply" ] || continue
             agricola deliver-reply "$reply"

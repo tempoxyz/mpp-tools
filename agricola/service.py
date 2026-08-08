@@ -23,13 +23,18 @@ from .models import (
     DecisionKind,
     LabelEvent,
     Manifest,
+    PendingIssueUpdate,
     PendingReply,
     PropagateDecision,
     PropagationRequest,
     PropagationResult,
     SkipDecision,
 )
-from .planner import build_tracking_issue, tracking_issue_title
+from .planner import (
+    build_tracking_issue,
+    record_propagation_links,
+    tracking_issue_title,
+)
 
 
 class GitHub(Protocol):
@@ -80,18 +85,23 @@ def poll(
             )
         existing_entry = ledger.read(summary.repo, summary.number)
         ledger.ensure(change, labels=resolution.labels)
+        entry = ledger.read(change.repo, change.number)
+        assert entry is not None
+        plan = build_tracking_issue(
+            change,
+            resolution,
+            manifest,
+            decisions=entry.decisions,
+        )
         issue = client.find_tracking_issue(change.marker)
         if resolution.disabled and not resolution.errors and not resolution.notes:
             counters["suppressed"] += 1
         elif issue:
             counters["deduplicated"] += 1
         else:
-            body = build_tracking_issue(change, resolution, manifest)
-            issue = client.create_issue(tracking_issue_title(change), body)
+            issue = client.create_issue(tracking_issue_title(change), plan)
             counters["created"] += 1
         if issue and not resolution.disabled and not resolution.errors:
-            entry = ledger.read(change.repo, change.number)
-            assert entry is not None
             propagations.extend(
                 _requests_for_targets(
                     client,
@@ -100,7 +110,7 @@ def poll(
                     dict(resolution.target_actors),
                     manifest,
                     issue,
-                    build_tracking_issue(change, resolution, manifest),
+                    plan,
                     entry.decisions,
                 )
             )
@@ -117,6 +127,7 @@ class CommentResult:
     changed_ledger: bool = False
     ignored: bool = False
     reply: PendingReply | None = None
+    issue_update: PendingIssueUpdate | None = None
     propagations: tuple[PropagationRequest, ...] = ()
 
 
@@ -172,13 +183,6 @@ def handle_comment(
     queued_targets: set[str] = set()
     for command in commands:
         if command.verb is CommandVerb.PLAN:
-            events = client.label_events(change.repo, change.number)
-            labels = resolve_labels(events, change.merged_at, manifest)
-            client.update_issue(
-                issue_number,
-                title=tracking_issue_title(change),
-                body=build_tracking_issue(change, labels, manifest),
-            )
             replies.append(f"Regenerated the impact plan for `{change.source_id}`.")
         elif command.verb is CommandVerb.PROPAGATE:
             created = ledger.ensure(change)
@@ -254,6 +258,31 @@ def handle_comment(
                 replies.append(
                     "No downstream pull requests are recorded for this change."
                 )
+    update_requested = any(
+        command.verb in {CommandVerb.PLAN, CommandVerb.PROPAGATE, CommandVerb.SKIP}
+        for command in commands
+    )
+    issue_update = None
+    if update_requested:
+        events = client.label_events(change.repo, change.number)
+        labels = resolve_labels(events, change.merged_at, manifest)
+        entry = ledger.read(change.repo, change.number)
+        decisions = () if entry is None else entry.decisions
+        updated_plan = build_tracking_issue(
+            change,
+            labels,
+            manifest,
+            decisions=decisions,
+            queued_targets=queued_targets,
+        )
+        issue_update = PendingIssueUpdate(
+            issue_number=issue_number,
+            body=updated_plan,
+        )
+        propagations = [
+            request.model_copy(update={"plan": updated_plan})
+            for request in propagations
+        ]
     reply = (
         PendingReply(issue_number=issue_number, body="\n\n".join(replies))
         if replies
@@ -263,15 +292,21 @@ def handle_comment(
         len(commands),
         changed_ledger,
         reply=reply,
+        issue_update=issue_update,
         propagations=tuple(propagations),
     )
 
 
 def record_propagations(
     ledger: DecisionLedger, results: Sequence[PropagationResult]
-) -> tuple[bool, tuple[PendingReply, ...]]:
+) -> tuple[
+    bool,
+    tuple[PendingReply, ...],
+    tuple[PendingIssueUpdate, ...],
+]:
     changed = False
     replies: dict[int, list[str]] = {}
+    issue_results: dict[int, list[PropagationResult]] = {}
     for result in results:
         request = result.request
         appended = ledger.append_source(
@@ -290,11 +325,22 @@ def record_propagations(
         replies.setdefault(request.tracking_issue, []).append(
             f"{action} draft PR for `{request.target}`: [{result.pr}]({result.url})."
         )
+        issue_results.setdefault(request.tracking_issue, []).append(result)
     pending = tuple(
         PendingReply(issue_number=issue, body="\n".join(messages))
         for issue, messages in sorted(replies.items())
     )
-    return changed, pending
+    updates = tuple(
+        PendingIssueUpdate(
+            issue_number=issue,
+            body=record_propagation_links(
+                grouped[0].request.plan,
+                ((item.request.target, item.pr, item.url) for item in grouped),
+            ),
+        )
+        for issue, grouped in sorted(issue_results.items())
+    )
+    return changed, pending, updates
 
 
 def _requests_for_targets(

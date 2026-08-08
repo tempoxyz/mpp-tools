@@ -1,16 +1,21 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from enum import StrEnum
 from pathlib import PurePosixPath
 
 from .models import (
     Automation,
     CanonicalChange,
+    Decision,
+    DecisionKind,
     LabelResolution,
     Manifest,
     PullRequestFile,
 )
+
+_PROPAGATION_TABLE_START = "<!-- agricola:propagation-table:start -->"
+_PROPAGATION_TABLE_END = "<!-- agricola:propagation-table:end -->"
 
 
 class FileCategory(StrEnum):
@@ -70,8 +75,73 @@ def _section(title: str, files: Iterable[PullRequestFile], empty: str) -> list[s
     return lines
 
 
+def _pull_request_link(reference: str) -> str:
+    repo, number = reference.rsplit("#", 1)
+    return f"[{reference}](https://github.com/{repo}/pull/{number})"
+
+
+def _table_row(target: str, mode: str, status: str, pull_request: str = "—") -> str:
+    return f"| `{target}` | {mode} | {status} | {pull_request} |"
+
+
+def _propagation_table(
+    manifest: Manifest,
+    selected_targets: Iterable[str],
+    decisions: Sequence[Decision],
+) -> list[str]:
+    selected = set(selected_targets)
+    by_target = {decision.target: decision for decision in decisions}
+    rows = [
+        _PROPAGATION_TABLE_START,
+        "| Target | Automation | Status | Pull request |",
+        "| --- | --- | --- | --- |",
+    ]
+    for target, sdk in manifest.sdks.items():
+        decision = by_target.get(target)
+        if decision is not None and decision.decision is DecisionKind.PROPAGATE:
+            assert decision.pr is not None
+            status = "Recorded"
+            pull_request = _pull_request_link(decision.pr)
+        elif decision is not None:
+            reason = decision.reason.replace("|", "\\|") if decision.reason else ""
+            status = f"Skipped — {reason}"
+            pull_request = "—"
+        elif target in selected:
+            status = "Queued"
+            pull_request = "—"
+        elif sdk.automation is Automation.NOTIFY:
+            status = "Notification only"
+            pull_request = "—"
+        else:
+            status = "Awaiting decision"
+            pull_request = "—"
+        rows.append(_table_row(target, sdk.automation.value, status, pull_request))
+    rows.append(_PROPAGATION_TABLE_END)
+    return rows
+
+
+def record_propagation_links(body: str, results: Iterable[tuple[str, str, str]]) -> str:
+    lines = body.splitlines()
+    replacements = {
+        target: _table_row(target, "pr", "Recorded", f"[{pr}]({url})")
+        for target, pr, url in results
+    }
+    if _PROPAGATION_TABLE_START not in lines or _PROPAGATION_TABLE_END not in lines:
+        return body
+    for index, line in enumerate(lines):
+        for target, replacement in replacements.items():
+            if line.startswith(f"| `{target}` |"):
+                lines[index] = replacement
+                break
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def build_tracking_issue(
-    change: CanonicalChange, labels: LabelResolution, manifest: Manifest
+    change: CanonicalChange,
+    labels: LabelResolution,
+    manifest: Manifest,
+    decisions: Sequence[Decision] = (),
+    queued_targets: Iterable[str] = (),
 ) -> str:
     categories: dict[FileCategory, list[PullRequestFile]] = {
         category: [] for category in FileCategory
@@ -141,6 +211,14 @@ def build_tracking_issue(
             f"- Draft PR automation: {pr_targets or 'none'}.",
             f"- Notification only: {notify_targets or 'none'}.",
         ]
+    )
+    lines.extend(["", "## Downstream propagation", ""])
+    lines.extend(
+        _propagation_table(
+            manifest,
+            (*labels.targets, *queued_targets),
+            decisions,
+        )
     )
     lines.extend(
         [

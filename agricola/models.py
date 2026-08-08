@@ -286,6 +286,11 @@ class PendingReply(FrozenModel):
     body: NonEmpty
 
 
+class PendingIssueUpdate(FrozenModel):
+    issue_number: PositiveInt
+    body: NonEmpty
+
+
 class Cursor(FrozenModel):
     merged_at: datetime
 

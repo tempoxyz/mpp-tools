@@ -80,7 +80,7 @@ Ledger-only state pull requests skip repository CI and SDK conformance workflow 
 
 The maintainer allowlist lives in [`sdks.yaml`](../sdks.yaml). Agricola reconstructs label state from canonical issue events at or before merge. A label is effective only when its final pre-merge application came from a configured maintainer. Unknown labels and conflicts create diagnostic plans. A clean `agricola:none` result is recorded without an issue. Post-merge edits do not change recorded state.
 
-Commands use deferred replies so state-changing acknowledgements appear only after state persistence. Skip decisions use the comment ID and line number. Propagation requests use the source SHA and target, and stable branches use `agricola/<canonical-repo>-<pr-number>`. Replaying a poll, comment, job, or state overlap therefore reuses existing work instead of opening duplicate pull requests.
+Commands use deferred issue updates and replies so the tracking table and state-changing acknowledgements appear only after state persistence. The table provides one durable view of every target, decision, and recorded downstream pull request. Skip decisions use the comment ID and line number. Propagation requests use the source SHA and target, and stable branches use `agricola/<canonical-repo>-<pr-number>`. Replaying a poll, comment, job, or state overlap therefore reuses existing work instead of opening duplicate pull requests.
 
 ## Manual poll
 

@@ -18,7 +18,12 @@ from .executor import (
 from .github import GitHubClient
 from .ledger import CursorStore, DecisionLedger, LedgerError
 from .manifest import ManifestError, load_manifest, print_schemas
-from .models import PendingReply, PropagationRequest, PropagationResult
+from .models import (
+    PendingIssueUpdate,
+    PendingReply,
+    PropagationRequest,
+    PropagationResult,
+)
 from .service import handle_comment, poll, record_propagations
 
 
@@ -52,12 +57,26 @@ def parser() -> argparse.ArgumentParser:
         "--reply-file",
         help="defer the GitHub reply by writing it to this file",
     )
+    handler.add_argument(
+        "--issue-update-file",
+        help="defer the tracking issue update by writing it to this file",
+    )
 
     delivery = subcommands.add_parser(
         "deliver-reply", help="deliver a previously deferred GitHub reply"
     )
     delivery.add_argument("reply_file")
     delivery.add_argument(
+        "--control-repo",
+        default=os.environ.get("GITHUB_REPOSITORY", "tempoxyz/mpp-tools"),
+    )
+
+    issue_delivery = subcommands.add_parser(
+        "deliver-issue-update",
+        help="deliver a previously deferred tracking issue update",
+    )
+    issue_delivery.add_argument("update_file")
+    issue_delivery.add_argument(
         "--control-repo",
         default=os.environ.get("GITHUB_REPOSITORY", "tempoxyz/mpp-tools"),
     )
@@ -70,6 +89,11 @@ def parser() -> argparse.ArgumentParser:
         "--reply-directory",
         required=True,
         help="directory for replies delivered after ledger persistence",
+    )
+    recorder.add_argument(
+        "--issue-update-directory",
+        required=True,
+        help="directory for issue updates delivered after ledger persistence",
     )
 
     verifier = subcommands.add_parser(
@@ -106,6 +130,20 @@ def main(argv: list[str] | None = None) -> int:
         GitHubClient(args.control_repo).comment_issue(reply.issue_number, reply.body)
         print(json.dumps({"delivered": True, "issue_number": reply.issue_number}))
         return 0
+    if args.command == "deliver-issue-update":
+        try:
+            update = PendingIssueUpdate.model_validate_json(
+                Path(args.update_file).read_text()
+            )
+        except (OSError, ValidationError) as exc:
+            print(f"issue update error: {exc}", file=sys.stderr)
+            return 2
+        GitHubClient(args.control_repo).update_issue(
+            update.issue_number,
+            body=update.body,
+        )
+        print(json.dumps({"updated": True, "issue_number": update.issue_number}))
+        return 0
     if args.command == "record-propagations":
         result_paths = tuple(sorted(Path(args.results).glob("*.json")))
         try:
@@ -113,7 +151,9 @@ def main(argv: list[str] | None = None) -> int:
                 PropagationResult.model_validate_json(path.read_text())
                 for path in result_paths
             )
-            changed, replies = record_propagations(DecisionLedger(args.ledger), results)
+            changed, replies, updates = record_propagations(
+                DecisionLedger(args.ledger), results
+            )
         except (OSError, ValidationError, LedgerError) as exc:
             print(f"propagation result error: {exc}", file=sys.stderr)
             return 2
@@ -123,12 +163,19 @@ def main(argv: list[str] | None = None) -> int:
             (reply_directory / f"issue-{reply.issue_number}.json").write_text(
                 reply.model_dump_json(indent=2) + "\n"
             )
+        issue_update_directory = Path(args.issue_update_directory)
+        issue_update_directory.mkdir(parents=True, exist_ok=True)
+        for update in updates:
+            (issue_update_directory / f"issue-{update.issue_number}.json").write_text(
+                update.model_dump_json(indent=2) + "\n"
+            )
         print(
             json.dumps(
                 {
                     "results": len(results),
                     "changed_ledger": changed,
                     "replies": len(replies),
+                    "issue_updates": len(updates),
                 },
                 indent=2,
             )
@@ -224,6 +271,16 @@ def main(argv: list[str] | None = None) -> int:
                 )
             else:
                 client.comment_issue(result.reply.issue_number, result.reply.body)
+        if result.issue_update is not None:
+            if args.issue_update_file:
+                Path(args.issue_update_file).write_text(
+                    result.issue_update.model_dump_json(indent=2) + "\n"
+                )
+            else:
+                client.update_issue(
+                    result.issue_update.issue_number,
+                    body=result.issue_update.body,
+                )
         print(
             json.dumps(
                 {
@@ -232,6 +289,8 @@ def main(argv: list[str] | None = None) -> int:
                     "ignored": result.ignored,
                     "reply_deferred": result.reply is not None
                     and bool(args.reply_file),
+                    "issue_update_deferred": result.issue_update is not None
+                    and bool(args.issue_update_file),
                     "propagations": [
                         request.model_dump(mode="json")
                         for request in result.propagations
