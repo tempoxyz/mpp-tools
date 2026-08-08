@@ -155,12 +155,18 @@ jobs:
         if: github.event_name == 'issue_comment'
         env:
           GH_TOKEN: ${{ steps.control-token.outputs.token }}
+          HAS_PROPAGATIONS: ${{ steps.process.outputs.has-propagations }}
         run: |
           if [ -f "$RUNNER_TEMP/agricola-issue-update.json" ]; then
             agricola deliver-issue-update "$RUNNER_TEMP/agricola-issue-update.json"
           fi
           if [ -f "$RUNNER_TEMP/agricola-reply.json" ]; then
-            agricola deliver-reply "$RUNNER_TEMP/agricola-reply.json"
+            if [ "$HAS_PROPAGATIONS" = "true" ]; then
+              agricola deliver-reply "$RUNNER_TEMP/agricola-reply.json" \
+                --action-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            else
+              agricola deliver-reply "$RUNNER_TEMP/agricola-reply.json"
+            fi
           fi
 
   generate:
@@ -687,5 +693,6 @@ jobs:
           done
           for reply in "$RUNNER_TEMP"/replies/*.json; do
             [ -e "$reply" ] || continue
-            agricola deliver-reply "$reply"
+            agricola deliver-reply "$reply" \
+              --action-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           done

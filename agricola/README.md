@@ -167,7 +167,7 @@ State-changing replies are deferred until the state pull request has been update
 | `agricola schema` | Prints generated manifest and ledger JSON Schemas. | `agricola schema > schemas.json` |
 | `agricola poll` | Processes newly merged canonical pull requests. | `agricola poll --control-repo tempoxyz/mpp-tools` |
 | `agricola handle-comment [event]` | Parses an `issue_comment` payload; defaults to `GITHUB_EVENT_PATH`. | `agricola handle-comment event.json` |
-| `agricola deliver-reply <file>` | Posts a reply deferred until after state persistence. | `agricola deliver-reply reply.json` |
+| `agricola deliver-reply <file>` | Posts a deferred reply, optionally linking its Actions run. | `agricola deliver-reply reply.json --action-url "$RUN_URL"` |
 | `agricola deliver-issue-update <file>` | Applies a deferred tracking-issue body update. | `agricola deliver-issue-update update.json` |
 | `agricola record-propagations <results>` | Records published PRs or explicit skips and renders deferred updates. | `agricola record-propagations results --reply-directory replies --issue-update-directory updates` |
 | `agricola audit-matrix` | Builds the SDK audit matrix from the manifest and adapters. | `agricola audit-matrix --adapters conformance/adapters` |
