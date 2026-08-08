@@ -71,15 +71,26 @@ def configure_python(conformance_dir: Path, sdk_path: Path) -> None:
     )
 
 
+def go_sdk_version(sdk_path: Path) -> str:
+    go_mod = read_text(sdk_path / "go.mod")
+    match = re.search(r"^// changelogs:version\s+(v?\S+)\s*$", go_mod, re.MULTILINE)
+    if not match:
+        raise RuntimeError(f"Could not find changelogs:version in {sdk_path / 'go.mod'}")
+    return match.group(1) if match.group(1).startswith("v") else f"v{match.group(1)}"
+
+
 def configure_go(conformance_dir: Path, sdk_path: Path) -> None:
     adapter_dir = conformance_dir / "adapters" / "go"
     go_env = os.environ.copy()
     go_env.setdefault("GOTOOLCHAIN", "auto")
+    sdk_version = go_sdk_version(sdk_path)
     result = subprocess.run(
         [
             "go",
             "mod",
             "edit",
+            "-require",
+            f"github.com/tempoxyz/mpp-go@{sdk_version}",
             "-replace",
             f"github.com/tempoxyz/mpp-go={sdk_path}",
         ],

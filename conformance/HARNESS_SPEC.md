@@ -605,7 +605,7 @@ for vector in vectors:
 npm-style SemVer constraints with `=`, `<`, `<=`, `>`, or `>=`; whitespace-
 separated comparators are combined with AND. Adapters not named in the object
 remain applicable. Invalid expressions and non-SemVer installed versions are
-runner errors, not skips.
+runner errors, not skips. Unknown adapter keys are also runner errors.
 
 Flow pseudo-code:
 

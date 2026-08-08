@@ -90,10 +90,24 @@ class VectorRunnerHelperTest(unittest.TestCase):
                 {"sdkVersions": ">=0.9.0"}, self.adapter
             )
 
+    def test_scenario_version_constraints_reject_unknown_adapter(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError, "sdkVersions contains unknown adapter keys: pyhton"
+        ):
+            self.runner.scenario_version_applies(
+                {"sdkVersions": {"pyhton": ">=0.9.0"}}, self.adapter
+            )
+
     def test_scenario_version_constraint_requires_a_string(self) -> None:
         with self.assertRaisesRegex(ValueError, "sdkVersions.python must be a string"):
             self.runner.scenario_version_applies(
                 {"sdkVersions": {"python": 0.9}}, self.adapter
+            )
+
+    def test_scenario_version_constraints_validate_every_adapter_value(self) -> None:
+        with self.assertRaisesRegex(ValueError, "sdkVersions.rust must be a string"):
+            self.runner.scenario_version_applies(
+                {"sdkVersions": {"rust": 0.12}}, self.adapter
             )
 
     def test_run_vector_file_skips_nonmatching_sdk_version(self) -> None:
@@ -115,6 +129,7 @@ class VectorRunnerHelperTest(unittest.TestCase):
             self.runner.run_vector_file(self.adapter, vector_path)
 
         self.assertEqual(self.runner.results, [])
+        self.assertEqual(self.runner.version_skips, 1)
 
     def test_compare_adapter_response_checks_error_message_substring(self) -> None:
         expected = {
@@ -228,6 +243,47 @@ class VectorRunnerJsonArtifactTest(unittest.TestCase):
         self.assertEqual(output["status"], "fail")
         failing = [check for check in output["checks"] if check["status"] == "FAILURE"]
         self.assertTrue(any("vector-file-error" in check["id"] for check in failing))
+
+    def test_all_version_skipped_selection_passes(self) -> None:
+        import vector_runner as vector_runner_module
+
+        fake_adapter = AdapterConfig(name="fake", command=["true"], capabilities=[])
+        vector = {
+            "commands": {"parse": "parse-www-authenticate"},
+            "scenarios": [
+                {
+                    "name": "future_rule",
+                    "wire": "unused",
+                    "tests": {"parse": True},
+                    "sdkVersions": {"fake": ">0.9.1"},
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            vector_path = Path(tmp) / "future.json"
+            vector_path.write_text(json.dumps(vector), encoding="utf-8")
+            original_discover_vectors = vector_runner_module.discover_vector_files
+            original_discover_adapters = vector_runner_module.discover_adapters
+            vector_runner_module.discover_vector_files = lambda: {"future": vector_path}
+            vector_runner_module.discover_adapters = lambda: {"fake": fake_adapter}
+            runner = VectorRunner(
+                output_format="json", sdk_version_resolver=lambda _: "0.9.1"
+            )
+            try:
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout):
+                    success = runner.run(
+                        adapter_names=["fake"], vector_names=["future"]
+                    )
+            finally:
+                vector_runner_module.discover_vector_files = original_discover_vectors
+                vector_runner_module.discover_adapters = original_discover_adapters
+
+        self.assertTrue(success)
+        output = json.loads(stdout.getvalue())
+        self.assertEqual(output["status"], "pass")
+        self.assertEqual(output["num_checks"], 0)
+        self.assertEqual(output["skipped"], 1)
 
 
 if __name__ == "__main__":

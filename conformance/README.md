@@ -72,7 +72,7 @@ Use `sdkVersions` when a rule only applies to particular released SDK versions:
 }
 ```
 
-Constraints use npm-style SemVer syntax with `=`, `<`, `<=`, `>`, and `>=`. Whitespace-separated comparators are combined with AND. An adapter not named in `sdkVersions` still runs the scenario; combine `sdkVersions` with `adapters` to restrict both adapter and version. Invalid constraints or installed versions fail the suite instead of silently skipping coverage. Java commit pins are not SemVer and cannot use `sdkVersions` until a versioned release is pinned.
+Constraints use npm-style SemVer syntax with `=`, `<`, `<=`, `>`, and `>=`. Whitespace-separated comparators are combined with AND. An adapter not named in `sdkVersions` still runs the scenario; combine `sdkVersions` with `adapters` to restrict both adapter and version. Unknown adapter keys, invalid constraints, and non-SemVer installed versions fail the suite instead of silently skipping coverage. Java constraints use the released version pinned in `adapters/java/build.gradle`.
 
 ### Test Types
 
