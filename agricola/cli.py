@@ -8,6 +8,16 @@ from pathlib import Path
 
 from pydantic import TypeAdapter, ValidationError
 
+from .audit import (
+    AuditError,
+    audit_matrix,
+    build_audit_report,
+    deliver_audit_report,
+    load_snapshots,
+    read_json_object,
+    render_audit_report,
+    snapshot_from_conformance,
+)
 from .commands import parse_commands, require_maintainer
 from .executor import (
     VerificationError,
@@ -16,11 +26,12 @@ from .executor import (
     verify,
 )
 from .github import GitHubClient
-from .ledger import CursorStore, DecisionLedger, LedgerError
+from .ledger import AuditStore, CursorStore, DecisionLedger, LedgerError
 from .manifest import ManifestError, load_manifest, print_schemas
 from .models import (
     PendingIssueUpdate,
     PendingReply,
+    PendingAuditReport,
     PropagationOutcome,
     PropagationRequest,
 )
@@ -96,6 +107,39 @@ def parser() -> argparse.ArgumentParser:
         help="directory for issue updates delivered after ledger persistence",
     )
 
+    matrix = subcommands.add_parser(
+        "audit-matrix", help="render the manifest audit matrix"
+    )
+    matrix.add_argument(
+        "--adapters",
+        default="conformance/adapters",
+        help="conformance adapter directory",
+    )
+
+    snapshot = subcommands.add_parser(
+        "audit-snapshot", help="normalize one head conformance result"
+    )
+    snapshot.add_argument("--target", required=True)
+    snapshot.add_argument("--repo", required=True)
+    snapshot.add_argument("--sha", required=True)
+    snapshot.add_argument("--adapter-manifest", required=True)
+    snapshot.add_argument("--results", required=True)
+
+    builder = subcommands.add_parser(
+        "build-audit", help="cluster snapshots and render the audit roll-up"
+    )
+    builder.add_argument("snapshots", help="directory containing audit snapshots")
+    builder.add_argument("--report-file", required=True)
+
+    audit_delivery = subcommands.add_parser(
+        "deliver-audit", help="create or update the audit roll-up issue"
+    )
+    audit_delivery.add_argument("report_file")
+    audit_delivery.add_argument(
+        "--control-repo",
+        default=os.environ.get("GITHUB_REPOSITORY", "tempoxyz/mpp-tools"),
+    )
+
     verifier = subcommands.add_parser(
         "verify-propagation", help="run manifest verification for generated changes"
     )
@@ -143,6 +187,42 @@ def main(argv: list[str] | None = None) -> int:
             body=update.body,
         )
         print(json.dumps({"updated": True, "issue_number": update.issue_number}))
+        return 0
+    if args.command == "deliver-audit":
+        try:
+            pending = PendingAuditReport.model_validate_json(
+                Path(args.report_file).read_text()
+            )
+            issue = deliver_audit_report(
+                GitHubClient(args.control_repo),
+                pending,
+            )
+        except (AuditError, OSError, ValidationError) as exc:
+            print(f"audit report error: {exc}", file=sys.stderr)
+            return 2
+        print(
+            json.dumps(
+                {
+                    "delivered": True,
+                    "issue_number": issue.get("number"),
+                    "url": issue.get("html_url"),
+                }
+            )
+        )
+        return 0
+    if args.command == "audit-snapshot":
+        try:
+            snapshot = snapshot_from_conformance(
+                target=args.target,
+                repo=args.repo,
+                sha=args.sha,
+                adapter_manifest=read_json_object(args.adapter_manifest),
+                results=read_json_object(args.results),
+            )
+        except (AuditError, ValidationError) as exc:
+            print(f"audit snapshot error: {exc}", file=sys.stderr)
+            return 2
+        print(snapshot.model_dump_json(indent=2))
         return 0
     if args.command == "record-propagations":
         result_paths = tuple(sorted(Path(args.results).glob("*.json")))
@@ -210,6 +290,38 @@ def main(argv: list[str] | None = None) -> int:
         print(f"manifest error: {exc}", file=sys.stderr)
         return 2
     ledger = DecisionLedger(args.ledger)
+
+    if args.command == "audit-matrix":
+        try:
+            matrix = audit_matrix(manifest, args.adapters)
+        except AuditError as exc:
+            print(f"audit matrix error: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(matrix, indent=2))
+        return 0
+    if args.command == "build-audit":
+        try:
+            report = build_audit_report(
+                manifest,
+                load_snapshots(args.snapshots),
+                AuditStore(args.ledger),
+            )
+            pending = render_audit_report(report)
+            Path(args.report_file).write_text(pending.model_dump_json(indent=2) + "\n")
+        except (AuditError, LedgerError, OSError, ValidationError) as exc:
+            print(f"audit report error: {exc}", file=sys.stderr)
+            return 2
+        print(
+            json.dumps(
+                {
+                    "findings": len(report.findings),
+                    "errors": len(report.errors),
+                    "healthy": pending.healthy,
+                },
+                indent=2,
+            )
+        )
+        return 0
 
     if args.command == "validate":
         try:

@@ -1,0 +1,257 @@
+name: Agricola SDK audit
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: agricola-control-plane
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      canonical-repo: ${{ steps.matrix.outputs.canonical-repo }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Build audit matrix
+        id: matrix
+        run: |
+          pip install .
+          matrix="$(agricola audit-matrix | jq -c .)"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "canonical-repo=$(python -c 'from agricola.manifest import load_manifest; print(load_manifest().canonical.repo)')" >> "$GITHUB_OUTPUT"
+
+  canonical:
+    name: audit (typescript reference)
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout audit control plane
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Checkout canonical SDK head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ needs.prepare.outputs.canonical-repo }}
+          path: .audit/sdk
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Setup conformance adapter
+        uses: ./.github/actions/setup-conformance
+        with:
+          adapter: typescript
+
+      - name: Install audit and conformance runner
+        run: |
+          pip install .
+          uv sync --locked --project conformance --python 3.12
+
+      - name: Point adapter at canonical checkout
+        run: |
+          uv run --locked --project conformance python conformance/scripts/use_local_sdk.py \
+            --adapter typescript \
+            --sdk-path .audit/sdk
+
+      - name: Build canonical SDK and adapter
+        run: |
+          corepack enable
+          cd .audit/sdk
+          pnpm install --frozen-lockfile
+          pnpm build
+          cd ../../conformance
+          npm install
+
+      - name: Run canonical vectors
+        run: |
+          set +e
+          uv run --locked --project conformance python conformance/scripts/vector_runner.py \
+            --adapter typescript \
+            --output json \
+            > "$RUNNER_TEMP/canonical-results.json"
+          status=$?
+          set -e
+          echo "Canonical vector runner exited $status"
+
+      - name: Build canonical snapshot
+        run: |
+          mkdir -p "$RUNNER_TEMP/snapshots"
+          agricola audit-snapshot \
+            --target typescript \
+            --repo "${{ needs.prepare.outputs.canonical-repo }}" \
+            --sha "$(git -C .audit/sdk rev-parse HEAD)" \
+            --adapter-manifest conformance/adapters/typescript/adapter.json \
+            --results "$RUNNER_TEMP/canonical-results.json" \
+            > "$RUNNER_TEMP/snapshots/typescript.json"
+
+      - name: Upload canonical snapshot
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: agricola-audit-snapshot-typescript
+          path: ${{ runner.temp }}/snapshots/typescript.json
+          if-no-files-found: warn
+
+  target:
+    name: audit (${{ matrix.target }})
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    steps:
+      - name: Checkout audit control plane
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Checkout SDK head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ matrix.repo }}
+          path: .audit/sdk
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Setup conformance adapter
+        uses: ./.github/actions/setup-conformance
+        with:
+          adapter: ${{ matrix.target }}
+          ruby-bundler-cache: "false"
+
+      - name: Install audit and conformance runner
+        run: |
+          pip install .
+          uv sync --locked --project conformance --python 3.12
+
+      - name: Build Java SDK checkout
+        if: matrix.target == 'java'
+        working-directory: .audit/sdk
+        run: ./gradlew --no-daemon jar
+
+      - name: Point adapter at SDK checkout
+        run: |
+          uv run --locked --project conformance python conformance/scripts/use_local_sdk.py \
+            --adapter "${{ matrix.target }}" \
+            --sdk-path .audit/sdk
+
+      - name: Run SDK vectors
+        run: |
+          set +e
+          uv run --locked --project conformance python conformance/scripts/vector_runner.py \
+            --adapter "${{ matrix.target }}" \
+            --output json \
+            > "$RUNNER_TEMP/target-results.json"
+          status=$?
+          set -e
+          echo "${{ matrix.target }} vector runner exited $status"
+
+      - name: Build SDK snapshot
+        run: |
+          mkdir -p "$RUNNER_TEMP/snapshots"
+          agricola audit-snapshot \
+            --target "${{ matrix.target }}" \
+            --repo "${{ matrix.repo }}" \
+            --sha "$(git -C .audit/sdk rev-parse HEAD)" \
+            --adapter-manifest "conformance/adapters/${{ matrix.target }}/adapter.json" \
+            --results "$RUNNER_TEMP/target-results.json" \
+            > "$RUNNER_TEMP/snapshots/${{ matrix.target }}.json"
+
+      - name: Upload SDK snapshot
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: agricola-audit-snapshot-${{ matrix.target }}
+          path: ${{ runner.temp }}/snapshots/${{ matrix.target }}.json
+          if-no-files-found: warn
+
+  report:
+    needs: [prepare, canonical, target]
+    if: always() && needs.prepare.result == 'success'
+    runs-on: ubuntu-latest
+    env:
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      STATE_BRANCH: agricola/state
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      - name: Restore control-plane state
+        run: |
+          if git fetch origin "refs/heads/$STATE_BRANCH:refs/remotes/origin/$STATE_BRANCH"; then
+            git restore --source "origin/$STATE_BRANCH" -- ledger
+          fi
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Agricola
+        run: pip install .
+
+      - name: Download audit snapshots
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: agricola-audit-snapshot-*
+          path: ${{ runner.temp }}/snapshots
+          merge-multiple: true
+
+      - name: Build audit roll-up
+        run: |
+          mkdir -p "$RUNNER_TEMP/snapshots"
+          agricola build-audit "$RUNNER_TEMP/snapshots" \
+            --report-file "$RUNNER_TEMP/audit-report.json"
+          cat "$RUNNER_TEMP/audit-report.json"
+
+      - name: Persist audit registry
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ github.token }}
+          base: ${{ env.DEFAULT_BRANCH }}
+          branch: ${{ env.STATE_BRANCH }}
+          commit-message: "chore(agricola): update state"
+          title: "chore(agricola): update state"
+          body: |
+            > [!IMPORTANT]
+            > This pull request is maintained by automation. Merge it to checkpoint state on the default branch; do not close or edit it manually.
+
+            ## Motivation
+
+            Persist Agricola's durable cursor, decisions, and audit finding registry through the repository's required pull-request path.
+
+            ## Summary
+
+            - tracks the latest processed canonical merge
+            - records immutable source snapshots and maintainer decisions
+            - assigns stable IDs to recurring audit findings
+
+            ## Key design considerations
+
+            - workflow code always executes from the protected default branch
+            - this pull request is updated in place as state advances
+          add-paths: ledger
+          delete-branch: true
+
+      - name: Update audit issue
+        run: agricola deliver-audit "$RUNNER_TEMP/audit-report.json"
+
+      - name: Require complete audit
+        run: jq -e '.healthy == true' "$RUNNER_TEMP/audit-report.json" >/dev/null

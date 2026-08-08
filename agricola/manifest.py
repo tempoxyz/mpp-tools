@@ -9,7 +9,7 @@ from yaml import resolver
 from yaml.constructor import ConstructorError
 from yaml.nodes import MappingNode
 
-from .models import Cursor, LedgerEntry, Manifest
+from .models import AuditRegistry, Cursor, LedgerEntry, Manifest
 
 
 class ManifestError(ValueError):
@@ -65,6 +65,7 @@ def generated_schemas() -> dict[str, dict[str, object]]:
         "manifest": Manifest.model_json_schema(),
         "ledger": LedgerEntry.model_json_schema(),
         "cursor": Cursor.model_json_schema(),
+        "audit": AuditRegistry.model_json_schema(),
     }
 
 

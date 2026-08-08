@@ -10,6 +10,7 @@ It:
 - creates one tracking issue per actionable canonical change;
 - accepts maintainer-only `plan`, `propagate`, `status`, and `skip` commands;
 - generates idiomatic downstream changes, runs each SDK's declared verification, and opens draft pull requests;
+- audits every SDK head against canonical `mppx`, clusters deterministic deltas, and updates one roll-up issue;
 - records immutable source snapshots and completed decisions under [`ledger/`](../ledger/).
 
 Agricola never auto-merges a downstream pull request. Maintainers retain review and merge control.
@@ -89,7 +90,7 @@ The tracking issue also contains a durable downstream propagation table. It list
 - `status` queries GitHub for downstream pull requests already recorded in the ledger.
 - `skip` appends an idempotent, reason-required decision for one manifest target.
 
-Commands in canonical or downstream repositories are not supported. Revision, retry, audit, and downstream issue commands remain manual operations. A failed unpublished propagation can be retried by rerunning its workflow; a published stable branch is updated idempotently.
+Commands in canonical or downstream repositories are not supported. Revision, retry, audit-finding actions, and downstream issue commands remain manual operations. A failed unpublished propagation can be retried by rerunning its workflow; a published stable branch is updated idempotently.
 
 ## Downstream execution
 
@@ -112,6 +113,14 @@ If the canonical behavior is absent from a target SDK, the generator returns an 
 
 Generation and verification failures leave no decision, so the same request remains retryable. Explicit skips and successful publications are recorded even when another target in the same matrix fails. A closed stable pull request must be reopened before retrying. An existing ready-for-review pull request is returned to draft before its branch is updated, and a merged pull request is treated as the completed result.
 
+## Recurring audit
+
+The weekly and manually dispatched audit is head-to-head and report-only. It uses `mppx` as the sole reference and evaluates every manifest SDK independently, including notification-only targets.
+
+The first pass runs shared protocol vectors against each repository's current default-branch checkout and compares the capabilities declared by its conformance adapter. The second pass clusters equivalent failures under SDK-independent fingerprints such as `capability:challenge.parse` or `vector:www-authenticate/basic/parse`. Stable `AGR-<year>-<sequence>` IDs are assigned in [`ledger/audit.json`](../ledger/audit.json).
+
+One `[Agricola] SDK drift audit` issue is updated in place. It shows the exact audited commits, affected and clean SDKs, likely-origin heuristic, and incomplete jobs. Findings never create branches, pull requests, or downstream issues automatically. Codex semantic comparison is intentionally omitted because the specification requires deterministic evidence to remain authoritative.
+
 ## State and recovery
 
 The poller creates `ledger/cursor.json` on its first run. GitHub Actions restores ledger data from `agricola/state` and updates one stable state pull request, following the changelog release-PR pattern. Merge that pull request to checkpoint the ledger on the default branch. Do not close or edit it manually. The next state change creates or updates its successor, so at most one state pull request remains open.
@@ -122,6 +131,8 @@ Ledger filenames identify the canonical repository and pull request. Entries con
 
 - `skip` requires a reason and forbids a pull-request reference;
 - `propagate` requires a downstream pull-request reference and is written only after publication.
+
+The separate `ledger/audit.json` registry maps stable fingerprints to finding IDs. It does not store mutable CI or pull-request lifecycle state.
 
 Tracking issue deduplication scans the control repository's issue API directly for the stable marker; it does not depend on search indexing.
 
@@ -138,6 +149,10 @@ State-changing replies are deferred until the state pull request has been update
 | `agricola deliver-reply <file>` | Deliver a reply deferred until after Git persistence. |
 | `agricola deliver-issue-update <file>` | Deliver a tracking issue body update deferred until after Git persistence. |
 | `agricola record-propagations <results>` | Record published pull requests or explicit skips and render deferred replies. |
+| `agricola audit-matrix` | Build the head-audit matrix from the manifest and conformance adapters. |
+| `agricola audit-snapshot` | Normalize one SDK's head conformance result. |
+| `agricola build-audit <snapshots>` | Cluster snapshots, assign stable finding IDs, and render the roll-up. |
+| `agricola deliver-audit <report>` | Create or update the single audit issue. |
 | `agricola verify-propagation <request>` | Run the target's reviewed verification commands. |
 | `agricola render-propagation <request>` | Render deterministic pull-request metadata. |
 | `agricola parse-command --author <login>` | Parse commands from standard input for diagnostics. |
@@ -160,5 +175,5 @@ With Ruff, `ty`, `uv`, Go, and Actionlint available:
 .venv/bin/ruff format --check agricola
 .venv/bin/ruff check agricola
 uvx ty check agricola
-go run github.com/rhysd/actionlint/cmd/actionlint@latest .github/workflows/agricola.yml
+go run github.com/rhysd/actionlint/cmd/actionlint@latest .github/workflows/agricola.yml .github/workflows/agricola-audit.yml
 ```

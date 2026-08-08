@@ -99,7 +99,7 @@ sdks:
 
     def test_generated_schemas_cover_persisted_models(self) -> None:
         schemas = generated_schemas()
-        self.assertEqual(set(schemas), {"manifest", "ledger", "cursor"})
+        self.assertEqual(set(schemas), {"manifest", "ledger", "cursor", "audit"})
         self.assertFalse(schemas["manifest"]["additionalProperties"])
         ledger_definitions = schemas["ledger"]["$defs"]
         self.assertIsInstance(ledger_definitions, dict)

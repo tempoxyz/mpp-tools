@@ -8,9 +8,18 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from .models import CanonicalChange, Cursor, Decision, LedgerEntry, Source
+from .models import (
+    AuditFindingRecord,
+    AuditRegistry,
+    CanonicalChange,
+    Cursor,
+    Decision,
+    LedgerEntry,
+    Source,
+)
 
 CURSOR_FILENAME = "cursor.json"
+AUDIT_FILENAME = "audit.json"
 
 
 class LedgerError(ValueError):
@@ -38,7 +47,7 @@ class DecisionLedger:
         paths = tuple(
             path
             for path in sorted(self.root.glob("*.json"))
-            if path.name != CURSOR_FILENAME
+            if path.name not in {AUDIT_FILENAME, CURSOR_FILENAME}
         )
         for path in paths:
             try:
@@ -46,6 +55,7 @@ class DecisionLedger:
             except (OSError, ValidationError) as exc:
                 raise LedgerError(f"cannot read ledger entry {path}: {exc}") from exc
         CursorStore(self.root).validate()
+        AuditStore(self.root).validate()
         return paths
 
     def append(self, change: CanonicalChange, decision: Decision) -> bool:
@@ -156,6 +166,57 @@ class CursorStore:
     def save(self, cursor: Cursor) -> None:
         content = cursor.model_dump_json(indent=2) + "\n"
         _atomic_write(self.path, content)
+
+
+class AuditStore:
+    def __init__(self, root: str | Path = "ledger") -> None:
+        self.path = Path(root) / AUDIT_FILENAME
+
+    def load(self) -> AuditRegistry:
+        if not self.path.exists():
+            return AuditRegistry()
+        try:
+            return AuditRegistry.model_validate_json(self.path.read_text())
+        except (OSError, ValidationError) as exc:
+            raise LedgerError(f"cannot read audit registry {self.path}: {exc}") from exc
+
+    def validate(self) -> None:
+        if self.path.exists():
+            self.load()
+
+    def assign(self, fingerprints: Iterable[str], at: datetime) -> dict[str, str]:
+        registry = self.load()
+        records = list(registry.findings)
+        by_fingerprint = {record.fingerprint: record.id for record in records}
+        year = at.astimezone(UTC).year
+        sequence = max(
+            (
+                int(record.id.rsplit("-", 1)[-1])
+                for record in records
+                if record.id.startswith(f"AGR-{year}-")
+            ),
+            default=0,
+        )
+        for fingerprint in sorted(set(fingerprints)):
+            if fingerprint in by_fingerprint:
+                continue
+            sequence += 1
+            finding_id = f"AGR-{year}-{sequence:03d}"
+            records.append(
+                AuditFindingRecord(
+                    id=finding_id,
+                    fingerprint=fingerprint,
+                    first_seen=at,
+                )
+            )
+            by_fingerprint[fingerprint] = finding_id
+        updated = AuditRegistry(findings=tuple(records))
+        if updated != registry:
+            _atomic_write(
+                self.path,
+                updated.model_dump_json(indent=2) + "\n",
+            )
+        return by_fingerprint
 
 
 def _atomic_write(path: Path, content: str) -> None:

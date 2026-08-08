@@ -13,6 +13,7 @@ class SelectAdaptersTests(unittest.TestCase):
                 "pull_request",
                 [
                     ".github/agricola/propagate.md",
+                    ".github/workflows/agricola-audit.yml",
                     ".github/workflows/agricola.yml",
                     "agricola/service.py",
                     "agricola/tests/test_service.py",
