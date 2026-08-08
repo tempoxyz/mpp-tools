@@ -66,6 +66,32 @@ class GitHubApiTests(unittest.TestCase):
         self.assertEqual(run.call_args.kwargs["env"]["GH_TOKEN"], "canonical-token")
 
     @patch("agricola.github.subprocess.run")
+    def test_failed_run_log_uses_repository_token(self, run) -> None:
+        run.return_value = subprocess.CompletedProcess([], 0, "failed output", "")
+        client = GitHubClient(
+            "tempoxyz/mpp-tools",
+            token="control-token",
+            repo_tokens={"tempoxyz/pympp": "sdk-token"},
+        )
+
+        result = client.failed_run_log("tempoxyz/pympp", 123)
+
+        self.assertEqual(result, "failed output")
+        self.assertEqual(run.call_args.kwargs["env"]["GH_TOKEN"], "sdk-token")
+        self.assertEqual(
+            run.call_args.args[0],
+            [
+                "gh",
+                "run",
+                "view",
+                "123",
+                "--repo",
+                "tempoxyz/pympp",
+                "--log-failed",
+            ],
+        )
+
+    @patch("agricola.github.subprocess.run")
     def test_post_fields_are_json_body(self, run) -> None:
         run.return_value = subprocess.CompletedProcess([], 0, '{"number": 1}', "")
         client = GitHubClient("tempoxyz/mpp-tools")
@@ -160,6 +186,43 @@ class GitHubApiTests(unittest.TestCase):
             [endpoint for endpoint, _ in client.calls],
             ["repos/tempoxyz/mpp-go", "repos/tempoxyz/mpp-go/commits/main"],
         )
+
+    def test_pull_revision_requires_open_stable_branch(self) -> None:
+        client = StubClient(
+            [
+                {
+                    "state": "open",
+                    "html_url": "https://github.com/tempoxyz/mpp-go/pull/88",
+                    "head": {
+                        "sha": "def1234567",
+                        "ref": "agricola/mppx-412",
+                        "repo": {"full_name": "tempoxyz/mpp-go"},
+                    },
+                }
+            ]
+        )
+
+        revision = client.pull_revision("tempoxyz/mpp-go#88", "agricola/mppx-412")
+
+        self.assertEqual(revision.head_sha, "def1234567")
+
+    def test_pull_revision_rejects_wrong_branch(self) -> None:
+        client = StubClient(
+            [
+                {
+                    "state": "open",
+                    "html_url": "https://github.com/tempoxyz/mpp-go/pull/88",
+                    "head": {
+                        "sha": "def1234567",
+                        "ref": "someone/else",
+                        "repo": {"full_name": "tempoxyz/mpp-go"},
+                    },
+                }
+            ]
+        )
+
+        with self.assertRaisesRegex(GitHubError, "does not use"):
+            client.pull_revision("tempoxyz/mpp-go#88", "agricola/mppx-412")
 
     def test_tracking_issue_deduplication_uses_direct_issue_listing(self) -> None:
         marker = "<!-- agricola:source=wevm/mppx#412 -->"

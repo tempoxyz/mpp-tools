@@ -58,6 +58,25 @@ def parse_commands(body: str, manifest: Manifest) -> list[Command]:
                     f"line {line_number}: unknown command {verb_text!r}"
                 ) from exc
         args = tokens[2:]
+        instruction: str | None = None
+        if verb_text == "fix" and args:
+            lexer = shlex.shlex(line.strip(), posix=False)
+            lexer.whitespace_split = True
+            lexer.commenters = ""
+            raw_tokens = list(lexer)
+            raw_instruction = raw_tokens[-1]
+            if (
+                len(raw_tokens) == len(tokens)
+                and len(raw_instruction) >= 2
+                and raw_instruction[0] in {'"', "'"}
+                and raw_instruction[-1] == raw_instruction[0]
+            ):
+                instruction = args[-1].strip()
+                args = args[:-1]
+                if not instruction:
+                    raise CommandError(
+                        f"line {line_number}: fix instruction must not be empty"
+                    )
         if verb in {CommandVerb.PLAN, CommandVerb.STATUS}:
             if args:
                 raise CommandError(
@@ -70,14 +89,26 @@ def parse_commands(body: str, manifest: Manifest) -> list[Command]:
             if not args:
                 if verb_text == "fix":
                     commands.append(
-                        Command(verb=verb, all_targets=True, line=line_number)
+                        Command(
+                            verb=verb,
+                            all_targets=True,
+                            instruction=instruction,
+                            line=line_number,
+                        )
                     )
                     continue
                 raise CommandError(
                     f"line {line_number}: {verb_text} requires SDK targets or all"
                 )
             if len(args) == 1 and args[0].lower() == "all":
-                commands.append(Command(verb=verb, all_targets=True, line=line_number))
+                commands.append(
+                    Command(
+                        verb=verb,
+                        all_targets=True,
+                        instruction=instruction,
+                        line=line_number,
+                    )
+                )
                 continue
             if any(argument.lower() == "all" for argument in args):
                 raise CommandError(
@@ -97,7 +128,12 @@ def parse_commands(body: str, manifest: Manifest) -> list[Command]:
                 if target not in targets:
                     targets.append(target)
             commands.append(
-                Command(verb=verb, targets=tuple(targets), line=line_number)
+                Command(
+                    verb=verb,
+                    targets=tuple(targets),
+                    instruction=instruction,
+                    line=line_number,
+                )
             )
             continue
 

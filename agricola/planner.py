@@ -157,9 +157,7 @@ def quick_fix_lines() -> list[str]:
 
 
 def queued_propagations(body: str, targets: Iterable[str]) -> str:
-    replacements = {
-        target: _table_row(target, "pr", "Queued") for target in targets
-    }
+    replacements = {target: _table_row(target, "pr", "Queued") for target in targets}
     return _replace_propagation_rows(body, replacements)
 
 
@@ -181,8 +179,7 @@ def preserve_propagation_state(body: str, previous_body: str) -> str:
         for line in previous_body.splitlines()
         if line.startswith("| `")
         and any(
-            status in line
-            for status in ("| Queued |", "| Recorded |", "| Skipped —")
+            status in line for status in ("| Queued |", "| Recorded |", "| Skipped —")
         )
     }
     replacements = {}
@@ -328,7 +325,7 @@ def build_tracking_issue(
             "| Command | What it does | Example |",
             "| --- | --- | --- |",
             "| `plan` | Rebuilds this impact plan from the immutable merge-time snapshot. | `/agricola plan` |",
-            "| `fix [sdk...]` | Queues named PR-enabled SDKs, or every PR-enabled SDK when omitted. | `/agricola fix` |",
+            '| `fix [sdk...] ["instruction"]` | Queues named PR-enabled SDKs, or every PR-enabled SDK when omitted. For a recorded PR, a quoted instruction revises it using review feedback and failed CI. | `/agricola fix python "address the review comments"` |',
             "| `status` | Reports the current state of recorded downstream PRs. | `/agricola status` |",
             '| `skip <sdk> reason="..."` | Records why one SDK should not receive this change. | `/agricola skip go reason="Not applicable to this transport"` |',
             "",

@@ -25,10 +25,11 @@ from .executor import (
     pull_request_title,
     verify,
 )
-from .github import GitHubClient
+from .github import GitHubClient, GitHubError
 from .ledger import AuditStore, CursorStore, DecisionLedger, LedgerError
 from .manifest import ManifestError, load_manifest, print_schemas
 from .models import (
+    Automation,
     AuditSemanticResult,
     PendingIssueUpdate,
     PendingReply,
@@ -36,6 +37,7 @@ from .models import (
     PropagationOutcome,
     PropagationRequest,
 )
+from .revision import collect_revision_feedback
 from .service import handle_comment, poll, record_propagations
 
 
@@ -153,6 +155,13 @@ def parser() -> argparse.ArgumentParser:
     )
     verifier.add_argument("request", help="propagation request JSON")
     verifier.add_argument("--root", default=".", help="target repository directory")
+
+    revision = subcommands.add_parser(
+        "collect-revision-feedback",
+        help="collect trusted review feedback and failed CI for a revision",
+    )
+    revision.add_argument("request", help="propagation request JSON")
+    revision.add_argument("--output", required=True)
 
     renderer = subcommands.add_parser(
         "render-propagation", help="render downstream pull-request metadata"
@@ -293,6 +302,22 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(json.dumps({"verified": request.target, "commands": len(request.verify)}))
         return 0
+    if args.command == "collect-revision-feedback":
+        try:
+            request = PropagationRequest.model_validate_json(
+                Path(args.request).read_text()
+            )
+            if request.revision is None:
+                raise ValueError("request is not a pull request revision")
+            feedback = collect_revision_feedback(
+                GitHubClient(request.target_repo), request
+            )
+            Path(args.output).write_text(feedback)
+        except (GitHubError, OSError, ValidationError, ValueError) as exc:
+            print(f"revision feedback error: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps({"collected": request.revision.pr}))
+        return 0
     if args.command == "render-propagation":
         try:
             request = PropagationRequest.model_validate_json(
@@ -368,6 +393,14 @@ def main(argv: list[str] | None = None) -> int:
     repo_tokens = {}
     if canonical_token := os.environ.get("AGRICOLA_CANONICAL_TOKEN"):
         repo_tokens[manifest.canonical.repo] = canonical_token
+    if sdk_token := os.environ.get("AGRICOLA_SDK_TOKEN"):
+        repo_tokens.update(
+            {
+                sdk.repo: sdk_token
+                for sdk in manifest.sdks.values()
+                if sdk.automation is Automation.PR
+            }
+        )
     client = GitHubClient(args.control_repo, repo_tokens=repo_tokens)
     if args.command == "poll":
         result = poll(client, manifest, ledger, CursorStore(args.ledger))

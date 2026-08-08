@@ -5,7 +5,15 @@ from datetime import UTC, datetime
 
 from pydantic import ValidationError
 
-from agricola.models import Cursor, PropagateDecision, SkipDecision
+from agricola.models import (
+    Changelog,
+    Cursor,
+    PropagateDecision,
+    PropagationRequest,
+    PropagationRevision,
+    SkipDecision,
+    Source,
+)
 from agricola.tests.helpers import change
 
 
@@ -71,6 +79,43 @@ class DecisionTests(unittest.TestCase):
                     "reason": "unexpected",
                 }
             )
+
+
+class PropagationRequestTests(unittest.TestCase):
+    def values(self) -> dict[str, object]:
+        return {
+            "source": Source(repo="wevm/mppx", pr=1, sha="abc1234567"),
+            "source_title": "Change",
+            "source_url": "https://example.test/source",
+            "target": "go",
+            "target_repo": "tempoxyz/mpp-go",
+            "target_base_sha": "def1234567",
+            "tracking_issue": 1,
+            "tracking_issue_url": "https://example.test/issue",
+            "by": "maintainer",
+            "idempotency_key": "revision:1",
+            "branch": "agricola/mppx-1",
+            "verify": ("make test",),
+            "changelog": Changelog.KEEP_A_CHANGELOG,
+            "plan": "plan",
+            "revision": PropagationRevision(
+                pr="tempoxyz/mpp-go#1",
+                url="https://example.test/pr",
+                head_sha="def1234567",
+            ),
+        }
+
+    def test_revision_requires_instruction(self) -> None:
+        with self.assertRaisesRegex(ValidationError, "requires an instruction"):
+            PropagationRequest.model_validate(self.values())
+
+    def test_revision_requires_exact_head(self) -> None:
+        values = self.values()
+        values["instruction"] = "address CI"
+        values["target_base_sha"] = "other1234567"
+
+        with self.assertRaisesRegex(ValidationError, "head must equal"):
+            PropagationRequest.model_validate(values)
 
 
 if __name__ == "__main__":

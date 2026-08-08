@@ -8,7 +8,14 @@ from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from .models import CanonicalChange, Cursor, LabelAction, LabelEvent, PullRequestFile
+from .models import (
+    CanonicalChange,
+    Cursor,
+    LabelAction,
+    LabelEvent,
+    PropagationRevision,
+    PullRequestFile,
+)
 
 _SOURCE_MARKER = re.compile(
     r"<!--\s*agricola:source=([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#([1-9][0-9]*)\s*-->"
@@ -77,6 +84,39 @@ class GitHubClient:
             raise GitHubError(
                 f"GitHub API returned invalid JSON for {endpoint}"
             ) from exc
+
+    def graphql(self, query: str, variables: dict[str, object]) -> Any:
+        return self.api(
+            "graphql",
+            method="POST",
+            fields={"query": query, "variables": variables},
+        )
+
+    def failed_run_log(self, repo: str, run_id: int) -> str:
+        environment = self.environment.copy()
+        if repo_token := self.repo_tokens.get(repo):
+            environment["GH_TOKEN"] = repo_token
+        process = subprocess.run(
+            [
+                "gh",
+                "run",
+                "view",
+                str(run_id),
+                "--repo",
+                repo,
+                "--log-failed",
+            ],
+            text=True,
+            capture_output=True,
+            env=environment,
+            check=False,
+        )
+        if process.returncode:
+            message = process.stderr.strip() or f"gh exited {process.returncode}"
+            raise GitHubError(
+                f"could not read failed logs for {repo} run {run_id}: {message}"
+            )
+        return process.stdout
 
     def merged_changes(
         self,
@@ -238,6 +278,26 @@ class GitHubClient:
         pull = self.api(f"repos/{repo}/pulls/{int(number)}")
         draft = "draft" if pull.get("draft") else "ready"
         return f"{reference}: {pull['state']} ({draft}) — {pull['html_url']}"
+
+    def pull_revision(
+        self, reference: str, expected_branch: str
+    ) -> PropagationRevision:
+        repo, number = reference.rsplit("#", 1)
+        pull = self.api(f"repos/{repo}/pulls/{int(number)}")
+        if pull.get("state") != "open":
+            raise GitHubError(f"{reference} is not open")
+        head = pull.get("head") or {}
+        head_repo = (head.get("repo") or {}).get("full_name")
+        if head_repo != repo or head.get("ref") != expected_branch:
+            raise GitHubError(f"{reference} does not use {repo}:{expected_branch}")
+        head_sha = head.get("sha")
+        if not isinstance(head_sha, str) or not head_sha:
+            raise GitHubError(f"{reference} has no head commit")
+        return PropagationRevision(
+            pr=reference,
+            url=pull["html_url"],
+            head_sha=head_sha,
+        )
 
 
 def _time(value: str) -> datetime:

@@ -13,6 +13,7 @@ from agricola.models import (
     LabelAction,
     LabelEvent,
     PropagationResult,
+    PropagationRevision,
     PropagationSkip,
 )
 from agricola.service import handle_comment, poll, record_propagations
@@ -80,6 +81,13 @@ class FakeGitHub:
 
     def pull_status(self, reference):
         return f"{reference}: open"
+
+    def pull_revision(self, reference, expected_branch):
+        return PropagationRevision(
+            pr=reference,
+            url=f"https://github.com/{reference.replace('#', '/pull/')}",
+            head_sha="def1234567",
+        )
 
 
 def cursor_store(directory: str) -> CursorStore:
@@ -388,11 +396,26 @@ class CommentTests(unittest.TestCase):
             assert isinstance(request.source, AuditSource)
             self.assertEqual(request.source.finding, "AGR-2026-022")
             self.assertEqual(request.source.repo, "wevm/mppx")
-            self.assertEqual(request.target_base_sha, "9cad840de723e52790878d63317f0f90468987fb")
+            self.assertEqual(
+                request.target_base_sha, "9cad840de723e52790878d63317f0f90468987fb"
+            )
             self.assertEqual(request.branch, "agricola/agr-2026-022")
             self.assertIsNotNone(result.issue_update)
             assert result.issue_update is not None
             self.assertIn("| `go` | pr | Queued |", result.issue_update.body)
+
+    def test_fix_instruction_guides_initial_audit_remediation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = handle_comment(
+                FakeGitHub(),
+                manifest(),
+                DecisionLedger(directory),
+                self.audit_event('/agricola fix "preserve the public API"'),
+            )
+
+            request = result.propagations[0]
+            self.assertEqual(request.instruction, "preserve the public API")
+            self.assertIsNone(request.revision)
 
     def test_audit_finding_records_pr_without_canonical_ledger_entry(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -419,6 +442,96 @@ class CommentTests(unittest.TestCase):
             self.assertIn("Opened draft PR", replies[0].body)
             self.assertIn("tempoxyz/mpp-go#91", updates[0].body)
             self.assertIsNone(ledger.read("wevm/mppx", 97))
+
+    def test_fix_instruction_revises_recorded_audit_pr(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeGitHub()
+            ledger = DecisionLedger(directory)
+            queued = handle_comment(
+                client,
+                manifest(),
+                ledger,
+                self.audit_event("/agricola fix"),
+            )
+            _, _, updates = record_propagations(
+                ledger,
+                (
+                    PropagationResult(
+                        request=queued.propagations[0],
+                        pr="tempoxyz/mpp-go#91",
+                        url="https://github.com/tempoxyz/mpp-go/pull/91",
+                    ),
+                ),
+            )
+            event = self.audit_event(
+                '/agricola fix "address the review and failing tests"',
+                comment_id=56,
+            )
+            event["issue"]["body"] = updates[0].body
+
+            revised = handle_comment(client, manifest(), ledger, event)
+
+            self.assertEqual(len(revised.propagations), 1)
+            request = revised.propagations[0]
+            self.assertEqual(
+                request.instruction, "address the review and failing tests"
+            )
+            self.assertEqual(request.target_base_sha, "def1234567")
+            self.assertIsNotNone(request.revision)
+            assert request.revision is not None
+            self.assertEqual(request.revision.pr, "tempoxyz/mpp-go#91")
+            assert revised.reply is not None
+            self.assertIn("Queued revision", revised.reply.body)
+
+    def test_fix_instruction_revises_recorded_canonical_pr_without_new_decision(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeGitHub()
+            ledger = DecisionLedger(directory)
+            queued = handle_comment(
+                client,
+                manifest(),
+                ledger,
+                self.event("@agricola propagate go"),
+            )
+            record_propagations(
+                ledger,
+                (
+                    PropagationResult(
+                        request=queued.propagations[0],
+                        pr="tempoxyz/mpp-go#88",
+                        url="https://github.com/tempoxyz/mpp-go/pull/88",
+                    ),
+                ),
+            )
+
+            revised = handle_comment(
+                client,
+                manifest(),
+                ledger,
+                self.event('/agricola fix go "address CI"', comment_id=56),
+            )
+            request = revised.propagations[0]
+            self.assertEqual(request.instruction, "address CI")
+            self.assertIsNotNone(request.revision)
+
+            changed, replies, _ = record_propagations(
+                ledger,
+                (
+                    PropagationResult(
+                        request=request,
+                        pr="tempoxyz/mpp-go#88",
+                        url="https://github.com/tempoxyz/mpp-go/pull/88",
+                    ),
+                ),
+            )
+
+            self.assertFalse(changed)
+            self.assertIn("Revised draft PR", replies[0].body)
+            entry = ledger.read("wevm/mppx", 412)
+            assert entry is not None
+            self.assertEqual(len(entry.decisions), 1)
 
     def test_audit_finding_rejects_unaffected_sdk(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

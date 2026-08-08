@@ -37,15 +37,13 @@ class AuditGitHub:
 
     def find_tracking_issues(self, marker: str) -> tuple[dict[str, object], ...]:
         return tuple(
-            issue
-            for issue in self.issues
-            if marker in str(issue.get("body") or "")
+            issue for issue in self.issues if marker in str(issue.get("body") or "")
         )
 
     def create_issue(self, title: str, body: str, labels=()):
-        number = max(
-            (int(str(issue["number"])) for issue in self.issues), default=0
-        ) + 1
+        number = (
+            max((int(str(issue["number"])) for issue in self.issues), default=0) + 1
+        )
         issue: dict[str, object] = {
             "number": number,
             "title": title,
@@ -345,7 +343,9 @@ class AuditTests(unittest.TestCase):
             self.assertIn("## How to action", pending.finding_issues[0].body)
             self.assertIn("## Agricola remediation", pending.finding_issues[0].body)
             self.assertIn("```text\n/agricola fix\n```", pending.finding_issues[0].body)
-            self.assertIn("gh workflow run agricola-audit.yml", pending.finding_issues[0].body)
+            self.assertIn(
+                "gh workflow run agricola-audit.yml", pending.finding_issues[0].body
+            )
             context = audit_finding_context_from_body(pending.finding_issues[0].body)
             assert context is not None
             self.assertEqual(context.id, "AGR-2026-001")
@@ -449,7 +449,9 @@ class AuditTests(unittest.TestCase):
         rollup = deliver_audit_report(client, render_audit_report(report, manifest()))
 
         finding = next(
-            issue for issue in client.issues if "agricola:audit-finding" in str(issue["body"])
+            issue
+            for issue in client.issues
+            if "agricola:audit-finding" in str(issue["body"])
         )
         self.assertIn("AGR-2026-001", str(finding["title"]))
         self.assertIn(f"[AGR-2026-001]({finding['html_url']})", str(rollup["body"]))
@@ -554,9 +556,7 @@ class AuditTests(unittest.TestCase):
         )
         pending = render_audit_report(
             AuditReportFixture.complete(), manifest()
-        ).model_copy(
-            update={"healthy": False}
-        )
+        ).model_copy(update={"healthy": False})
 
         deliver_audit_report(client, pending)
 
