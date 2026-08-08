@@ -36,9 +36,7 @@ class SemVer:
 
         prerelease = tuple(match.group(4).split(".")) if match.group(4) else ()
         if any(
-            identifier.isdigit()
-            and len(identifier) > 1
-            and identifier.startswith("0")
+            identifier.isdigit() and len(identifier) > 1 and identifier.startswith("0")
             for identifier in prerelease
         ):
             raise ValueError(f"Invalid SemVer version: {value!r}")

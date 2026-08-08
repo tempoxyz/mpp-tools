@@ -91,9 +91,7 @@ class VectorRunnerHelperTest(unittest.TestCase):
             )
 
     def test_scenario_version_constraint_requires_a_string(self) -> None:
-        with self.assertRaisesRegex(
-            ValueError, "sdkVersions.python must be a string"
-        ):
+        with self.assertRaisesRegex(ValueError, "sdkVersions.python must be a string"):
             self.runner.scenario_version_applies(
                 {"sdkVersions": {"python": 0.9}}, self.adapter
             )
