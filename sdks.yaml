@@ -30,6 +30,7 @@ sdks:
     owners: [brendanjryan]
     changelog: keep-a-changelog
     verify:
+      - uv sync --all-extras --dev
       - uv run pytest
 
   ruby:
