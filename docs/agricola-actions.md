@@ -56,9 +56,9 @@ Propagation is split into credential boundaries:
 
 1. `run` reads canonical state with a read-only App token and persists the cursor/tracking plan with `GITHUB_TOKEN`.
 2. `generate` checks out the request's pinned downstream base commit without persisted credentials. The OpenAI API key is passed only to the official generation action, whose proxy keeps it out of the generated process environment.
-3. `verify` checks out the same base commit, receives only the generated binary patch, and runs reviewed manifest commands in a separate, secretless job.
-4. `publish` checks out the same base commit only after verification, mints a short-lived target token, applies the verified patch, and creates or updates the stable draft pull request.
-5. `record` persists every successful returned pull-request reference, including successful matrix entries when another target fails, updates the state pull request, and then posts publication replies.
+3. `verify` checks out the same base commit, receives only the generated binary patch, and runs reviewed manifest commands in a separate, secretless job. An explicit no-op skips verification.
+4. `publish` checks out the same base commit only after verification, mints a short-lived target token, applies the verified patch, and creates or updates the stable draft pull request. No-op targets never request write credentials.
+5. `record` persists every successful pull-request reference or explicit skip, including successful matrix entries when another target fails, updates the state pull request, and then posts replies.
 
 Downstream code never runs in a job containing downstream write credentials. Generated changes remain drafts and are never auto-merged.
 
@@ -97,7 +97,7 @@ The Actions page also exposes **Run workflow** through `workflow_dispatch`.
 
 - Canonical token creation fails: confirm the App ID, private key, installation on `wevm/mppx`, and requested permissions.
 - A label is ignored: confirm its final application occurred before merge, was performed by a configured maintainer, and canonical timeline events were returned.
-- Generation fails: inspect the generation action output and confirm `OPENAI_API_KEY` is configured.
+- Generation fails: inspect the generation action output and confirm `OPENAI_API_KEY` is configured. An empty patch succeeds only when the generator provides the required explicit skip reason.
 - Verification fails: reproduce the listed `sdks.yaml` commands in the target repository; no downstream branch is published.
 - Publication fails: confirm the App installation covers the target and grants contents/pull-request write access. Reopen a closed stable pull request before retrying.
 - A command has no reply: inspect state persistence. Replies are intentionally skipped after failed ledger updates.

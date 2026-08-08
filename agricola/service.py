@@ -26,13 +26,14 @@ from .models import (
     PendingIssueUpdate,
     PendingReply,
     PropagateDecision,
+    PropagationOutcome,
     PropagationRequest,
-    PropagationResult,
+    PropagationSkip,
     SkipDecision,
 )
 from .planner import (
     build_tracking_issue,
-    record_propagation_links,
+    record_propagation_outcomes,
     tracking_issue_title,
 )
 
@@ -298,7 +299,7 @@ def handle_comment(
 
 
 def record_propagations(
-    ledger: DecisionLedger, results: Sequence[PropagationResult]
+    ledger: DecisionLedger, results: Sequence[PropagationOutcome]
 ) -> tuple[
     bool,
     tuple[PendingReply, ...],
@@ -306,25 +307,39 @@ def record_propagations(
 ]:
     changed = False
     replies: dict[int, list[str]] = {}
-    issue_results: dict[int, list[PropagationResult]] = {}
+    issue_results: dict[int, list[PropagationOutcome]] = {}
     for result in results:
         request = result.request
-        appended = ledger.append_source(
-            request.source,
-            PropagateDecision(
+        if isinstance(result, PropagationSkip):
+            decision: Decision = SkipDecision(
+                target=request.target,
+                decision=DecisionKind.SKIP,
+                by=request.by,
+                reason=result.reason,
+                idempotency_key=request.idempotency_key,
+                at=result.at,
+            )
+            message = f'Skipped `{request.target}`: "{result.reason}".'
+        else:
+            decision = PropagateDecision(
                 target=request.target,
                 decision=DecisionKind.PROPAGATE,
                 by=request.by,
                 pr=result.pr,
                 idempotency_key=request.idempotency_key,
                 at=result.at,
-            ),
+            )
+            message = (
+                f"Opened draft PR for `{request.target}`: [{result.pr}]({result.url})."
+            )
+        appended = ledger.append_source(
+            request.source,
+            decision,
         )
         changed = changed or appended
-        action = "Opened" if appended else "Already recorded"
-        replies.setdefault(request.tracking_issue, []).append(
-            f"{action} draft PR for `{request.target}`: [{result.pr}]({result.url})."
-        )
+        if not appended:
+            message = f"Already recorded: {message[0].lower()}{message[1:]}"
+        replies.setdefault(request.tracking_issue, []).append(message)
         issue_results.setdefault(request.tracking_issue, []).append(result)
     pending = tuple(
         PendingReply(issue_number=issue, body="\n".join(messages))
@@ -333,10 +348,7 @@ def record_propagations(
     updates = tuple(
         PendingIssueUpdate(
             issue_number=issue,
-            body=record_propagation_links(
-                grouped[0].request.plan,
-                ((item.request.target, item.pr, item.url) for item in grouped),
-            ),
+            body=record_propagation_outcomes(grouped[0].request.plan, grouped),
         )
         for issue, grouped in sorted(issue_results.items())
     )

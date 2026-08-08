@@ -6,7 +6,7 @@ import os
 import sys
 from pathlib import Path
 
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from .commands import parse_commands, require_maintainer
 from .executor import (
@@ -21,8 +21,8 @@ from .manifest import ManifestError, load_manifest, print_schemas
 from .models import (
     PendingIssueUpdate,
     PendingReply,
+    PropagationOutcome,
     PropagationRequest,
-    PropagationResult,
 )
 from .service import handle_comment, poll, record_propagations
 
@@ -82,7 +82,7 @@ def parser() -> argparse.ArgumentParser:
     )
 
     recorder = subcommands.add_parser(
-        "record-propagations", help="record published downstream pull requests"
+        "record-propagations", help="record downstream propagation outcomes"
     )
     recorder.add_argument("results", help="directory containing propagation results")
     recorder.add_argument(
@@ -147,9 +147,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "record-propagations":
         result_paths = tuple(sorted(Path(args.results).glob("*.json")))
         try:
+            outcome_adapter = TypeAdapter(PropagationOutcome)
             results = tuple(
-                PropagationResult.model_validate_json(path.read_text())
-                for path in result_paths
+                outcome_adapter.validate_json(path.read_text()) for path in result_paths
             )
             changed, replies, updates = record_propagations(
                 DecisionLedger(args.ledger), results

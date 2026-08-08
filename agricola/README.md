@@ -108,7 +108,9 @@ The executor:
 5. creates or updates the stable branch and opens a draft pull request;
 6. records the propagation decision only after GitHub returns the pull-request reference.
 
-Generation and verification failure leave no recorded propagate decision, so the same request remains retryable. Successful publications are recorded even when another target in the same matrix fails. A closed stable pull request must be reopened before retrying. An existing ready-for-review pull request is returned to draft before its branch is updated, and a merged pull request is treated as the completed result.
+If the canonical behavior is absent from a target SDK, the generator returns an explicit reason instead of a patch. Agricola records that result as a skip, updates the tracking table, and does not run verification or request downstream write credentials. An unexplained empty patch remains a generation failure.
+
+Generation and verification failures leave no decision, so the same request remains retryable. Explicit skips and successful publications are recorded even when another target in the same matrix fails. A closed stable pull request must be reopened before retrying. An existing ready-for-review pull request is returned to draft before its branch is updated, and a merged pull request is treated as the completed result.
 
 ## State and recovery
 
@@ -135,7 +137,7 @@ State-changing replies are deferred until the state pull request has been update
 | `agricola handle-comment [event]` | Parse an `issue_comment` event; defaults to `GITHUB_EVENT_PATH`. |
 | `agricola deliver-reply <file>` | Deliver a reply deferred until after Git persistence. |
 | `agricola deliver-issue-update <file>` | Deliver a tracking issue body update deferred until after Git persistence. |
-| `agricola record-propagations <results>` | Record published pull requests and render deferred replies. |
+| `agricola record-propagations <results>` | Record published pull requests or explicit skips and render deferred replies. |
 | `agricola verify-propagation <request>` | Run the target's reviewed verification commands. |
 | `agricola render-propagation <request>` | Render deterministic pull-request metadata. |
 | `agricola parse-command --author <login>` | Parse commands from standard input for diagnostics. |

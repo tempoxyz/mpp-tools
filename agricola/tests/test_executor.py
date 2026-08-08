@@ -10,7 +10,7 @@ from agricola.executor import (
     pull_request_title,
     verify,
 )
-from agricola.models import PropagationRequest, PropagationResult
+from agricola.models import PropagationRequest, PropagationResult, PropagationSkip
 
 
 def request() -> PropagationRequest:
@@ -74,6 +74,10 @@ class ExecutorTests(unittest.TestCase):
                 pr="tempoxyz/pympp#88",
                 url="https://github.com/tempoxyz/pympp/pull/88",
             )
+
+    def test_skip_requires_a_reason(self) -> None:
+        with self.assertRaisesRegex(ValueError, "at least 1 character"):
+            PropagationSkip(request=request(), reason="")
 
 
 if __name__ == "__main__":
