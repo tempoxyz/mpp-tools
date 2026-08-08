@@ -15,8 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from deepdiff import DeepDiff
-
+from comparison import json_diff
 from conformance_checks import make_check
 from harness import (
     AdapterClient,
@@ -52,13 +51,6 @@ def normalize_result(entry: dict[str, Any]) -> dict[str, Any]:
         challenge.pop("expires", None)
     normalized.pop("problem_details", None)
     return normalized
-
-
-def compute_diff(expected: Any, actual: Any) -> str:
-    diff = DeepDiff(expected, actual, ignore_order=True, verbose_level=2)
-    if not diff:
-        return ""
-    return json.dumps(diff, indent=2, default=str)
 
 
 @dataclass
@@ -650,7 +642,7 @@ def compare_results(
             results.append(RunResult(adapter=adapter, name=str(name), passed=True))
             unmatched.discard(name)
             continue
-        diff = compute_diff(normalize_result(golden), normalize_result(entry))
+        diff = json_diff(normalize_result(golden), normalize_result(entry), ignore_order=True)
         results.append(RunResult(adapter=adapter, name=str(name), passed=diff == "", error=diff or None))
         unmatched.discard(name)
     for name in sorted(unmatched):
