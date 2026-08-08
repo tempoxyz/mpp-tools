@@ -119,6 +119,8 @@ class GitHubClient:
 
     def pull_request(self, repo: str, number: int) -> CanonicalChange:
         item = self.api(f"repos/{repo}/pulls/{number}")
+        if not item.get("merged_at"):
+            raise GitHubError(f"{repo}#{number} is not merged")
         files = self.pull_request_files(repo, number)
         return CanonicalChange(
             repo=repo,
@@ -127,10 +129,21 @@ class GitHubClient:
             title=item["title"],
             url=item["html_url"],
             body=item.get("body") or "",
-            merged_at=_time(item.get("merged_at") or item["updated_at"]),
+            merged_at=_time(item["merged_at"]),
             labels=tuple(label["name"] for label in item.get("labels", [])),
             files=files,
         )
+
+    def repository_head(self, repo: str) -> str:
+        repository = self.api(f"repos/{repo}")
+        branch = repository.get("default_branch")
+        if not isinstance(branch, str) or not branch:
+            raise GitHubError(f"{repo} has no default branch")
+        commit = self.api(f"repos/{repo}/commits/{branch}")
+        sha = commit.get("sha")
+        if not isinstance(sha, str) or not sha:
+            raise GitHubError(f"could not resolve the default branch head for {repo}")
+        return sha
 
     def pull_request_files(self, repo: str, number: int) -> tuple[PullRequestFile, ...]:
         pages = self.api(

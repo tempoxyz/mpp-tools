@@ -74,7 +74,7 @@ jobs:
             agricola poll > "$result"
           fi
           cat "$result"
-          jq -c '{include: .propagations}' "$result" \
+          jq -c '{include: [.propagations[] | {request: .}]}' "$result" \
             | sed 's/^/propagation-matrix=/' >> "$GITHUB_OUTPUT"
           if jq -e '.propagations | length > 0' "$result" >/dev/null; then
             echo "has-propagations=true" >> "$GITHUB_OUTPUT"
@@ -131,6 +131,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ matrix.request.target_repo }}
+          ref: ${{ matrix.request.target_base_sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -192,6 +193,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ matrix.request.target_repo }}
+          ref: ${{ matrix.request.target_base_sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -253,6 +255,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ matrix.request.target_repo }}
+          ref: ${{ matrix.request.target_base_sha }}
           token: ${{ steps.downstream-token.outputs.token }}
           fetch-depth: 0
 
@@ -294,16 +297,24 @@ jobs:
         run: |
           repo="$(jq -r .target_repo .agricola/request.json)"
           branch="$(jq -r .branch .agricola/request.json)"
-          existing="$(gh pr list --repo "$repo" --head "$branch" --state all --limit 1 \
-            --json number,state,url,isDraft)"
-          state="$(jq -r '.[0].state // empty' <<< "$existing")"
+          owner="${repo%%/*}"
+          candidates="$(gh api --method GET "repos/$repo/pulls" \
+            -f state=all -f head="$owner:$branch" -f per_page=100)"
+          existing="$(jq -c --arg repo "$repo" \
+            '[.[] | select(.head.repo.full_name == $repo)][0] // {}' \
+            <<< "$candidates")"
+          state="$(jq -r 'if .merged_at then "MERGED" else (.state // "" | ascii_upcase) end' \
+            <<< "$existing")"
           if [ "$state" = "MERGED" ]; then
-            url="$(jq -r '.[0].url' <<< "$existing")"
-            number="$(jq -r '.[0].number' <<< "$existing")"
+            url="$(jq -r .html_url <<< "$existing")"
+            number="$(jq -r .number <<< "$existing")"
           elif [ "$state" = "CLOSED" ]; then
             echo "Existing Agricola PR is closed; use retry after reopening it" >&2
             exit 1
           else
+            if [ "$state" = "OPEN" ] && [ "$(jq -r .draft <<< "$existing")" != "true" ]; then
+              gh pr ready --undo "$(jq -r .number <<< "$existing")" --repo "$repo"
+            fi
             if remote="$(git ls-remote --heads origin "refs/heads/$branch" | cut -f1)" && [ -n "$remote" ]; then
               git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch"
               git push --force-with-lease="refs/heads/$branch:$remote" origin "HEAD:refs/heads/$branch"
@@ -311,8 +322,8 @@ jobs:
               git push origin "HEAD:refs/heads/$branch"
             fi
             if [ "$state" = "OPEN" ]; then
-              url="$(jq -r '.[0].url' <<< "$existing")"
-              number="$(jq -r '.[0].number' <<< "$existing")"
+              url="$(jq -r .html_url <<< "$existing")"
+              number="$(jq -r .number <<< "$existing")"
             else
               url="$(gh pr create --repo "$repo" --head "$branch" --draft \
                 --title "$(tr -d '\n' < "$RUNNER_TEMP/pr-title.txt")" \
@@ -338,7 +349,7 @@ jobs:
 
   record:
     needs: [run, publish]
-    if: needs.run.outputs.has-propagations == 'true'
+    if: always() && needs.run.result == 'success' && needs.run.outputs.has-propagations == 'true'
     runs-on: ubuntu-latest
     env:
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
@@ -365,6 +376,7 @@ jobs:
         run: pip install .
 
       - name: Download propagation results
+        continue-on-error: true
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: agricola-result-*
@@ -373,6 +385,7 @@ jobs:
 
       - name: Record propagation decisions
         run: |
+          mkdir -p "$RUNNER_TEMP/results"
           agricola record-propagations "$RUNNER_TEMP/results" \
             --reply-directory "$RUNNER_TEMP/replies"
 

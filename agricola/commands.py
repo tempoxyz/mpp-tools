@@ -116,6 +116,24 @@ def parse_commands(body: str, manifest: Manifest) -> list[Command]:
         commands.append(
             Command(verb=verb, target=target, reason=reason, line=line_number)
         )
+    propagation_targets = {
+        target
+        for command in commands
+        if command.verb is CommandVerb.PROPAGATE
+        for target in (
+            manifest.pr_targets() if command.all_targets else command.targets
+        )
+    }
+    skipped_targets = {
+        command.target
+        for command in commands
+        if command.verb is CommandVerb.SKIP and command.target is not None
+    }
+    conflicts = sorted(propagation_targets & skipped_targets)
+    if conflicts:
+        raise CommandError(
+            "targets cannot be both propagated and skipped: " + ", ".join(conflicts)
+        )
     return commands
 
 
@@ -164,7 +182,15 @@ def resolve_labels(
         label.removeprefix("agricola:"): applied[label].actor
         for label in effective
         if label != "agricola:all"
+        and manifest.target(label.removeprefix("agricola:")).automation is Automation.PR
     }
+    notify_targets = sorted(
+        label.removeprefix("agricola:")
+        for label in effective
+        if label != "agricola:all"
+        and manifest.target(label.removeprefix("agricola:")).automation
+        is Automation.NOTIFY
+    )
     if "agricola:all" in effective:
         actor = applied["agricola:all"].actor
         for name, sdk in manifest.sdks.items():
@@ -175,4 +201,8 @@ def resolve_labels(
         targets=tuple(sorted(target_actors)),
         target_actors=tuple(sorted(target_actors.items())),
         errors=errors,
+        notes=tuple(
+            f"{target} is notify-only; no downstream PR was queued"
+            for target in notify_targets
+        ),
     )

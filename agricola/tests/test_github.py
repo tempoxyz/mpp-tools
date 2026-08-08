@@ -136,6 +136,31 @@ class GitHubApiTests(unittest.TestCase):
         self.assertEqual(len(changes), 101)
         self.assertIn("page=2", client.calls[1][0])
 
+    def test_pull_request_rejects_unmerged_source(self) -> None:
+        client = StubClient(
+            [
+                pull(
+                    3,
+                    merged_at=None,
+                    updated_at="2026-08-07T14:20:00Z",
+                )
+            ]
+        )
+
+        with self.assertRaisesRegex(GitHubError, "is not merged"):
+            client.pull_request("wevm/mppx", 3)
+
+        self.assertEqual(len(client.calls), 1)
+
+    def test_repository_head_resolves_default_branch_commit(self) -> None:
+        client = StubClient([{"default_branch": "main"}, {"sha": "abc1234567"}])
+
+        self.assertEqual(client.repository_head("tempoxyz/mpp-go"), "abc1234567")
+        self.assertEqual(
+            [endpoint for endpoint, _ in client.calls],
+            ["repos/tempoxyz/mpp-go", "repos/tempoxyz/mpp-go/commits/main"],
+        )
+
     def test_tracking_issue_deduplication_uses_direct_issue_listing(self) -> None:
         marker = "<!-- agricola:source=wevm/mppx#412 -->"
         client = StubClient([[[{"number": 9, "body": marker}]]])

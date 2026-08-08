@@ -93,6 +93,10 @@ Commands in canonical or downstream repositories are not supported. Revision, re
 
 Every source-target pair uses a stable branch such as `agricola/mppx-412`. The source SHA and target define a stable idempotency key, so overlapping polls and repeated commands do not create duplicate pull requests.
 
+The executor pins the target repository's default-branch commit when it creates a
+propagation request. Generation, verification, and publication all use that exact
+target tree, even if the default branch advances while the workflow is running.
+
 The executor:
 
 1. checks out the downstream repository, exact canonical merge commit, specification, reviewed plan, and target conventions;
@@ -102,7 +106,7 @@ The executor:
 5. creates or updates the stable branch and opens a draft pull request;
 6. records the propagation decision only after GitHub returns the pull-request reference.
 
-Generation and verification failure leave no recorded propagate decision, so the same request remains retryable. A closed stable pull request must be reopened before retrying. A merged pull request is treated as the completed result.
+Generation and verification failure leave no recorded propagate decision, so the same request remains retryable. Successful publications are recorded even when another target in the same matrix fails. A closed stable pull request must be reopened before retrying. An existing ready-for-review pull request is returned to draft before its branch is updated, and a merged pull request is treated as the completed result.
 
 ## State and recovery
 

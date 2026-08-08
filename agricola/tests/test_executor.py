@@ -20,6 +20,7 @@ def request() -> PropagationRequest:
         source_url="https://github.com/wevm/mppx/pull/412",
         target="go",
         target_repo="tempoxyz/mpp-go",
+        target_base_sha="def4567890",
         tracking_issue=207,
         tracking_issue_url="https://github.com/tempoxyz/mpp-tools/issues/207",
         by="maintainer",

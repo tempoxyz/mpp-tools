@@ -20,6 +20,8 @@ class FakeGitHub:
         self.updated: list[tuple[int, str | None, str | None]] = []
         self.comments: list[tuple[int, str]] = []
         self.pull_requests = 0
+        self.source_repo = "wevm/mppx"
+        self.repository_heads: list[str] = []
         self.events: tuple[LabelEvent, ...] = (
             LabelEvent(
                 LabelAction.LABELED,
@@ -35,6 +37,10 @@ class FakeGitHub:
     def pull_request(self, repo, number):
         self.pull_requests += 1
         return self.change
+
+    def repository_head(self, repo):
+        self.repository_heads.append(repo)
+        return f"{repo.rsplit('/', 1)[-1]}1234567"
 
     def label_events(self, repo, number):
         return self.events
@@ -63,7 +69,7 @@ class FakeGitHub:
     def source_from_body(self, body):
         if "agricola:source=" not in body:
             raise GitHubError("missing source")
-        return "wevm/mppx", 412
+        return self.source_repo, 412
 
     def pull_status(self, reference):
         return f"{reference}: open"
@@ -90,6 +96,7 @@ class PollTests(unittest.TestCase):
             self.assertEqual(len(client.created), 1)
             self.assertEqual(client.pull_requests, 2)
             self.assertEqual(first.propagations[0].target, "go")
+            self.assertEqual(first.propagations[0].target_base_sha, "mpp-go1234567")
             self.assertEqual(second.propagations[0], first.propagations[0])
             self.assertEqual(store.load().merged_at, client.change.merged_at)
             self.assertIsNotNone(ledger.read("wevm/mppx", 412))
@@ -384,6 +391,23 @@ class CommentTests(unittest.TestCase):
             assert result.reply is not None
             self.assertIn("require a tracking issue", result.reply.body)
             self.assertFalse(client.comments)
+
+    def test_forged_source_repository_gets_scope_reply(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeGitHub()
+            client.source_repo = "attacker/example"
+
+            result = handle_comment(
+                client,
+                manifest(),
+                DecisionLedger(directory),
+                self.event("@agricola status"),
+            )
+
+            self.assertIsNotNone(result.reply)
+            assert result.reply is not None
+            self.assertIn("merged canonical pull request", result.reply.body)
+            self.assertEqual(client.pull_requests, 0)
 
 
 if __name__ == "__main__":

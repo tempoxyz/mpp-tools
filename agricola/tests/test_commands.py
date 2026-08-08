@@ -53,6 +53,13 @@ class CommandTests(unittest.TestCase):
         with self.assertRaisesRegex(CommandError, "cannot be combined"):
             parse_commands("@agricola propagate all go", self.manifest)
 
+    def test_rejects_propagating_and_skipping_the_same_target(self) -> None:
+        with self.assertRaisesRegex(CommandError, "both propagated and skipped: go"):
+            parse_commands(
+                '@agricola propagate all\n@agricola skip go reason="not needed"',
+                self.manifest,
+            )
+
     def test_rejects_unknown_target(self) -> None:
         with self.assertRaisesRegex(CommandError, "unknown SDK target"):
             parse_commands('@agricola skip golang reason="wrong"', self.manifest)
@@ -97,6 +104,18 @@ class LabelTests(unittest.TestCase):
         self.assertEqual(
             result.target_actors,
             (("go", "maintainer"), ("rust", "maintainer")),
+        )
+
+    def test_notify_only_label_does_not_queue_a_pull_request(self) -> None:
+        result = resolve_labels(
+            [self.event("agricola:ruby")], self.merged, self.manifest
+        )
+
+        self.assertEqual(result.targets, ())
+        self.assertEqual(result.target_actors, ())
+        self.assertEqual(
+            result.notes,
+            ("ruby is notify-only; no downstream PR was queued",),
         )
 
     def test_none_wins_and_reports_conflict(self) -> None:

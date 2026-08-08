@@ -55,10 +55,10 @@ In repository Actions settings, enable workflow write access and allow Actions t
 Propagation is split into credential boundaries:
 
 1. `run` reads canonical state with a read-only App token and persists the cursor/tracking plan with `GITHUB_TOKEN`.
-2. `generate` checks out the downstream repository without persisted credentials. The OpenAI API key is passed only to the official generation action, whose proxy keeps it out of the generated process environment.
-3. `verify` receives only the generated binary patch and runs reviewed manifest commands in a separate, secretless job.
-4. `publish` runs only after verification, mints a short-lived target token, applies the verified patch, and creates or updates the stable draft pull request.
-5. `record` persists the returned pull-request reference, updates the state pull request, and then posts publication replies.
+2. `generate` checks out the request's pinned downstream base commit without persisted credentials. The OpenAI API key is passed only to the official generation action, whose proxy keeps it out of the generated process environment.
+3. `verify` checks out the same base commit, receives only the generated binary patch, and runs reviewed manifest commands in a separate, secretless job.
+4. `publish` checks out the same base commit only after verification, mints a short-lived target token, applies the verified patch, and creates or updates the stable draft pull request.
+5. `record` persists every successful returned pull-request reference, including successful matrix entries when another target fails, updates the state pull request, and then posts publication replies.
 
 Downstream code never runs in a job containing downstream write credentials. Generated changes remain drafts and are never auto-merged.
 

@@ -35,6 +35,7 @@ from .planner import build_tracking_issue, tracking_issue_title
 class GitHub(Protocol):
     def merged_changes(self, repo: str, cursor: Cursor) -> list[CanonicalChange]: ...
     def pull_request(self, repo: str, number: int) -> CanonicalChange: ...
+    def repository_head(self, repo: str) -> str: ...
     def label_events(self, repo: str, number: int) -> Sequence[LabelEvent]: ...
     def find_tracking_issue(self, marker: str) -> dict[str, object] | None: ...
     def create_issue(
@@ -93,6 +94,7 @@ def poll(
             assert entry is not None
             propagations.extend(
                 _requests_for_targets(
+                    client,
                     change,
                     resolution.targets,
                     dict(resolution.target_actors),
@@ -150,18 +152,20 @@ def handle_comment(
     issue_body = str(issue.get("body") or "")
     try:
         source_repo, source_number = client.source_from_body(issue_body)
+        if source_repo.lower() != manifest.canonical.repo.lower():
+            raise ValueError("source repository is not canonical")
+        change = client.pull_request(source_repo, source_number)
     except (GitHubError, ValueError):
         return CommentResult(
             commands=len(commands),
             reply=PendingReply(
                 issue_number=issue_number,
                 body=(
-                    "Agricola commands require a tracking issue with a canonical "
-                    "source marker."
+                    "Agricola commands require a tracking issue tied to a merged "
+                    "canonical pull request."
                 ),
             ),
         )
-    change = client.pull_request(source_repo, source_number)
     changed_ledger = False
     replies: list[str] = []
     propagations: list[PropagationRequest] = []
@@ -189,6 +193,7 @@ def handle_comment(
                 if target not in recorded_targets and target not in queued_targets
             )
             requested = _requests_for_targets(
+                client,
                 change,
                 fresh_targets,
                 {target: author for target in targets},
@@ -293,6 +298,7 @@ def record_propagations(
 
 
 def _requests_for_targets(
+    client: GitHub,
     change: CanonicalChange,
     targets: Sequence[str],
     actors: dict[str, str],
@@ -320,6 +326,7 @@ def _requests_for_targets(
                 source_url=change.url,
                 target=target,
                 target_repo=sdk.repo,
+                target_base_sha=client.repository_head(sdk.repo),
                 tracking_issue=issue_number,
                 tracking_issue_url=issue_url,
                 by=actors[target],

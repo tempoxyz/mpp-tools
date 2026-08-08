@@ -248,6 +248,7 @@ class PropagationRequest(FrozenModel):
     source_url: NonEmpty
     target: TargetName
     target_repo: RepoName
+    target_base_sha: Sha
     tracking_issue: PositiveInt
     tracking_issue_url: NonEmpty
     by: Login
