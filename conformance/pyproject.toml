@@ -1,0 +1,14 @@
+[project]
+name = "mpp-conformance-runner"
+version = "0.0.1"
+description = "Cross-SDK MPP conformance runner"
+requires-python = ">=3.12"
+dependencies = [
+    "deepdiff>=8.6.1,<9",
+    "jsonschema>=4.26.0,<5",
+    "rfc3339-validator>=0.1.4,<1",
+    "semantic-version>=2.10.0,<3",
+]
+
+[tool.uv]
+package = false

@@ -65,7 +65,7 @@ mpp-tools/
 
 ## Conformance Suite
 
-The conformance suite ensures every SDK produces identical protocol outputs for the same inputs. No SDK is privileged: checked-in JSON vectors are the source of truth, and each SDK is exercised through a thin CLI adapter with a shared request/response contract.
+The conformance suite ensures every SDK produces identical protocol outputs for the same inputs. The pinned `mppx` release is the reference implementation: it produces canonical flow results and resolves behavior that the protocol specification leaves ambiguous. Checked-in JSON vectors remain the normative fixtures for their explicit inputs and expected outputs. Each SDK is exercised through a thin CLI adapter with a shared request/response contract.
 
 ```text
 vectors/*.json -> vector_runner.py -> adapter -> pass/fail

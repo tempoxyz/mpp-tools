@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tempo.xyz/mpp-tools/conformance/schemas/vector.schema.json",
+  "title": "MPP Conformance Vector",
+  "type": "object",
+  "required": ["version", "description", "spec_ref", "commands", "scenarios"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "description": { "type": "string", "minLength": 1 },
+    "spec_ref": { "type": "string", "minLength": 1 },
+    "commands": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "parse": { "type": "string", "minLength": 1 },
+        "format": { "type": "string", "minLength": 1 },
+        "generate": { "type": "string", "minLength": 1 },
+        "operation": { "$ref": "protocol.schema.json#/$defs/Operation" }
+      },
+      "anyOf": [
+        { "required": ["parse"] },
+        { "required": ["format"] },
+        { "required": ["parse", "format"] },
+        { "required": ["generate"] },
+        { "required": ["operation"] }
+      ]
+    },
+    "scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/Scenario" }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "commands": { "required": ["operation"] }
+        }
+      },
+      "then": {
+        "properties": {
+          "scenarios": {
+            "items": { "required": ["input", "expected"] }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "commands": {
+            "anyOf": [
+              { "required": ["parse"] },
+              { "required": ["format"] }
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "scenarios": {
+            "items": { "required": ["tests"] }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "ExpectedError": {
+      "type": "object",
+      "required": ["success", "error_type"],
+      "additionalProperties": false,
+      "properties": {
+        "success": { "const": false },
+        "error_type": { "$ref": "protocol.schema.json#/$defs/ErrorType" }
+      }
+    },
+    "TestExpectation": {
+      "oneOf": [
+        { "const": true },
+        { "$ref": "#/$defs/ExpectedError" }
+      ]
+    },
+    "Tests": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "parse": { "$ref": "#/$defs/TestExpectation" },
+        "format": { "$ref": "#/$defs/TestExpectation" },
+        "roundtrip": { "const": true },
+        "generate": { "$ref": "#/$defs/TestExpectation" }
+      }
+    },
+    "ExpandedWire": {
+      "type": "object",
+      "required": ["prefix", "repeat", "count"],
+      "additionalProperties": false,
+      "properties": {
+        "prefix": { "type": "string" },
+        "repeat": { "type": "string" },
+        "count": { "type": "integer", "minimum": 0 },
+        "suffix": { "type": "string" }
+      }
+    },
+    "Scenario": {
+      "type": "object",
+      "required": ["name", "description", "tags"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "adapters": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "sdkVersions": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        },
+        "maxDurationMs": { "type": "integer", "minimum": 1 },
+        "maxDurationMsByAdapter": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "type": "integer", "minimum": 1 }
+        },
+        "tests": { "$ref": "#/$defs/Tests" },
+        "wire": {
+          "oneOf": [
+            { "type": "string" },
+            { "$ref": "#/$defs/ExpandedWire" }
+          ]
+        },
+        "object": true,
+        "decoded": { "type": "string" },
+        "encoded": { "type": "string" },
+        "input": true,
+        "expected": true
+      },
+      "anyOf": [
+        { "required": ["tests"] },
+        { "required": ["input", "expected"] }
+      ]
+    }
+  }
+}

@@ -57,6 +57,7 @@ def main() -> int:
         "num_checks": 0,
         "passed": 0,
         "failed": 0,
+        "skipped": 0,
         "errors": [],
     }
     errors = merged["errors"]
@@ -92,9 +93,10 @@ def main() -> int:
             record_runner_failure(adapter, stderr or f"Could not read {result_path}: {exc}")
             continue
 
-        merged["passed"] = int(merged["passed"]) + adapter_passed
-        merged["failed"] = int(merged["failed"]) + adapter_failed
-        merged["num_checks"] = int(merged["num_checks"]) + adapter_checks
+        merged["passed"] = int(merged["passed"]) + int(result.get("passed", 0))
+        merged["failed"] = int(merged["failed"]) + int(result.get("failed", 0))
+        merged["skipped"] = int(merged["skipped"]) + int(result.get("skipped", 0))
+        merged["num_checks"] = int(merged["num_checks"]) + int(result.get("num_checks", 0))
         errors.extend(result.get("errors", []))
 
         # A readable artifact can still be vacuous or self-inconsistent; do not

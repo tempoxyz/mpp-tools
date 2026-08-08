@@ -6,10 +6,10 @@
   "type": "module",
   "scripts": {
     "test:golden": "tsx golden/adapter.ts",
-    "test:all": "python3 scripts/vector_runner.py",
-    "flow": "python3 scripts/flow_runner.py",
-    "test:go": "python3 scripts/vector_runner.py --adapter go",
-    "test:ruby": "python3 scripts/vector_runner.py --adapter ruby",
+    "test:all": "uv run --locked python scripts/vector_runner.py",
+    "flow": "uv run --locked python scripts/flow_runner.py",
+    "test:go": "uv run --locked python scripts/vector_runner.py --adapter go",
+    "test:ruby": "uv run --locked python scripts/vector_runner.py --adapter ruby",
     "build:go": "make install-go",
     "build:rust": "cd adapters/rust && cargo build --locked --release",
     "build:python": "make install-python",
@@ -17,10 +17,10 @@
     "build:all": "make install"
   },
   "dependencies": {
-    "mppx": "0.8.6"
+    "mppx": "0.8.15"
   },
   "devDependencies": {
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.1.2",
     "tsx": "^4.23.1",
     "typescript": "^7.0.2"
   },

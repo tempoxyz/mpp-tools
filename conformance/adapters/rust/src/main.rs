@@ -33,6 +33,7 @@ fn main() {
         "base64url-encode" => handle_base64url_encode(input),
         "base64url-decode" => handle_base64url_decode(input),
         "generate-challenge-id" => handle_generate_challenge_id(input),
+        "tempo-proof-typed-data" => handle_tempo_proof_typed_data(input),
         _ => print_error(&format!("Unknown command: {}", command), "unknown_error"),
     }
 }
@@ -200,6 +201,11 @@ fn handle_parse_receipt(input: &str) {
 fn handle_format_www_authenticate(input: &str) {
     match serde_json::from_str::<Value>(input) {
         Ok(value) => {
+            let id = str_field(&value, "id");
+            if id.is_empty() {
+                print_error("id must not be empty", "format_error");
+                return;
+            }
             let request_obj = value.get("request").cloned().unwrap_or(json!({}));
             let request_b64 = match Base64UrlJson::from_value(&request_obj) {
                 Ok(b64) => b64,
@@ -210,7 +216,7 @@ fn handle_format_www_authenticate(input: &str) {
             };
 
             let challenge = PaymentChallenge {
-                id: str_field(&value, "id"),
+                id,
                 realm: str_field(&value, "realm"),
                 method: str_field(&value, "method").into(),
                 intent: str_field(&value, "intent").into(),
@@ -353,6 +359,35 @@ fn handle_generate_challenge_id(input: &str) {
     }
 }
 
+fn handle_tempo_proof_typed_data(input: &str) {
+    match serde_json::from_str::<serde_json::Value>(input) {
+        Ok(params) => {
+            let chain_id = params.get("chainId").and_then(|v| v.as_u64()).unwrap_or(0);
+            let challenge_id = str_field(&params, "challengeId");
+            let realm = str_field(&params, "realm");
+            print_success(json!({
+                "domain": {
+                    "name": "MPP",
+                    "version": "2",
+                    "chainId": chain_id,
+                },
+                "types": {
+                    "Proof": [
+                        { "name": "challengeId", "type": "string" },
+                        { "name": "realm", "type": "string" },
+                    ],
+                },
+                "primaryType": "Proof",
+                "message": {
+                    "challengeId": challenge_id,
+                    "realm": realm,
+                },
+            }));
+        }
+        Err(e) => print_error(&e.to_string(), "generation_error"),
+    }
+}
+
 fn print_adapter_success<T: serde::Serialize>(value: T) {
     println!(
         "{}",
@@ -416,6 +451,7 @@ fn legacy_command_for_operation(op: &str) -> Option<&'static str> {
         "base64url.encode" => Some("base64url-encode"),
         "base64url.decode" => Some("base64url-decode"),
         "challenge.id" => Some("generate-challenge-id"),
+        "tempo.proof.typed_data" => Some("tempo-proof-typed-data"),
         _ => None,
     }
 }
@@ -524,12 +560,18 @@ struct ChallengeIdParams<'a> {
     opaque: Option<&'a str>,
 }
 
-fn generate_conformance_challenge_id(
-    params: ChallengeIdParams<'_>,
-) -> Result<String, std::fmt::Error> {
+fn generate_conformance_challenge_id(params: ChallengeIdParams<'_>) -> Result<String, String> {
+    const MINIMUM_SECRET_KEY_BYTES: usize = 32;
     type HmacSha256 = Hmac<Sha256>;
 
-    let request_json = stable_json(params.request)?;
+    if params.secret_key.as_bytes().len() < MINIMUM_SECRET_KEY_BYTES {
+        return Err(format!(
+            "secretKey must be at least {} bytes",
+            MINIMUM_SECRET_KEY_BYTES
+        ));
+    }
+
+    let request_json = stable_json(params.request).map_err(|e| e.to_string())?;
     let request_b64 = base64url_encode(request_json.as_bytes());
     let hmac_input = [
         params.realm,

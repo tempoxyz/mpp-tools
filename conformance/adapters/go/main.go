@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/tempoxyz/mpp-go/pkg/mpp"
 	"github.com/tempoxyz/mpp-go/pkg/server"
@@ -36,6 +37,8 @@ type adapterResponse struct {
 	Value any           `json:"value,omitempty"`
 	Error *adapterError `json:"error,omitempty"`
 }
+
+const minimumSecretKeyBytes = 32
 
 type adapterError struct {
 	Type    string `json:"type"`
@@ -152,6 +155,10 @@ func handleFormatWWWAuthenticate(input string) {
 		printJSON(commandResponse{Success: false, Error: err.Error(), ErrorType: "format_error"})
 		return
 	}
+	if challenge.ID == "" {
+		printJSON(commandResponse{Success: false, Error: "id must not be empty", ErrorType: "format_error"})
+		return
+	}
 
 	header, err := challenge.ToAuthenticateStrict(challenge.Realm)
 	if err != nil {
@@ -210,6 +217,12 @@ func handleBase64URLDecode(input string) {
 		printJSON(commandResponse{Success: false, Error: err.Error(), ErrorType: "encoding_error"})
 		return
 	}
+	// The decode ABI returns a UTF-8 JSON string; bytes that cannot be
+	// decoded must be an encoding_error, not U+FFFD replacements.
+	if !utf8.Valid(decoded) {
+		printJSON(commandResponse{Success: false, Error: "decoded value is not valid UTF-8", ErrorType: "encoding_error"})
+		return
+	}
 	printJSON(commandResponse{Success: true, Result: string(decoded)})
 }
 
@@ -220,7 +233,7 @@ func handleGenerateChallengeID(input string) {
 		return
 	}
 
-	result := generateConformanceChallengeID(
+	result, err := generateConformanceChallengeID(
 		stringField(data, "secretKey"),
 		stringField(data, "realm"),
 		stringField(data, "method"),
@@ -230,6 +243,10 @@ func handleGenerateChallengeID(input string) {
 		stringField(data, "digest"),
 		stringField(data, "opaque"),
 	)
+	if err != nil {
+		printJSON(commandResponse{Success: false, Error: err.Error(), ErrorType: "generation_error"})
+		return
+	}
 	printJSON(commandResponse{Success: true, Result: result})
 }
 
@@ -523,7 +540,11 @@ func parseConformanceReceipt(header string) (*mpp.Receipt, error) {
 // string placed directly in the pipe-delimited HMAC input, which differs from
 // the library's map[string]string encoding. Once the spec settles on a single
 // encoding this can be replaced with mpp.GenerateChallengeID.
-func generateConformanceChallengeID(secretKey, realm, method, intent string, request map[string]any, expires, digest, opaque string) string {
+func generateConformanceChallengeID(secretKey, realm, method, intent string, request map[string]any, expires, digest, opaque string) (string, error) {
+	if len([]byte(secretKey)) < minimumSecretKeyBytes {
+		return "", fmt.Errorf("secretKey must be at least %d bytes", minimumSecretKeyBytes)
+	}
+
 	requestB64, _ := encodeJSONBase64URL(request)
 
 	input := strings.Join([]string{
@@ -539,7 +560,7 @@ func generateConformanceChallengeID(secretKey, realm, method, intent string, req
 	mac := hmac.New(sha256.New, []byte(secretKey))
 	mac.Write([]byte(input))
 
-	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil)), nil
 }
 
 func formatConformanceReceipt(receipt *mpp.Receipt) (string, error) {

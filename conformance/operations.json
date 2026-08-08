@@ -82,6 +82,14 @@
       "comparison": "exact",
       "description": "Verify Stripe charge receipt attribution uses only the server-bound request externalId and cannot be forged from credential payload."
     },
+    "tempo.proof.typed_data": {
+      "category": "vector",
+      "inputRef": "protocol.schema.json#/$defs/TempoProofInput",
+      "successRef": "protocol.schema.json#/$defs/TempoProofTypedData",
+      "errorTypes": ["generation_error"],
+      "comparison": "exact",
+      "description": "Generate the EIP-712 typed-data shape for a zero-amount Tempo proof credential."
+    },
     "http.payment_request": {
       "category": "flow",
       "inputRef": "protocol.schema.json#/$defs/HttpPaymentRequest",

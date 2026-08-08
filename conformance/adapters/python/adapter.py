@@ -23,6 +23,8 @@ from mpp import (
     format_payment_receipt,
 )
 
+MINIMUM_SECRET_KEY_BYTES = 32
+
 
 def base64url_encode(data: str) -> str:
     """Encode a string to base64url without padding."""
@@ -31,14 +33,21 @@ def base64url_encode(data: str) -> str:
 
 
 def base64url_decode(data: str) -> str:
-    """Decode a base64url string (with or without padding)."""
+    """Decode a base64url string (with or without padding).
+
+    Invalid input must be rejected, not repaired: silently dropping
+    out-of-alphabet characters would accept wire values every other
+    adapter refuses.
+    """
     import re
 
-    cleaned = re.sub(r"[^A-Za-z0-9_-]", "", data)
-    padding = 4 - (len(cleaned) % 4)
+    stripped = data.rstrip("=")
+    if re.search(r"[^A-Za-z0-9_-]", stripped):
+        raise ValueError("invalid base64url character")
+    padding = 4 - (len(stripped) % 4)
     if padding != 4:
-        cleaned += "=" * padding
-    decoded = base64.urlsafe_b64decode(cleaned)
+        stripped += "=" * padding
+    decoded = base64.urlsafe_b64decode(stripped)
     return decoded.decode("utf-8")
 
 
@@ -48,6 +57,9 @@ def canonical_json(value) -> str:
 
 
 def generate_conformance_challenge_id(*, secret_key: str, realm: str, method: str, intent: str, request, expires: str | None = None, digest: str | None = None, opaque: str | None = None) -> str:
+    if len(secret_key.encode("utf-8")) < MINIMUM_SECRET_KEY_BYTES:
+        raise ValueError(f"secretKey must be at least {MINIMUM_SECRET_KEY_BYTES} bytes")
+
     request_b64 = base64.urlsafe_b64encode(canonical_json(request or {}).encode("utf-8")).decode("ascii").rstrip("=")
     payload = "|".join([
         realm,
@@ -60,6 +72,27 @@ def generate_conformance_challenge_id(*, secret_key: str, realm: str, method: st
     ])
     signature = hmac.new(secret_key.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).digest()
     return base64.urlsafe_b64encode(signature).decode("ascii").rstrip("=")
+
+
+def tempo_proof_typed_data(*, chain_id: int, challenge_id: str, realm: str):
+    return {
+        "domain": {
+            "name": "MPP",
+            "version": "2",
+            "chainId": chain_id,
+        },
+        "types": {
+            "Proof": [
+                {"name": "challengeId", "type": "string"},
+                {"name": "realm", "type": "string"},
+            ],
+        },
+        "primaryType": "Proof",
+        "message": {
+            "challengeId": challenge_id,
+            "realm": realm,
+        },
+    }
 
 
 def challenge_to_dict(challenge: Challenge) -> dict:
@@ -150,6 +183,7 @@ OP_TO_COMMAND = {
     "base64url.decode": "base64url-decode",
     "challenge.id": "generate-challenge-id",
     "tempo.receipt.verify": "verify-tempo-receipt",
+    "tempo.proof.typed_data": "tempo-proof-typed-data",
 }
 
 
@@ -282,6 +316,8 @@ def main():
             print(json.dumps(success(receipt_to_dict(receipt))))
         elif command == "format-www-authenticate":
             data = json.loads(input_data)
+            if not data.get("id"):
+                raise ValueError("id must not be empty")
             challenge = Challenge(
                 id=data["id"],
                 method=data["method"],
@@ -354,14 +390,22 @@ def main():
         elif command == "verify-tempo-receipt":
             params = json.loads(input_data)
             print(json.dumps(asyncio.run(verify_tempo_receipt(params))))
+        elif command == "tempo-proof-typed-data":
+            params = json.loads(input_data)
+            result = tempo_proof_typed_data(
+                chain_id=params["chainId"],
+                challenge_id=params["challengeId"],
+                realm=params["realm"],
+            )
+            print(json.dumps(success(result)))
         else:
             print(json.dumps(error(f"Unknown command: {command}")))
     except Exception as e:
-        if command.startswith("parse-") or command == "base64url-decode":
+        if command.startswith("parse-"):
             error_type = "parse_error"
         elif command.startswith("format-"):
             error_type = "format_error"
-        elif command == "base64url-encode":
+        elif command.startswith("base64url-"):
             error_type = "encoding_error"
         elif command.startswith("generate-"):
             error_type = "generation_error"

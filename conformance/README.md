@@ -21,7 +21,7 @@ make server-verify # run SDK server verification ABI tests
 
 ## How It Works
 
-Test vectors are hand-authored JSON files in `vectors/`. No SDK is privileged — the vectors are the single source of truth.
+Test vectors are hand-authored JSON files in `vectors/`. Their explicit inputs and expected outputs are normative. The pinned TypeScript `mppx` package is the reference implementation for canonical serialization, flow behavior, and cases where the protocol specification permits multiple interpretations.
 
 Each SDK has a thin **adapter** CLI that wraps its library and exposes a uniform interface. A Python test runner invokes every adapter against every vector and compares outputs.
 
@@ -29,7 +29,7 @@ Each SDK has a thin **adapter** CLI that wraps its library and exposes a uniform
 vectors/*.json ──► vector_runner.py ──► adapter (Rust/Python/Go/Ruby/Java) ──► pass/fail
 ```
 
-The TypeScript adapter remains the golden implementation for fixture maintenance and can be run explicitly with `make test-typescript`. Default vector runs skip it because the vector JSON files are the checked golden source of truth.
+The TypeScript adapter is the reference implementation for fixture maintenance and can be run explicitly with `make test-typescript`. Default vector runs skip it because checked-in vector expectations do not need to be regenerated on every run.
 
 See [`HARNESS_SPEC.md`](./HARNESS_SPEC.md) for the schema-backed adapter ABI, manifest format, operation registry, migration plan, and language skeletons.
 
@@ -44,6 +44,7 @@ Vectors live in `vectors/` and cover the core protocol surface:
 | `receipt.json` | Parsing and formatting `Payment-Receipt: ...` headers. Base64url-encoded JSON with `status`, `method`, `timestamp`, `reference`. |
 | `base64url.json` | RFC 4648 §5 encoding: no padding, URL-safe alphabet (`-`/`_` instead of `+`/`/`). |
 | `challenge-id.json` | Deterministic challenge ID generation via HMAC-SHA256. Input is pipe-delimited (`realm\|method\|intent\|canonicalized_request\|expires\|digest\|opaque`), output is unpadded base64url. |
+| `tempo-proof.json` | EIP-712 typed-data shape for zero-amount Tempo proof credentials. Binds `challengeId` and `realm` under domain `MPP` version `2`. |
 
 Each vector file contains **scenarios** — individual test cases with a name, description, tags, and expected inputs/outputs:
 
@@ -59,6 +60,20 @@ Each vector file contains **scenarios** — individual test cases with a name, d
 ```
 
 Scenarios may optionally include `adapters` to restrict an edge case to specific SDK adapters, and `maxDurationMs` or `maxDurationMsByAdapter` to assert bounded execution for parser stress cases. Long stress inputs can use `wire` as `{ "prefix": "...", "repeat": "...", "count": 123, "suffix": "..." }` to keep fixtures reviewable.
+
+Use `sdkVersions` when a rule only applies to particular released SDK versions:
+
+```json
+{
+  "name": "rejects_weak_secret",
+  "sdkVersions": {
+    "typescript": ">0.8.15",
+    "rust": ">=0.12.0 <1.0.0"
+  }
+}
+```
+
+Constraints use npm-style SemVer syntax with `=`, `<`, `<=`, `>`, and `>=`. Whitespace-separated comparators are combined with AND. An adapter not named in `sdkVersions` still runs the scenario; combine `sdkVersions` with `adapters` to restrict both adapter and version. Unknown adapter keys, invalid constraints, and non-SemVer installed versions fail the suite instead of silently skipping coverage. Java constraints use the released version pinned in `adapters/java/build.gradle`.
 
 ### Test Types
 
@@ -79,7 +94,7 @@ make flow
 
 The Python flow runner owns the HTTP state machine. It calls each adapter's existing parse/format commands to parse the challenge, format the credential, and parse the receipt. This keeps flow tests focused on protocol compatibility rather than each SDK's HTTP transport implementation.
 
-Flow assertions compare adapter results against `flows/golden-results.json`, generated with the pinned TypeScript `mppx` package. Regenerate it with `make update-flow-golden` when the flow fixtures intentionally change.
+Flow assertions compare adapter results against `flows/golden-results.json`, generated exclusively with the pinned TypeScript `mppx` package. Regenerate it with `make update-flow-golden` only when the flow fixtures or pinned `mppx` behavior intentionally change, and commit the golden diff with that change.
 
 ## Server Verification Tests
 
@@ -154,19 +169,19 @@ make test-ruby
 make test-java
 
 # Single vector file
-python3 scripts/vector_runner.py --vector www-authenticate
+uv run --locked python scripts/vector_runner.py --vector www-authenticate
 
 # Filter by tag
-python3 scripts/vector_runner.py --tag happy-path
+uv run --locked python scripts/vector_runner.py --tag happy-path
 
 # Verbose output
-python3 scripts/vector_runner.py --verbose
+uv run --locked python scripts/vector_runner.py --verbose
 
 # JSON output (for CI)
-python3 scripts/vector_runner.py --output json
+uv run --locked python scripts/vector_runner.py --output json
 
 # Flow JSON output
-python3 scripts/flow_runner.py --output json
+uv run --locked python scripts/flow_runner.py --output json
 ```
 
 JSON output includes a `checks` array. Each check has a stable `id`, `name`,
@@ -275,15 +290,16 @@ make flow-sdk ADAPTER=rust
 
 1. Edit the appropriate vector file in `vectors/`
 2. Add a new scenario object to the `scenarios` array
-3. Run `make test` to verify all adapters pass
-4. Submit a PR
+3. Optionally use `adapters` and `sdkVersions` to define where the rule applies
+4. Run `make test` to verify all applicable adapters pass
+5. Submit a PR
 
 ## Prerequisites
 
 - Node.js ≥ 20
 - Rust toolchain (for the Rust adapter)
-- Python ≥ 3.12 + [uv](https://github.com/astral-sh/uv) (for the Python adapter)
+- Python ≥ 3.12 + [uv](https://github.com/astral-sh/uv) (for the runner and Python adapter)
 - Go with toolchain auto-download enabled or Go ≥ 1.26 (for the Go adapter)
 - Ruby ≥ 3.3 + Bundler (for the `mpp-rb` adapter)
 - JDK 17 or newer (for the Java adapter; it builds Java 11 bytecode)
-- `python3 -m pip install -r requirements.txt` (for the test runner)
+- `uv sync --locked` (for the test runner)

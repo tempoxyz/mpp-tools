@@ -18,7 +18,15 @@ from typing import Any
 from deepdiff import DeepDiff
 
 from conformance_checks import make_check
-from harness import AdapterClient, AdapterConfig, build_adapter, discover_adapters
+from harness import (
+    AdapterClient,
+    AdapterConfig,
+    build_adapter,
+    discover_adapters,
+    load_flow_cases as load_validated_flow_cases,
+    load_flow_results,
+    write_flow_results,
+)
 
 
 SCRIPT_DIR = Path(__file__).parent
@@ -105,20 +113,8 @@ def wait_for_server(base_url: str, timeout: int = 15) -> None:
     raise RuntimeError("Server did not start")
 
 
-def load_results(data: str) -> list[dict[str, Any]]:
-    parsed = json.loads(data)
-    results = parsed.get("results")
-    if not isinstance(results, list):
-        raise ValueError("Invalid results payload")
-    return results
-
-
 def load_flow_cases() -> list[dict[str, Any]]:
-    parsed = json.loads(FLOW_CASES.read_text())
-    cases = parsed.get("cases")
-    if not isinstance(cases, list):
-        raise ValueError("Invalid flow cases payload")
-    return cases
+    return load_validated_flow_cases(FLOW_CASES)
 
 
 def flow_case_url(base_url: str, flow_case: dict[str, Any], *, retry: bool = False) -> str:
@@ -137,7 +133,7 @@ def load_golden_results() -> list[dict[str, Any]]:
             f"Missing flow golden file: {FLOW_RESULTS}. "
             "Run scripts/flow_runner.py --update-golden to create it."
         )
-    return load_results(FLOW_RESULTS.read_text())
+    return load_flow_results(FLOW_RESULTS)
 
 
 def parse_problem_details(headers: Any, body_bytes: bytes) -> tuple[dict[str, Any] | None, str | None]:
@@ -169,7 +165,11 @@ def perform_request(
 ) -> tuple[int, Any, bytes]:
     method = flow_case.get("http_method", "GET")
     body = flow_case.get("retry_body", flow_case.get("body")) if retry else flow_case.get("body")
-    data = body.encode("utf-8") if body and method == "POST" else None
+    data = (
+        body.encode("utf-8")
+        if body is not None and method in {"POST", "PUT", "PATCH"}
+        else None
+    )
     request = urllib.request.Request(url, data=data, method=method)
     request.add_header("X-Flow-Client", client_name)
     if data is not None:
@@ -613,6 +613,28 @@ def run_flow_case(
     return result
 
 
+def run_flow_case_safely(
+    client: AdapterClient,
+    base_url: str,
+    flow_case: dict[str, Any],
+    cases_by_path: dict[str, dict[str, Any]],
+    verbose: bool,
+) -> dict[str, Any]:
+    """Contain per-case crashes so one bad response cannot void the whole suite.
+
+    AdapterClient.call raises (rather than returning an error response) when an
+    adapter's output fails schema validation; without this boundary that single
+    case would abort every remaining flow for the adapter.
+    """
+    name = str(flow_case.get("name"))
+    try:
+        return run_flow_case(client, base_url, flow_case, cases_by_path, verbose)
+    except Exception as exc:
+        if verbose:
+            print(f"[{client.adapter.name}] {name}: case error {exc}", file=sys.stderr)
+        return flow_error(name, 0, f"case_error: {exc}")
+
+
 def run_adapter_flows(adapter: AdapterConfig, base_url: str, verbose: bool) -> list[dict[str, Any]]:
     build_error = build_adapter(adapter)
     if build_error:
@@ -621,7 +643,7 @@ def run_adapter_flows(adapter: AdapterConfig, base_url: str, verbose: bool) -> l
     flow_cases = load_flow_cases()
     cases_by_path = {str(flow_case.get("path", "/")): flow_case for flow_case in flow_cases}
     return [
-        run_flow_case(client, base_url, flow_case, cases_by_path, verbose)
+        run_flow_case_safely(client, base_url, flow_case, cases_by_path, verbose)
         for flow_case in flow_cases
         if not flow_case.get("server_only")
     ]
@@ -629,12 +651,22 @@ def run_adapter_flows(adapter: AdapterConfig, base_url: str, verbose: bool) -> l
 
 def update_golden_results(adapters: dict[str, AdapterConfig], base_url: str, verbose: bool) -> list[dict[str, Any]]:
     results = run_adapter_flows(adapters["typescript"], base_url, verbose)
-    FLOW_RESULTS.write_text(json.dumps({"results": results}, indent=2) + "\n")
+    write_flow_results(results, FLOW_RESULTS)
     return results
 
 
 def record_adapter_failure(results: list[RunResult], adapter: str, exc: Exception) -> None:
     results.append(RunResult(adapter=adapter, name="adapter-run", passed=False, error=str(exc)))
+
+
+def guard_no_results(results: list[RunResult], adapter: str) -> None:
+    """An empty result set must fail: zero executed checks is not conformance."""
+    if not results:
+        record_adapter_failure(
+            results,
+            adapter,
+            RuntimeError("No flow conformance checks were executed"),
+        )
 
 
 def compare_results(
@@ -713,7 +745,22 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    adapters = discover_adapters()
+    try:
+        load_flow_cases()
+        adapters = discover_adapters()
+    except Exception as exc:
+        if args.output != "json":
+            raise
+        results = [
+            RunResult(
+                adapter=args.adapter,
+                name="data-validation",
+                passed=False,
+                error=str(exc),
+            )
+        ]
+        output_json(results, passed=0, failed=1, total=1)
+        return 1
     base_url = f"http://127.0.0.1:{args.port}"
     env = os.environ.copy()
     env["MPP_FLOW_PORT"] = str(args.port)
@@ -753,6 +800,8 @@ def main() -> int:
                 log(" failed", args.output)
                 record_adapter_failure(results, adapter_name, exc)
 
+        guard_no_results(results, args.adapter)
+
         passed = sum(1 for r in results if r.passed)
         failed = sum(1 for r in results if not r.passed)
         total = len(results)
@@ -788,6 +837,7 @@ def main() -> int:
             server.wait(timeout=5)
         except subprocess.TimeoutExpired:
             server.kill()
+            server.wait()
 
 
 if __name__ == "__main__":

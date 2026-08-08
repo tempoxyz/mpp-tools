@@ -180,6 +180,24 @@
       }
     },
     {
+      "name": "error_empty_id_format",
+      "description": "Rejects challenge object with empty id during formatting",
+      "tags": ["error", "invalid-value"],
+      "object": {
+        "id": "",
+        "intent": "charge",
+        "method": "tempo",
+        "realm": "api.example.com",
+        "request": {}
+      },
+      "tests": {
+        "format": {
+          "success": false,
+          "error_type": "format_error"
+        }
+      }
+    },
+    {
       "name": "payment_keyword_in_quoted_realm",
       "description": "The word 'Payment' inside a quoted parameter value must not be mistaken for a second auth scheme",
       "tags": ["happy-path", "edge-case", "quoted-string", "scheme-boundary"],
@@ -234,6 +252,27 @@
       },
       "tests": {
         "parse": true
+      }
+    },
+    {
+      "name": "error_oversized_request_parameter",
+      "description": "Rejects a valid JSON request auth-param whose encoded size exceeds the 16 KiB parser cap",
+      "tags": ["error", "performance", "size-limit"],
+      "maxDurationMs": 1000,
+      "maxDurationMsByAdapter": {
+        "typescript": 3000
+      },
+      "wire": {
+        "prefix": "Payment id=\"ch_oversized\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"eyJwYWRkaW5nIjoi",
+        "repeat": "YWFh",
+        "count": 4092,
+        "suffix": "In0\""
+      },
+      "tests": {
+        "parse": {
+          "success": false,
+          "error_type": "parse_error"
+        }
       }
     },
     {

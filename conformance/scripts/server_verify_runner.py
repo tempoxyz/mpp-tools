@@ -57,6 +57,17 @@ def selected_adapters(name: str, adapters: dict[str, AdapterConfig]) -> list[str
     return selected
 
 
+def guard_no_results(results: list[RunResult], adapter: str) -> None:
+    """An empty result set must fail: zero executed checks is not conformance."""
+    if not results:
+        results.append(RunResult(
+            adapter=adapter,
+            name="no-checks",
+            passed=False,
+            error="No server verification checks were executed",
+        ))
+
+
 def run_adapter(adapter: AdapterConfig, cases: list[dict[str, Any]]) -> list[RunResult]:
     build_error = build_adapter(adapter)
     if build_error:
@@ -66,11 +77,22 @@ def run_adapter(adapter: AdapterConfig, cases: list[dict[str, Any]]) -> list[Run
     results: list[RunResult] = []
     for case in cases:
         name = str(case.get("name"))
-        response = client.call(
-            "server.verify",
-            case.get("input"),
-            context={"caseName": name},
-        )
+        try:
+            response = client.call(
+                "server.verify",
+                case.get("input"),
+                context={"caseName": name},
+            )
+        except Exception as exc:
+            # Schema-validation failures raise out of call(); keep them scoped
+            # to the case instead of aborting the adapter's remaining cases.
+            results.append(RunResult(
+                adapter=adapter.name,
+                name=name,
+                passed=False,
+                error=str(exc),
+            ))
+            continue
         if not response.get("ok"):
             error = response.get("error") or {}
             results.append(RunResult(
@@ -117,6 +139,8 @@ def main() -> int:
         except Exception as exc:
             print(" failed")
             results.append(RunResult(adapter=adapter_name, name="adapter-run", passed=False, error=str(exc)))
+
+    guard_no_results(results, args.adapter)
 
     passed = sum(1 for result in results if result.passed)
     failed = sum(1 for result in results if not result.passed)

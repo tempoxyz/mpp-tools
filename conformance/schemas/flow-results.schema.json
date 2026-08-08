@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tempo.xyz/mpp-tools/conformance/schemas/flow-results.schema.json",
+  "title": "MPP Conformance Flow Results",
+  "type": "object",
+  "required": ["results"],
+  "additionalProperties": false,
+  "properties": {
+    "results": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/FlowResult" }
+    }
+  },
+  "$defs": {
+    "Outcome": {
+      "type": "object",
+      "required": ["ok", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "ok": { "type": "boolean" },
+        "status": { "type": "integer", "minimum": 0, "maximum": 599 },
+        "error_type": { "type": "string" },
+        "content_type": { "type": "string" },
+        "skipped": { "type": "boolean" },
+        "requires": { "type": "string" }
+      }
+    },
+    "ProblemDetails": {
+      "type": ["object", "null"],
+      "required": ["type", "title", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "status": { "type": "integer", "minimum": 100, "maximum": 599 },
+        "detail": { "type": "string" }
+      }
+    },
+    "FlowResult": {
+      "type": "object",
+      "required": ["name", "outcome"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "outcome": { "$ref": "#/$defs/Outcome" },
+        "challenge": { "$ref": "protocol.schema.json#/$defs/Challenge" },
+        "credential": { "type": "object" },
+        "receipt": {
+          "oneOf": [
+            { "$ref": "protocol.schema.json#/$defs/Receipt" },
+            { "type": "null" }
+          ]
+        },
+        "problem_details": { "$ref": "#/$defs/ProblemDetails" },
+        "concurrent_statuses": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 100, "maximum": 599 }
+        },
+        "accept_payment_observed": { "type": ["string", "null"] },
+        "authorization_observed": { "type": "boolean" },
+        "body_preserved": { "type": "boolean" },
+        "discovery_valid": { "type": "boolean" },
+        "idempotency_key_observed": { "type": "string" },
+        "initial_cache_control": { "type": "string" },
+        "json_rpc_receipt": { "type": "boolean" },
+        "ok": { "type": "boolean" },
+        "payment_receipt_observed": { "type": "boolean" },
+        "receipt_on_error": { "type": "boolean" },
+        "response_name": { "type": "string" },
+        "retry_after": { "type": "string" },
+        "retry_cache_control": { "type": "string" },
+        "side_effect_count": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

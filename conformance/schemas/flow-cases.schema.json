@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tempo.xyz/mpp-tools/conformance/schemas/flow-cases.schema.json",
+  "title": "MPP Conformance Flow Cases",
+  "type": "object",
+  "required": ["version", "cases"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/FlowCase" }
+    }
+  },
+  "$defs": {
+    "ProblemDetails": {
+      "type": "object",
+      "required": ["type", "title", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "status": { "type": "integer", "minimum": 100, "maximum": 599 }
+      }
+    },
+    "ReceiptFixture": {
+      "type": "object",
+      "required": ["status", "reference"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "enum": ["success", "failed"] },
+        "reference": { "type": "string", "minLength": 1 }
+      }
+    },
+    "FlowCase": {
+      "type": "object",
+      "required": ["name", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "pattern": "^/" },
+        "request": { "$ref": "protocol.schema.json#/$defs/JsonObject" },
+        "payload": { "$ref": "protocol.schema.json#/$defs/JsonObject" },
+        "receipt": { "$ref": "#/$defs/ReceiptFixture" },
+        "expect_problem_details": { "$ref": "#/$defs/ProblemDetails" },
+        "http_method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] },
+        "force_status": { "type": "integer", "minimum": 100, "maximum": 599 },
+        "redirect_to_port_offset": { "type": "integer" },
+        "expected_signature": { "type": "string" },
+        "body": { "type": "string" },
+        "headers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "source": {
+          "anyOf": [
+            { "$ref": "protocol.schema.json#/$defs/JsonObject" },
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        },
+        "retry_body": { "type": "string" },
+        "initial_query": { "type": "string" },
+        "retry_query": { "type": "string" },
+        "accept_payment": { "type": "string" },
+        "idempotency_key": { "type": "string" },
+        "expect_retry_after": { "type": "string" },
+        "expect_error_type": { "type": "string" },
+        "expect_error_message_contains": { "type": "string" },
+        "expect_response_name": { "type": "string" },
+        "challenge_path": { "type": "string" },
+        "redirect_to": { "type": "string" },
+        "mode": { "$ref": "protocol.schema.json#/$defs/HttpPaymentMode" },
+        "bind_request_resource": { "type": "boolean" },
+        "check_cache_headers": { "type": "boolean" },
+        "check_expires": { "type": "boolean" },
+        "client_flow": { "type": "boolean" },
+        "concurrent_replay": { "type": "boolean" },
+        "digest_binding": { "type": "boolean" },
+        "discovery": { "type": "boolean" },
+        "expect_no_authorization": { "type": "boolean" },
+        "expect_payment_receipt": { "type": "boolean" },
+        "fail_verification": { "type": "boolean" },
+        "invalid_challenge_id": { "type": "boolean" },
+        "invalid_www_authenticate": { "type": "boolean" },
+        "json_rpc": { "type": "boolean" },
+        "mismatch_request": { "type": "boolean" },
+        "no_payment": { "type": "boolean" },
+        "omit_challenge_expires": { "type": "boolean" },
+        "omit_receipt": { "type": "boolean" },
+        "reject_authorization": { "type": "boolean" },
+        "server_only": { "type": "boolean" },
+        "skip_authorization": { "type": "boolean" },
+        "verify_body_preserved": { "type": "boolean" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "anyOf": [
+              { "required": ["headers"] },
+              { "required": ["source"] },
+              { "required": ["expect_response_name"] }
+            ]
+          },
+          "then": {
+            "required": ["client_flow"],
+            "properties": { "client_flow": { "const": true } }
+          }
+        }
+      ]
+    }
+  }
+}

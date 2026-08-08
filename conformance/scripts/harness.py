@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from jsonschema import Draft202012Validator, RefResolver
+from jsonschema import Draft202012Validator, FormatChecker, RefResolver
 
 
 SCRIPT_DIR = Path(__file__).parent
@@ -15,6 +15,9 @@ CONFORMANCE_DIR = SCRIPT_DIR.parent
 ADAPTERS_DIR = CONFORMANCE_DIR / "adapters"
 SCHEMAS_DIR = CONFORMANCE_DIR / "schemas"
 OPERATIONS_PATH = CONFORMANCE_DIR / "operations.json"
+VECTORS_DIR = CONFORMANCE_DIR / "vectors"
+FLOW_CASES_PATH = CONFORMANCE_DIR / "flows" / "flows.json"
+FLOW_RESULTS_PATH = CONFORMANCE_DIR / "flows" / "golden-results.json"
 
 COMMAND_TO_OPERATION = {
     "parse-www-authenticate": "challenge.parse",
@@ -27,12 +30,108 @@ COMMAND_TO_OPERATION = {
     "base64url-decode": "base64url.decode",
     "generate-challenge-id": "challenge.id",
     "verify-stripe-external-id-binding": "stripe.external_id_binding",
+    "tempo-proof-typed-data": "tempo.proof.typed_data",
 }
 
 
 def load_json(path: Path) -> Any:
     with path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def load_vector(path: Path) -> dict[str, Any]:
+    vector = load_json(path)
+    validate_value(vector, "vector.schema.json", str(path))
+    validate_vector_scenarios(vector, str(path))
+    return vector
+
+
+def validate_vector_scenarios(vector: dict[str, Any], label: str) -> None:
+    commands = vector["commands"]
+    parse_command = commands.get("parse")
+    format_command = commands.get("format")
+    generate_command = commands.get("generate")
+    operation = commands.get("operation")
+    is_base64url = bool(
+        (parse_command and parse_command.startswith("base64url-"))
+        or (format_command and format_command.startswith("base64url-"))
+    )
+    input_field = "decoded" if is_base64url else "object"
+    wire_field = "encoded" if is_base64url else "wire"
+
+    for index, scenario in enumerate(vector["scenarios"]):
+        scenario_label = f"{label} scenario {index} ({scenario['name']})"
+        if operation:
+            continue
+
+        tests = scenario.get("tests", {})
+        if generate_command:
+            unsupported = set(tests) - {"generate"}
+            if unsupported:
+                names = ", ".join(sorted(unsupported))
+                raise ValueError(f"{scenario_label} has unsupported tests: {names}")
+            if "input" not in scenario:
+                raise ValueError(f"{scenario_label} requires input")
+            if "expected" not in scenario and "generate" not in tests:
+                raise ValueError(f"{scenario_label} requires expected or tests.generate")
+            continue
+
+        supported_tests = set()
+        if parse_command:
+            supported_tests.add("parse")
+        if format_command:
+            supported_tests.add("format")
+        if parse_command and format_command:
+            supported_tests.add("roundtrip")
+        selected_tests = set(tests)
+        unsupported = selected_tests - supported_tests
+        if unsupported:
+            names = ", ".join(sorted(unsupported))
+            raise ValueError(f"{scenario_label} has unsupported tests: {names}")
+        if not selected_tests:
+            raise ValueError(f"{scenario_label} has no tests supported by its commands")
+
+        if "parse" in tests:
+            if wire_field not in scenario:
+                raise ValueError(f"{scenario_label} parse test requires {wire_field}")
+            if tests["parse"] is True and input_field not in scenario:
+                raise ValueError(
+                    f"{scenario_label} successful parse test requires {input_field}"
+                )
+        if "format" in tests:
+            if input_field not in scenario:
+                raise ValueError(f"{scenario_label} format test requires {input_field}")
+            if tests["format"] is True and wire_field not in scenario:
+                raise ValueError(
+                    f"{scenario_label} successful format test requires {wire_field}"
+                )
+        if "roundtrip" in tests and input_field not in scenario:
+            raise ValueError(f"{scenario_label} roundtrip test requires {input_field}")
+
+
+def load_flow_cases(path: Path = FLOW_CASES_PATH) -> list[dict[str, Any]]:
+    document = load_json(path)
+    validate_value(document, "flow-cases.schema.json", str(path))
+    cases = document["cases"]
+    seen_paths: set[str] = set()
+    for flow_case in cases:
+        case_path = flow_case["path"]
+        if case_path in seen_paths:
+            raise ValueError(f"{path} contains duplicate flow case path: {case_path}")
+        seen_paths.add(case_path)
+    return cases
+
+
+def load_flow_results(path: Path = FLOW_RESULTS_PATH) -> list[dict[str, Any]]:
+    document = load_json(path)
+    validate_value(document, "flow-results.schema.json", str(path))
+    return document["results"]
+
+
+def write_flow_results(results: list[dict[str, Any]], path: Path = FLOW_RESULTS_PATH) -> None:
+    document = {"results": results}
+    validate_value(document, "flow-results.schema.json", str(path))
+    path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
 
 
 def _schema_store() -> dict[str, Any]:
@@ -52,7 +151,11 @@ SCHEMA_STORE = _schema_store()
 def validate_value(value: Any, schema: dict[str, Any] | str, label: str) -> None:
     schema_obj = SCHEMA_STORE[schema] if isinstance(schema, str) else schema
     resolver = RefResolver.from_schema(schema_obj, store=SCHEMA_STORE)
-    validator = Draft202012Validator(schema_obj, resolver=resolver)
+    validator = Draft202012Validator(
+        schema_obj,
+        resolver=resolver,
+        format_checker=FormatChecker(),
+    )
     errors = sorted(validator.iter_errors(value), key=lambda error: list(error.path))
     if errors:
         error = errors[0]
@@ -133,6 +236,7 @@ def request_input_for_command(command: str, input_data: str) -> tuple[str, Any]:
         "receipt.format",
         "challenge.id",
         "stripe.external_id_binding",
+        "tempo.proof.typed_data",
     }:
         return op, json.loads(input_data)
     if op in {"base64url.encode", "base64url.decode"}:
@@ -165,7 +269,14 @@ class AdapterClient:
     def __init__(self, adapter: AdapterConfig):
         self.adapter = adapter
 
-    def call(self, op: str, input_value: Any, context: dict[str, Any] | None = None, timeout: float = 30) -> dict[str, Any]:
+    def call(
+        self,
+        op: str,
+        input_value: Any,
+        context: dict[str, Any] | None = None,
+        timeout: float = 30,
+        validate_input: bool = True,
+    ) -> dict[str, Any]:
         if op not in self.adapter.capabilities:
             return {
                 "ok": False,
@@ -178,7 +289,12 @@ class AdapterClient:
         request: dict[str, Any] = {"schema": 1, "op": op, "input": input_value}
         if context:
             request["context"] = context
-        validate_value(request, "adapter-request.schema.json", f"{self.adapter.name} request")
+        request_schema = (
+            "adapter-request.schema.json"
+            if validate_input
+            else "adapter-request-envelope.schema.json"
+        )
+        validate_value(request, request_schema, f"{self.adapter.name} request")
 
         env = os.environ.copy()
         if self.adapter.env:
@@ -229,7 +345,18 @@ class AdapterClient:
             }
         return response
 
-    def run_legacy_command(self, command: str, input_data: str, timeout: float = 30) -> dict[str, Any]:
+    def run_legacy_command(
+        self,
+        command: str,
+        input_data: str,
+        timeout: float = 30,
+        validate_input: bool = True,
+    ) -> dict[str, Any]:
         op, input_value = request_input_for_command(command, input_data)
-        response = self.call(op, input_value, timeout=timeout)
+        response = self.call(
+            op,
+            input_value,
+            timeout=timeout,
+            validate_input=validate_input,
+        )
         return legacy_response_for_operation(op, response)

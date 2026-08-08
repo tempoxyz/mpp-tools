@@ -10,6 +10,8 @@ require "time"
 require "mpp-rb"
 require "mpp/methods/tempo"
 
+MINIMUM_SECRET_KEY_BYTES = 32
+
 def success(result)
   {success: true, result: result}
 end
@@ -55,6 +57,9 @@ def deep_sort_keys(value)
 end
 
 def generate_conformance_challenge_id(params)
+  secret_key = params.fetch("secretKey")
+  raise "secretKey must be at least #{MINIMUM_SECRET_KEY_BYTES} bytes" if secret_key.bytesize < MINIMUM_SECRET_KEY_BYTES
+
   request_b64 = base64url_encode(stable_json(params["request"] || {}))
   payload = [
     params["realm"] || "",
@@ -65,7 +70,7 @@ def generate_conformance_challenge_id(params)
     params["digest"] || "",
     params["opaque"] || ""
   ].join("|")
-  digest = OpenSSL::HMAC.digest("SHA256", params.fetch("secretKey").encode("UTF-8"), payload.encode("UTF-8"))
+  digest = OpenSSL::HMAC.digest("SHA256", secret_key.encode("UTF-8"), payload.encode("UTF-8"))
   base64url_encode(digest)
 end
 
@@ -285,7 +290,7 @@ def verify_stripe_external_id_binding(input)
   require "mpp/methods/stripe"
   require "mpp/server"
 
-  secret_key = "conformance-stripe-secret"
+  secret_key = "conformance-stripe-secret-key-32"
   realm = "conformance.local"
   expires = "2099-01-29T12:05:30Z"
   challenge = Mpp::Challenge.create(
@@ -345,7 +350,7 @@ def run_adapter_request(request)
 end
 
 def error_type_for_command(command)
-  if command.start_with?("parse-") || command == "base64url-decode"
+  if command.start_with?("parse-")
     "parse_error"
   elsif command.start_with?("format-")
     "format_error"
@@ -370,6 +375,7 @@ def run_command(command, input)
     success(receipt_to_h(Mpp::Receipt.from_payment_receipt(input)))
   when "format-www-authenticate"
     data = JSON.parse(input)
+    raise ArgumentError, "id must not be empty" if data.fetch("id", "").empty?
     success(challenge_from_h(data).to_www_authenticate(data.fetch("realm", "")))
   when "format-authorization"
     data = JSON.parse(input)
@@ -393,7 +399,9 @@ def run_command(command, input)
   when "base64url-encode"
     success(base64url_encode(input))
   when "base64url-decode"
-    success(base64url_decode(input).force_encoding("UTF-8"))
+    decoded = base64url_decode(input).force_encoding("UTF-8")
+    raise ArgumentError, "decoded value is not valid UTF-8" unless decoded.valid_encoding?
+    success(decoded)
   when "generate-challenge-id"
     success(generate_conformance_challenge_id(JSON.parse(input)))
   when "cosign-tempo-fee-payer"

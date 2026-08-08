@@ -10,13 +10,29 @@ calls.
 The normative contract lives in JSON Schema:
 
 - [`schemas/adapter-manifest.schema.json`](./schemas/adapter-manifest.schema.json)
+- [`schemas/adapter-request-envelope.schema.json`](./schemas/adapter-request-envelope.schema.json)
 - [`schemas/adapter-request.schema.json`](./schemas/adapter-request.schema.json)
 - [`schemas/adapter-response.schema.json`](./schemas/adapter-response.schema.json)
 - [`schemas/operation-registry.schema.json`](./schemas/operation-registry.schema.json)
 - [`schemas/protocol.schema.json`](./schemas/protocol.schema.json)
+- [`schemas/vector.schema.json`](./schemas/vector.schema.json)
+- [`schemas/flow-cases.schema.json`](./schemas/flow-cases.schema.json)
+- [`schemas/flow-results.schema.json`](./schemas/flow-results.schema.json)
 
 The operation list lives in [`operations.json`](./operations.json). Examples
 live in [`examples/`](./examples/).
+
+## Reference Implementation
+
+The pinned TypeScript `mppx` package is the executable reference implementation.
+It defines canonical serialization and flow behavior where the protocol
+specification permits multiple interpretations. Hand-authored vectors remain
+normative for their explicit inputs and expected outputs.
+
+Only the TypeScript adapter may regenerate `flows/golden-results.json`. Golden
+changes must be reviewed and committed with the fixture or pinned `mppx` change
+that caused them. Other adapters are always compared with the checked-in golden
+results and never update them.
 
 ## Simplification Plan
 
@@ -83,9 +99,11 @@ Rules:
 
 ## Adapter ABI
 
-All adapter requests must validate against
-`schemas/adapter-request.schema.json`. All adapter responses must validate
-against `schemas/adapter-response.schema.json`.
+Adapter requests normally validate against `schemas/adapter-request.schema.json`.
+Negative vectors whose expected result is an error validate only against
+`schemas/adapter-request-envelope.schema.json`, allowing deliberately invalid
+operation inputs to reach the SDK under test. All adapter responses must
+validate against `schemas/adapter-response.schema.json`.
 
 Request:
 
@@ -594,10 +612,18 @@ for manifest in discover("adapters/*/adapter.json"):
 
 for vector in vectors:
     for scenario in vector.scenarios:
+        if not matches_sdk_version(adapter, scenario.sdkVersions):
+            continue
         for op, input_value, expected in expand_scenario(vector, scenario):
             actual = adapter.call(op, input_value)
             compare(normalize(expected), normalize(actual))
 ```
+
+`scenario.sdkVersions` is an optional object keyed by adapter name. Values use
+npm-style SemVer constraints with `=`, `<`, `<=`, `>`, or `>=`; whitespace-
+separated comparators are combined with AND. Adapters not named in the object
+remain applicable. Invalid expressions and non-SemVer installed versions are
+runner errors, not skips. Unknown adapter keys are also runner errors.
 
 Flow pseudo-code:
 
