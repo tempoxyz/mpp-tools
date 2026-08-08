@@ -9,7 +9,8 @@
     "outDir": "dist",
     "rootDir": ".",
     "declaration": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "types": ["node"]
   },
   "include": ["golden/**/*.ts", "scripts/**/*.ts", "flows/**/*.ts"],
   "exclude": ["node_modules", "dist"]

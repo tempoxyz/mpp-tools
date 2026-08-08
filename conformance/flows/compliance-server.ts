@@ -74,7 +74,7 @@ if (!flowPath) {
   process.exit(1)
 }
 
-const flowFile = await import(pathToFileURL(flowPath).href, { assert: { type: 'json' } }).catch(
+const flowFile = await import(pathToFileURL(flowPath).href, { with: { type: 'json' } }).catch(
   (err) => {
     console.error('Failed to load flow cases:', err)
     process.exit(1)
@@ -333,7 +333,13 @@ const handler: http.RequestListener = async (req, res) => {
     res.end(JSON.stringify({ ok: false, name: flowCase.name, authorization_observed: true }))
     return
   }
-  if (!req.headers.authorization) acceptPaymentByPath.set(url.pathname, req.headers['accept-payment'] ?? null)
+  if (!req.headers.authorization) {
+    const acceptPayment = req.headers['accept-payment']
+    acceptPaymentByPath.set(
+      url.pathname,
+      Array.isArray(acceptPayment) ? acceptPayment.join(', ') : (acceptPayment ?? null),
+    )
+  }
   if (flowCase.concurrent_replay && req.headers.authorization) {
     const authorization = `${req.headers['x-flow-client'] ?? 'unknown'}:${req.headers.authorization}`
     if (seenAuthorization.has(authorization)) {

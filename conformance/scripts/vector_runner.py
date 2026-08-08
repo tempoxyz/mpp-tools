@@ -26,8 +26,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable
 
-from deepdiff import DeepDiff
-
+from comparison import format_json_mismatch
 from conformance_checks import make_check
 from harness import AdapterClient, AdapterConfig, build_adapter, discover_adapters, load_vector
 from sdk_version import installed_version
@@ -35,16 +34,6 @@ from version_constraints import matches_constraint
 
 
 SCRIPT_DIR = Path(__file__).parent
-
-
-class DiffType(str, Enum):
-    """Enum for DeepDiff dictionary keys."""
-    VALUES_CHANGED = "values_changed"
-    DICTIONARY_ITEM_ADDED = "dictionary_item_added"
-    DICTIONARY_ITEM_REMOVED = "dictionary_item_removed"
-    TYPE_CHANGES = "type_changes"
-    ITERABLE_ITEM_ADDED = "iterable_item_added"
-    ITERABLE_ITEM_REMOVED = "iterable_item_removed"
 
 
 class TestType(str, Enum):
@@ -62,49 +51,9 @@ def base64url_decode(s: str) -> bytes:
     return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
 
 
-def compute_diff(expected: Any, actual: Any) -> str:
-    """Compute a human-readable diff between expected and actual values."""
-    diff = DeepDiff(expected, actual, ignore_order=True, verbose_level=2)
-    if not diff:
-        return ""
-    lines = []
-    if DiffType.VALUES_CHANGED in diff:
-        for path, change in diff[DiffType.VALUES_CHANGED].items():
-            lines.append(f"  {path}: {change['old_value']!r} → {change['new_value']!r}")
-    if DiffType.DICTIONARY_ITEM_ADDED in diff:
-        for path in diff[DiffType.DICTIONARY_ITEM_ADDED]:
-            value = diff[DiffType.DICTIONARY_ITEM_ADDED][path]
-            lines.append(f"  + {path}: {value!r}")
-    if DiffType.DICTIONARY_ITEM_REMOVED in diff:
-        for path in diff[DiffType.DICTIONARY_ITEM_REMOVED]:
-            value = diff[DiffType.DICTIONARY_ITEM_REMOVED][path]
-            lines.append(f"  - {path}: {value!r}")
-    if DiffType.TYPE_CHANGES in diff:
-        for path, change in diff[DiffType.TYPE_CHANGES].items():
-            lines.append(f"  {path}: type {change['old_type'].__name__} → {change['new_type'].__name__}")
-            lines.append(f"    {change['old_value']!r} → {change['new_value']!r}")
-    if DiffType.ITERABLE_ITEM_ADDED in diff:
-        for path in diff[DiffType.ITERABLE_ITEM_ADDED]:
-            lines.append(f"  + {path}: {diff[DiffType.ITERABLE_ITEM_ADDED][path]!r}")
-    if DiffType.ITERABLE_ITEM_REMOVED in diff:
-        for path in diff[DiffType.ITERABLE_ITEM_REMOVED]:
-            lines.append(f"  - {path}: {diff[DiffType.ITERABLE_ITEM_REMOVED][path]!r}")
-    return "\n".join(lines)
-
-
 def format_mismatch_error(expected: Any, actual: Any, label: str = "result") -> str:
-    """Format a mismatch error with both full shapes and diff."""
-    diff_str = compute_diff(expected, actual)
-    error_parts = [
-        f"{label} mismatch:",
-        f"  expected: {json.dumps(expected, sort_keys=True, indent=2)}",
-        f"  actual:   {json.dumps(actual, sort_keys=True, indent=2)}",
-    ]
-    if diff_str:
-        error_parts.append(f"  diff:")
-        for line in diff_str.split("\n"):
-            error_parts.append(f"  {line}")
-    return "\n".join(error_parts)
+    """Format a mismatch as a unified JSON diff."""
+    return format_json_mismatch(expected, actual, label)
 
 
 CONFORMANCE_DIR = SCRIPT_DIR.parent
@@ -762,10 +711,10 @@ class VectorRunner:
 
             # Build if needed
             if adapter.build_command:
-                self.log(f"  building...", end="", flush=True)
+                self.log("  building...", end="", flush=True)
                 build_error = build_adapter(adapter)
                 if build_error:
-                    self.log(f" FAILED")
+                    self.log(" FAILED")
                     self._record_result(
                         vector_file="adapter",
                         test_type=TestType.BUILD,
@@ -778,11 +727,11 @@ class VectorRunner:
                         error=build_error,
                     )
                     continue
-                self.log(f" ok")
+                self.log(" ok")
             else:
                 build_error = build_adapter(adapter)
                 if build_error:
-                    self.log(f"  build FAILED")
+                    self.log("  build FAILED")
                     self._record_result(
                         vector_file="adapter",
                         test_type=TestType.BUILD,

@@ -14,6 +14,7 @@ Or step by step:
 
 ```bash
 make install      # install the pinned TS/Rust/Python/Go/Ruby/Java releases
+make check        # run static checks for the runner and every adapter
 make test         # run SDK adapters against all vectors
 make flow         # run the end-to-end flow suite against golden results
 make server-verify # run SDK server verification ABI tests

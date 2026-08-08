@@ -120,6 +120,11 @@ jobs:
         env:
           ADAPTER: ${{ steps.resolve.outputs.adapter }}
 
+      - name: Run adapter static checks
+        run: make check-$ADAPTER
+        env:
+          ADAPTER: ${{ steps.resolve.outputs.adapter }}
+
       - name: Run vector conformance
         run: uv run --locked python scripts/vector_runner.py --adapter "$ADAPTER"
         env:

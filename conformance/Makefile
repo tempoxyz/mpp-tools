@@ -1,7 +1,7 @@
 # Conformance Testing Makefile
 # Cross-SDK protocol compatibility testing for MPP implementations
 
-.PHONY: all update-locks update-java install install-runner install-java use-local-sdk test test-all test-sdk test-typescript test-rust test-python test-go test-ruby test-java test-json flow flow-sdk flow-typescript flow-rust flow-python flow-go flow-ruby flow-java server-verify server-verify-sdk server-verify-go update-flow-golden clean help
+.PHONY: all update-locks update-java install install-runner install-java use-local-sdk check check-typescript check-rust check-python check-go check-ruby check-java test test-all test-sdk test-typescript test-rust test-python test-go test-ruby test-java test-json flow flow-sdk flow-typescript flow-rust flow-python flow-go flow-ruby flow-java server-verify server-verify-sdk server-verify-go update-flow-golden clean help
 
 RUBY ?= ruby
 BUNDLE ?= bundle
@@ -80,6 +80,32 @@ install-ruby:
 install-java:
 	@echo "→ Building Java adapter..."
 	cd adapters/java && ./gradlew --no-daemon installDist
+
+#------------------------------------------------------------------------------
+# Static checks
+#------------------------------------------------------------------------------
+
+check: check-python check-typescript check-rust check-go check-ruby check-java
+
+check-python:
+	$(RUNNER_PYTHON) -m ruff check scripts adapters/python/adapter.py adapters/ruby/run_adapter.py
+
+check-typescript:
+	npm run typecheck
+
+check-rust:
+	cd adapters/rust && cargo fmt --check
+	cd adapters/rust && cargo clippy --locked --all-targets -- -D warnings
+
+check-go:
+	@test -z "$$(cd adapters/go && gofmt -l .)" || (cd adapters/go && gofmt -d .; exit 1)
+	cd adapters/go && go vet ./...
+
+check-ruby:
+	cd adapters/ruby && $(RUBY) -c adapter.rb
+
+check-java:
+	cd adapters/java && ./gradlew --no-daemon check
 
 #------------------------------------------------------------------------------
 # Testing
@@ -223,6 +249,8 @@ help:
 	@echo "  install          Install all adapter dependencies"
 	@echo "  install-runner   Install shared runner dependencies only"
 	@echo "  use-local-sdk    Point one adapter at SDK_PATH, e.g. ADAPTER=rust SDK_PATH=../mpp-rs"
+	@echo "  check            Run static checks for the runner and all adapters"
+	@echo "  check-<adapter>  Run static checks for one adapter"
 	@echo "  test             Run conformance tests for all adapters"
 	@echo "  test-sdk         Run vector tests for ADAPTER"
 	@echo "  flow             Run flow conformance tests"

@@ -14,7 +14,6 @@ from mpp import (
     ChallengeEcho,
     Credential,
     Receipt,
-    generate_challenge_id,
     parse_www_authenticate,
     parse_authorization,
     format_www_authenticate,
@@ -352,7 +351,7 @@ def main():
             print(json.dumps(success(result)))
         elif command == "format-receipt":
             data = json.loads(input_data)
-            from datetime import datetime, UTC
+            from datetime import datetime
 
             ts_str = data.get("timestamp", "")
             ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))

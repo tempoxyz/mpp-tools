@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from comparison import format_json_mismatch
 from harness import AdapterConfig, AdapterClient, build_adapter, discover_adapters
 
 
@@ -32,16 +33,6 @@ def load_cases() -> list[dict[str, Any]]:
     if not isinstance(cases, list):
         raise ValueError("Invalid server verification cases payload")
     return cases
-
-
-def compute_diff(expected: Any, actual: Any) -> str:
-    if expected == actual:
-        return ""
-    return "\n".join([
-        "result mismatch:",
-        f"  expected: {json.dumps(expected, sort_keys=True, indent=2)}",
-        f"  actual:   {json.dumps(actual, sort_keys=True, indent=2)}",
-    ])
 
 
 def selected_adapters(name: str, adapters: dict[str, AdapterConfig]) -> list[str]:
@@ -83,7 +74,7 @@ def run_adapter(adapter: AdapterConfig, cases: list[dict[str, Any]]) -> list[Run
 
         expected = case.get("expected")
         actual = response.get("value")
-        diff = compute_diff(expected, actual)
+        diff = format_json_mismatch(expected, actual)
         results.append(RunResult(adapter=adapter.name, name=name, passed=diff == "", error=diff or None))
     return results
 
