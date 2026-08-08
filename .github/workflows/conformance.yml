@@ -111,7 +111,7 @@ jobs:
           adapter: ${{ matrix.adapter }}
 
       - name: Install runner dependencies
-        run: python3 -m pip install -q -r requirements.txt
+        run: uv sync --locked
 
       - name: Check Java Gradle locks
         if: matrix.adapter == 'java'
@@ -127,7 +127,7 @@ jobs:
         env:
           ADAPTER: ${{ matrix.adapter }}
         run: |
-          python3 scripts/vector_runner.py \
+          uv run --locked python scripts/vector_runner.py \
             --adapter "$ADAPTER" \
             --output json \
             > "results-${ADAPTER}.json" \
@@ -184,10 +184,10 @@ jobs:
           ADAPTER: ${{ matrix.adapter }}
         run: |
           set +e
-          python3 scripts/flow_runner.py --adapter "$ADAPTER" > "flow-${ADAPTER}.log" 2>&1
+          uv run --locked python scripts/flow_runner.py --adapter "$ADAPTER" > "flow-${ADAPTER}.log" 2>&1
           status=$?
-          sdk_summary=$(python3 scripts/sdk_version.py --adapter "$ADAPTER" 2>/dev/null || true)
-          python3 scripts/write_flow_result.py \
+          sdk_summary=$(uv run --locked python scripts/sdk_version.py --adapter "$ADAPTER" 2>/dev/null || true)
+          uv run --locked python scripts/write_flow_result.py \
             --adapter "$ADAPTER" \
             --status-code "$status" \
             --log "flow-${ADAPTER}.log" \
@@ -223,13 +223,13 @@ jobs:
           adapter: go
 
       - name: Install runner dependencies
-        run: python3 -m pip install -q -r requirements.txt
+        run: uv sync --locked
 
       - name: Install Go adapter dependencies
         run: make install-go
 
       - name: Run server verification conformance
-        run: python3 scripts/server_verify_runner.py --adapter go
+        run: uv run --locked python scripts/server_verify_runner.py --adapter go
 
   conformance:
     runs-on: ubuntu-latest
