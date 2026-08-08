@@ -439,7 +439,17 @@ jobs:
             --body-file "$RUNNER_TEMP/pr-body.md"
           git config user.name "${{ steps.downstream-token.outputs.app-slug }}[bot]"
           git config user.email "${{ steps.downstream-token.outputs.app-slug }}[bot]@users.noreply.github.com"
-          git commit -F "$RUNNER_TEMP/pr-title.txt"
+          if [ "$(jq -r '.revision != null' .agricola/request.json)" = "true" ]; then
+            {
+              cat "$RUNNER_TEMP/pr-title.txt"
+              echo
+              printf 'Agricola-Request: %s\n' "$(jq -r .idempotency_key .agricola/request.json)"
+              printf 'Agricola-Summary: %s\n' "$(tr -d '\n' < "$RUNNER_TEMP/summary/revision-summary.txt")"
+            } > "$RUNNER_TEMP/commit-message.txt"
+            git commit -F "$RUNNER_TEMP/commit-message.txt"
+          else
+            git commit -F "$RUNNER_TEMP/pr-title.txt"
+          fi
 
       - name: Create or update draft pull request
         if: steps.patch.outputs.has-changes == 'true'
@@ -472,21 +482,49 @@ jobs:
             echo "Existing Agricola PR is closed; use retry after reopening it" >&2
             exit 1
           else
-            was_ready=false
             if [ "$state" = "OPEN" ] && [ "$(jq -r .draft <<< "$existing")" != "true" ]; then
-              was_ready=true
+              gh pr ready --undo "$(jq -r .number <<< "$existing")" --repo "$repo"
             fi
             revision_head="$(jq -r '.revision.head_sha // empty' .agricola/request.json)"
             if [ -n "$revision_head" ]; then
-              git push origin "HEAD:refs/heads/$branch"
+              request_key="$(jq -r .idempotency_key .agricola/request.json)"
+              git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch"
+              remote="$(git rev-parse "refs/remotes/origin/$branch")"
+              if [ "$remote" = "$revision_head" ]; then
+                git push origin "HEAD:refs/heads/$branch"
+              else
+                if ! git merge-base --is-ancestor "$revision_head" "$remote"; then
+                  echo "Revision branch no longer descends from the recorded PR head" >&2
+                  exit 1
+                fi
+                published_commit=""
+                while IFS= read -r candidate; do
+                  candidate_key="$(git show -s \
+                    --format='%(trailers:key=Agricola-Request,valueonly)' "$candidate")"
+                  if [ "$candidate_key" = "$request_key" ]; then
+                    published_commit="$candidate"
+                    break
+                  fi
+                done < <(git rev-list "$revision_head..$remote")
+                if [ -z "$published_commit" ]; then
+                  echo "Revision branch changed before publication" >&2
+                  exit 1
+                fi
+                git show -s --format='%(trailers:key=Agricola-Summary,valueonly)' \
+                  "$published_commit" > "$RUNNER_TEMP/summary/revision-summary.txt"
+                if [ ! -s "$RUNNER_TEMP/summary/revision-summary.txt" ]; then
+                  echo "Published revision has no stored summary" >&2
+                  exit 1
+                fi
+                git show --stat --format= --no-renames "$published_commit" \
+                  > "$RUNNER_TEMP/summary/revision-stat.txt"
+                echo "Revision was already published; resuming post-push steps"
+              fi
             elif remote="$(git ls-remote --heads origin "refs/heads/$branch" | cut -f1)" && [ -n "$remote" ]; then
               git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch"
               git push --force-with-lease="refs/heads/$branch:$remote" origin "HEAD:refs/heads/$branch"
             else
               git push origin "HEAD:refs/heads/$branch"
-            fi
-            if [ "$was_ready" = "true" ]; then
-              gh pr ready --undo "$(jq -r .number <<< "$existing")" --repo "$repo"
             fi
             if [ "$state" = "OPEN" ]; then
               url="$(jq -r .html_url <<< "$existing")"
@@ -499,8 +537,10 @@ jobs:
             fi
           fi
           if [ -n "$expected_pr" ]; then
+            request_key="$(jq -r .idempotency_key .agricola/request.json)"
+            marker="<!-- agricola:revision-summary:$request_key -->"
             {
-              echo '<!-- agricola:revision-summary -->'
+              echo "$marker"
               echo 'Agricola updated this pull request from the latest review feedback and failing CI.'
               echo
               echo '### Summary of changes'
@@ -515,8 +555,15 @@ jobs:
               echo
               echo "Requested from ${{ matrix.request.tracking_issue_url }}."
             } > "$RUNNER_TEMP/revision-comment.md"
-            gh pr comment "$number" --repo "$repo" \
-              --body-file "$RUNNER_TEMP/revision-comment.md"
+            already_commented="$(
+              gh api --paginate "repos/$repo/issues/$number/comments?per_page=100" |
+                jq -s --arg marker "$marker" \
+                  'add | any(.[]; (.body // "") | contains($marker))'
+            )"
+            if [ "$already_commented" != "true" ]; then
+              gh pr comment "$number" --repo "$repo" \
+                --body-file "$RUNNER_TEMP/revision-comment.md"
+            fi
           fi
           mkdir -p "$RUNNER_TEMP/results"
           jq -n \

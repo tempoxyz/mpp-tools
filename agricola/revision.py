@@ -16,7 +16,7 @@ _FAILED_CONCLUSIONS = {
     "timed_out",
 }
 _RUN_URL = re.compile(r"/actions/runs/(?P<run>[1-9][0-9]*)/")
-_REVISION_SUMMARY_MARKER = "<!-- agricola:revision-summary -->"
+_REVISION_SUMMARY_MARKER = "<!-- agricola:revision-summary"
 
 _REVIEW_THREADS_QUERY = """
 query AgricolaReviewThreads(
@@ -33,7 +33,8 @@ query AgricolaReviewThreads(
           isOutdated
           path
           line
-          comments(first: 100) {
+          comments(last: 100) {
+            totalCount
             nodes {
               author { login }
               authorAssociation
@@ -121,9 +122,10 @@ def _review_thread_lines(
         for thread in threads.get("nodes") or []:
             if thread.get("isResolved"):
                 continue
+            thread_comments = thread.get("comments") or {}
             comments = [
                 comment
-                for comment in (thread.get("comments") or {}).get("nodes") or []
+                for comment in thread_comments.get("nodes") or []
                 if _trusted(comment)
             ]
             if not comments:
@@ -135,6 +137,7 @@ def _review_thread_lines(
                     "",
                     f"Outdated: {'yes' if thread.get('isOutdated') else 'no'}",
                     "",
+                    *_omitted_thread_comment_lines(thread_comments),
                     "<untrusted-feedback>",
                     *(_comment_lines(comment) for comment in comments),
                     "</untrusted-feedback>",
@@ -152,18 +155,14 @@ def _review_thread_lines(
 
 
 def _review_lines(client: GitHub, repo: str, number: int) -> list[str]:
-    reviews = [
-        review
-        for review in _paged_items(
+    reviews = _current_review_summaries(
+        _paged_items(
             client.api(
                 f"repos/{repo}/pulls/{number}/reviews?per_page=100",
                 paginate=True,
             )
         )
-        if _trusted(review)
-        and str(review.get("body") or "").strip()
-        and review.get("state") in {"CHANGES_REQUESTED", "COMMENTED"}
-    ]
+    )
     if not reviews:
         return ["", "# Review summaries", "", "None."]
     lines = ["", "# Review summaries", ""]
@@ -285,6 +284,40 @@ def _failed_check_lines(client: GitHub, repo: str, head_sha: str) -> list[str]:
 
 def _paged_items(pages: Any) -> list[dict[str, Any]]:
     return [item for page in pages for item in page]
+
+
+def _current_review_summaries(
+    reviews: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    effective_states = {"APPROVED", "CHANGES_REQUESTED", "DISMISSED"}
+    latest_effective: dict[str, tuple[int, dict[str, Any]]] = {}
+    trusted = [
+        (index, review) for index, review in enumerate(reviews) if _trusted(review)
+    ]
+    for index, review in trusted:
+        if review.get("state") in effective_states:
+            latest_effective[_author(review)] = (index, review)
+
+    summaries: list[dict[str, Any]] = []
+    for index, review in trusted:
+        if not str(review.get("body") or "").strip():
+            continue
+        latest = latest_effective.get(_author(review))
+        if review.get("state") == "CHANGES_REQUESTED" and latest == (index, review):
+            summaries.append(review)
+        elif review.get("state") == "COMMENTED" and (
+            latest is None or index > latest[0]
+        ):
+            summaries.append(review)
+    return summaries
+
+
+def _omitted_thread_comment_lines(comments: Mapping[str, Any]) -> list[str]:
+    nodes = comments.get("nodes") or []
+    total = comments.get("totalCount")
+    if isinstance(total, int) and total > len(nodes):
+        return [f"GitHub omitted {total - len(nodes)} older comments.", ""]
+    return []
 
 
 def _trusted(item: Mapping[str, Any]) -> bool:

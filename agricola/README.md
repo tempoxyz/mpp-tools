@@ -128,7 +128,7 @@ The executor:
 
 If the canonical behavior is absent from a target SDK, the generator returns an explicit reason instead of a patch. Agricola records that result as a skip, updates the tracking table, and does not run verification or request downstream write credentials. An unexplained empty patch remains a generation failure.
 
-Generation and verification failures leave no decision, so the same request remains retryable. Explicit skips and successful publications are recorded even when another target in the same matrix fails. A closed stable pull request must be reopened before retrying. An existing ready-for-review pull request is returned to draft before its branch is updated, and a merged pull request is treated as the completed result.
+Generation and verification failures leave no decision, so the same request remains retryable. Explicit skips and successful publications are recorded even when another target in the same matrix fails. A post-push retry recognizes its request-keyed commit and summary comment, then resumes recording without rewriting the branch or posting the summary twice. A closed stable pull request must be reopened before retrying. An existing ready-for-review pull request is returned to draft before its branch is updated, and a merged pull request is treated as the completed result.
 
 ## Recurring audit
 
