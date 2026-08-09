@@ -341,10 +341,11 @@ class AuditTests(unittest.TestCase):
             self.assertIn("AGR-2026-001", pending.body)
             self.assertIn("`go`", pending.body)
             self.assertEqual(len(pending.finding_issues), 1)
-            self.assertIn("## How to action", pending.finding_issues[0].body)
-            self.assertIn("## Agricola remediation", pending.finding_issues[0].body)
+            self.assertIn("## Available `/ag` commands", pending.finding_issues[0].body)
+            self.assertNotIn("## How to action", pending.finding_issues[0].body)
             self.assertIn("```text\n/ag fix\n```", pending.finding_issues[0].body)
-            self.assertIn(
+            self.assertIn("| `/ag fix go` |", pending.finding_issues[0].body)
+            self.assertNotIn(
                 "gh workflow run agricola-audit.yml", pending.finding_issues[0].body
             )
             context = audit_finding_context_from_body(pending.finding_issues[0].body)
@@ -358,6 +359,32 @@ class AuditTests(unittest.TestCase):
             updated = ensure_audit_remediation(legacy, context, manifest())
             self.assertIn("```text\n/ag fix\n```", updated)
             self.assertNotIn("/agricola propagate go", updated)
+            self.assertNotIn("## How to action", updated)
+
+    def test_notify_only_finding_lists_status_without_fix(self) -> None:
+        check = "vector:www-authenticate/basic/parse"
+        canonical = snapshot("typescript", observations=(observation(check),))
+        go = snapshot("go", observations=(observation(check),))
+        ruby = snapshot(
+            "ruby",
+            observations=(observation(check, AuditCheckStatus.FAILURE),),
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            report = build_audit_report(
+                manifest(), (canonical, go, ruby), AuditStore(directory)
+            )
+
+        body = render_audit_report(report, manifest()).finding_issues[0].body
+        self.assertIn("## Available `/ag` commands", body)
+        self.assertIn("| `/ag status` |", body)
+        self.assertIn(
+            "`ruby` because the affected SDK is configured for notification-only",
+            body,
+        )
+        self.assertNotIn("| `/ag fix", body)
+        self.assertNotIn("agricola:propagation-table:start", body)
+        self.assertNotIn("## How to action", body)
 
     def test_rollup_links_semantic_source_evidence(self) -> None:
         canonical = snapshot("typescript")
