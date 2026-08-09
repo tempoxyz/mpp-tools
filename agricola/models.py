@@ -253,6 +253,15 @@ class LabelEvent:
 
 
 @dataclass(frozen=True)
+class PullRequestComment:
+    id: int
+    body: str
+    author: str
+    created_at: datetime
+    has_eyes: bool = False
+
+
+@dataclass(frozen=True)
 class LabelResolution:
     labels: tuple[str, ...]
     targets: tuple[str, ...]
@@ -376,6 +385,13 @@ PropagationOutcome = Annotated[
 class PendingReply(FrozenModel):
     issue_number: PositiveInt
     body: NonEmpty
+    repository: RepoName | None = None
+
+
+class PendingAcknowledgement(FrozenModel):
+    repository: RepoName
+    comment_id: PositiveInt
+    content: Literal["eyes"] = "eyes"
 
 
 class PendingIssueUpdate(FrozenModel):

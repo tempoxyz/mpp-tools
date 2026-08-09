@@ -82,9 +82,8 @@ jobs:
           permission-issues: read
           permission-pull-requests: read
 
-      - name: Create downstream repository read token
-        if: github.event_name == 'issue_comment'
-        id: downstream-read-token
+      - name: Create downstream command token
+        id: downstream-command-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ vars.AGRICOLA_APP_ID }}
@@ -92,6 +91,7 @@ jobs:
           owner: ${{ steps.downstream-scope.outputs.owner }}
           repositories: ${{ steps.downstream-scope.outputs.repositories }}
           permission-contents: read
+          permission-issues: write
           permission-pull-requests: read
 
       - name: Process event
@@ -99,7 +99,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.control-token.outputs.token }}
           AGRICOLA_CANONICAL_TOKEN: ${{ steps.canonical-token.outputs.token }}
-          AGRICOLA_SDK_TOKEN: ${{ steps.downstream-read-token.outputs.token }}
+          AGRICOLA_SDK_TOKEN: ${{ steps.downstream-command-token.outputs.token }}
         run: |
           result="$RUNNER_TEMP/agricola-result.json"
           transaction=(
@@ -133,6 +133,11 @@ jobs:
           else
             echo "accepted-command=false" >> "$GITHUB_OUTPUT"
           fi
+          if jq -e '.acknowledgements | length > 0' "$result" >/dev/null; then
+            echo "has-pr-actions=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-pr-actions=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Acknowledge accepted command
         if: github.event_name == 'issue_comment' && steps.process.outputs.accepted-command == 'true'
@@ -143,6 +148,14 @@ jobs:
           gh api --method POST \
             "repos/$GITHUB_REPOSITORY/issues/comments/${{ github.event.comment.id }}/reactions" \
             -f content=eyes
+
+      - name: Acknowledge polled PR commands
+        if: steps.process.outputs.has-pr-actions == 'true'
+        env:
+          GH_TOKEN: ${{ steps.downstream-command-token.outputs.token }}
+        run: |
+          agricola deliver-pr-actions "$RUNNER_TEMP/agricola-result.json" \
+            --action-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 
       - name: Fetch GitHub token via STS
         id: sts
