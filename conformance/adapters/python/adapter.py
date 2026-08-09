@@ -119,10 +119,12 @@ def challenge_to_dict(challenge: Challenge) -> dict:
 def credential_to_dict(credential: Credential) -> dict:
     """Convert a Credential to a JSON-serializable dict."""
     challenge = credential.challenge
-    # Decode the base64url request string back to an object
-    request_decoded = json.loads(
-        base64.urlsafe_b64decode(challenge.request + "=" * (-len(challenge.request) % 4))
-    )
+    # Decode the base64url request string back to an object. Use the
+    # hardened base64url_decode() here too: raw urlsafe_b64decode()
+    # silently drops out-of-alphabet characters instead of rejecting
+    # them, which would let a malformed embedded `request` field pass
+    # through this adapter while every other adapter rejects it.
+    request_decoded = json.loads(base64url_decode(challenge.request))
 
     challenge_dict = {
         "id": challenge.id,
