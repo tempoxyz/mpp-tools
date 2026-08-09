@@ -602,50 +602,10 @@ def _render_finding_issue(
                 ]
             )
 
-    action_steps = (
-        (
-            "1. Assign an owner and confirm the discrepancy against the linked commits.",
-            "2. Add the suggested regression test in each affected SDK.",
-            "3. Implement the SDK fix and link its pull request to this issue.",
-            "4. Re-run the audit. A healthy run closes this issue when the fingerprint disappears.",
-        )
-        if finding.semantic_evidence
-        else (
-            "1. Assign an owner and confirm the delta against the audited heads.",
-            "2. Add a conformance test that captures the missing capability or behavior.",
-            "3. Implement the SDK fix and link its pull request to this issue.",
-            "4. Re-run the audit. A healthy run closes this issue when the fingerprint disappears.",
-        )
-    )
     lines.extend(
         [
             "",
-            "## Agricola remediation",
-            "",
-            "Use these commands on this issue to create or inspect draft fixes for "
-            "the affected SDKs.",
-            "",
-            *propagation_table(manifest, finding.affected),
-            "",
-            *_finding_command_lines(finding.affected, manifest),
-            "",
-            "## How to action",
-            "",
-            *action_steps,
-            "",
-            "### Re-run command",
-            "",
-            "Runs the complete audit against the latest default-branch heads:",
-            "",
-            "```bash",
-            "gh workflow run agricola-audit.yml --repo tempoxyz/mpp-tools --ref main",
-            "```",
-            "",
-            "Example for checking the dispatched run:",
-            "",
-            "```bash",
-            "gh run list --repo tempoxyz/mpp-tools --workflow agricola-audit.yml --limit 1",
-            "```",
+            *_finding_command_section(finding.affected, manifest),
         ]
     )
     title = f"[Agricola] {finding.id}: {finding.summary}"[:256]
@@ -720,30 +680,67 @@ def audit_finding_context_from_body(body: str) -> AuditFindingContext | None:
 
 
 def _finding_command_lines(affected: Iterable[str], manifest: Manifest) -> list[str]:
+    affected_targets = tuple(affected)
     enabled = tuple(
         target
-        for target in affected
+        for target in affected_targets
         if manifest.target(target).automation is Automation.PR
     )
-    rows = []
+    rows = ["| Command | What it does |", "| --- | --- |"]
     if enabled:
-        rows.extend([*quick_fix_lines(), ""])
-    rows.extend(
-        [
-            "| Command | What it does | Example |",
-            "| --- | --- | --- |",
-        ]
-    )
-    if enabled:
+        rows.append(
+            "| `/ag fix` | Opens or retries draft fixes for every affected "
+            "PR-enabled SDK. |"
+        )
         rows.extend(
-            [
-                '| `fix [sdk...] ["instruction"]` | Opens fixes for affected SDKs; for a recorded PR, ingests unresolved review feedback and failed CI, applies the quoted instruction, verifies, and updates that PR. | `/ag fix "address the review comments"` |',
-            ]
+            f"| `/ag fix {target}` | Opens or retries the draft fix for `{target}` only. |"
+            for target in enabled
+        )
+        rows.append(
+            '| `/ag fix "instruction"` | Applies the instruction to affected fixes; '
+            "recorded PRs also incorporate unresolved review feedback and failed CI. |"
         )
     rows.append(
-        "| `status` | Reports the current state of linked remediation pull requests. | `/ag status` |"
+        "| `/ag status` | Reports the current state of linked remediation pull requests. |"
     )
+    notify_only = tuple(target for target in affected_targets if target not in enabled)
+    if notify_only:
+        names = ", ".join(f"`{target}`" for target in notify_only)
+        noun = "SDK is" if len(notify_only) == 1 else "SDKs are"
+        rows.extend(
+            [
+                "",
+                f"> `/ag fix` is unavailable for {names} because the affected {noun} "
+                "configured for notification-only automation.",
+            ]
+        )
     return rows
+
+
+def _finding_command_section(affected: Iterable[str], manifest: Manifest) -> list[str]:
+    affected_targets = tuple(affected)
+    enabled = tuple(
+        target
+        for target in affected_targets
+        if manifest.target(target).automation is Automation.PR
+    )
+    lines = [
+        "## Available `/ag` commands",
+        "",
+        "Post a command as a new comment. Only configured maintainers can run "
+        "these commands.",
+    ]
+    if enabled:
+        lines.extend(
+            [
+                "",
+                *propagation_table(manifest, affected_targets),
+                "",
+                *quick_fix_lines(),
+            ]
+        )
+    lines.extend(["", *_finding_command_lines(affected_targets, manifest)])
+    return lines
 
 
 def ensure_audit_remediation(
@@ -751,46 +748,16 @@ def ensure_audit_remediation(
     context: AuditFindingContext,
     manifest: Manifest,
 ) -> str:
-    if "<!-- agricola:propagation-table:start -->" in body:
-        return _replace_audit_commands(body, context.affected, manifest)
-    section = "\n".join(
-        [
-            "## Agricola remediation",
-            "",
-            "Use these commands on this issue to create or inspect draft fixes for "
-            "the affected SDKs.",
-            "",
-            *propagation_table(manifest, context.affected),
-            "",
-            *_finding_command_lines(context.affected, manifest),
-            "",
-        ]
+    section = "\n".join(_finding_command_section(context.affected, manifest))
+    headings = (
+        "\n## Agricola remediation\n",
+        "\n## Available `/ag` commands\n",
+        "\n## How to action\n",
     )
-    separator = "\n## How to action\n"
-    if separator in body:
-        return body.replace(separator, f"\n{section}\n## How to action\n", 1)
-    return body.rstrip() + "\n\n" + section
-
-
-def _replace_audit_commands(
-    body: str,
-    affected: Iterable[str],
-    manifest: Manifest,
-) -> str:
-    table_end = "<!-- agricola:propagation-table:end -->"
-    table_index = body.find(table_end)
-    action_index = body.find("\n## How to action\n", table_index)
-    if table_index < 0 or action_index < 0:
-        return body
-    table_index += len(table_end)
-    commands = "\n".join(_finding_command_lines(affected, manifest))
-    return (
-        body[:table_index].rstrip()
-        + "\n\n"
-        + commands
-        + "\n\n"
-        + body[action_index + 1 :].lstrip()
-    )
+    indexes = tuple(index for heading in headings if (index := body.find(heading)) >= 0)
+    prefix = body[: min(indexes)].rstrip() if indexes else body.rstrip()
+    updated = prefix + "\n\n" + section + "\n"
+    return preserve_propagation_state(updated, body)
 
 
 def _link_finding_issues(body: str, urls: Mapping[str, str]) -> str:
