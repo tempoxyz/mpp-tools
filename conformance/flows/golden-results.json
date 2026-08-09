@@ -664,6 +664,17 @@
       }
     },
     {
+      "name": "same_origin_post_payment_request",
+      "outcome": {
+        "ok": true,
+        "status": 200
+      },
+      "payment_receipt_observed": true,
+      "ok": true,
+      "response_name": "same_origin_post_payment_request",
+      "body_preserved": true
+    },
+    {
       "name": "cross_origin_redirect_before_402_rejected",
       "outcome": {
         "ok": true,

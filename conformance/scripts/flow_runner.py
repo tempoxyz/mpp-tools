@@ -378,6 +378,11 @@ def run_client_http_flow_case(
                 result[key] = body[key]
         if "name" in body:
             result["response_name"] = body["name"]
+    if flow_case.get("verify_body_preserved"):
+        result["body_preserved"] = bool(
+            isinstance(body, dict) and body.get("received_body") == flow_case.get("body")
+        )
+        result["outcome"]["ok"] = bool(result["outcome"]["ok"] and result["body_preserved"])
     if flow_case.get("expect_no_authorization"):
         expected_response_name = flow_case.get("expect_response_name")
         if expected_response_name and result.get("response_name") != expected_response_name:

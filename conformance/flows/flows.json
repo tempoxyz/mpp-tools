@@ -417,6 +417,26 @@
       }
     },
     {
+      "name": "same_origin_post_payment_request",
+      "path": "/charge/same-origin-post-payment-request",
+      "client_flow": true,
+      "http_method": "POST",
+      "body": "{\"prompt\":\"expensive question\"}",
+      "verify_body_preserved": true,
+      "request": {
+        "amount": "2042",
+        "currency": "USD",
+        "recipient": "merchant",
+        "expires": "2099-01-01T00:00:00Z"
+      },
+      "payload": {
+        "type": "transaction",
+        "signature": "0xpostpayment"
+      },
+      "expected_signature": "0xpostpayment",
+      "expect_payment_receipt": true
+    },
+    {
       "name": "cross_origin_redirect_before_402_rejected",
       "path": "/charge/redirect-cross-origin",
       "client_flow": true,

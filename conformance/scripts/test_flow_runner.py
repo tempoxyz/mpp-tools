@@ -7,7 +7,7 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-from flow_runner import compare_results, main, perform_request
+from flow_runner import compare_results, main, perform_request, run_client_http_flow_case
 
 
 class PerformRequestTests(unittest.TestCase):
@@ -28,6 +28,49 @@ class PerformRequestTests(unittest.TestCase):
                 request = urlopen.call_args.args[0]
                 self.assertEqual(request.data, b'{"amount":"1"}')
                 self.assertEqual(request.get_header("Content-type"), "application/json")
+
+
+class ClientHttpFlowTests(unittest.TestCase):
+    def test_paid_post_requires_the_adapter_to_preserve_the_body(self) -> None:
+        body = '{"prompt":"expensive question"}'
+        flow_case = {
+            "name": "same_origin_post_payment_request",
+            "path": "/charge/same-origin-post-payment-request",
+            "http_method": "POST",
+            "body": body,
+            "verify_body_preserved": True,
+        }
+        client = MagicMock()
+        client.adapter.capabilities = ["http.payment_request"]
+        client.call.return_value = {
+            "ok": True,
+            "value": {
+                "status": 200,
+                "headers": {},
+                "body": json.dumps(
+                    {
+                        "name": "same_origin_post_payment_request",
+                        "received_body": body,
+                    }
+                ),
+            },
+        }
+
+        result = run_client_http_flow_case(client, "http://127.0.0.1:3000", flow_case, False)
+
+        self.assertTrue(result["outcome"]["ok"])
+        self.assertTrue(result["body_preserved"])
+
+        client.call.return_value["value"]["body"] = json.dumps(
+            {
+                "name": "same_origin_post_payment_request",
+                "received_body": "",
+            }
+        )
+        result = run_client_http_flow_case(client, "http://127.0.0.1:3000", flow_case, False)
+
+        self.assertFalse(result["outcome"]["ok"])
+        self.assertFalse(result["body_preserved"])
 
 
 class CompareResultsCapabilitySkipTests(unittest.TestCase):
