@@ -49,6 +49,7 @@ class AuditGitHub:
             "title": title,
             "body": body,
             "state": "open",
+            "labels": tuple(labels),
             "html_url": f"https://github.com/tempoxyz/mpp-tools/issues/{number}",
         }
         self.issues.append(issue)
@@ -437,10 +438,13 @@ class AuditTests(unittest.TestCase):
         go = snapshot(
             "go", observations=(observation(check, AuditCheckStatus.FAILURE),)
         )
+        rust = snapshot(
+            "rust", observations=(observation(check, AuditCheckStatus.FAILURE),)
+        )
         with tempfile.TemporaryDirectory() as directory:
             report = build_audit_report(
                 manifest(),
-                (canonical, go, snapshot("rust"), snapshot("ruby")),
+                (canonical, go, rust, snapshot("ruby")),
                 AuditStore(directory),
                 at=datetime(2026, 8, 8, 18, 0, tzinfo=UTC),
             )
@@ -454,6 +458,8 @@ class AuditTests(unittest.TestCase):
             if "agricola:audit-finding" in str(issue["body"])
         )
         self.assertIn("AGR-2026-001", str(finding["title"]))
+        self.assertEqual(finding["labels"], ("agricola", "go", "rust"))
+        self.assertEqual(rollup["labels"], ("agricola",))
         self.assertIn(f"[AGR-2026-001]({finding['html_url']})", str(rollup["body"]))
 
     def test_healthy_delivery_closes_resolved_findings(self) -> None:

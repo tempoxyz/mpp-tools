@@ -223,6 +223,15 @@ def resolve_labels(
             notes=notes,
         )
 
+    affected = (
+        set(manifest.sdks)
+        if "agricola:all" in effective
+        else {
+            label.removeprefix("agricola:")
+            for label in effective
+            if label.removeprefix("agricola:") in manifest.sdks
+        }
+    )
     target_actors = {
         label.removeprefix("agricola:"): applied[label].actor
         for label in effective
@@ -244,6 +253,7 @@ def resolve_labels(
     return LabelResolution(
         labels=tuple(sorted(applied)),
         targets=tuple(sorted(target_actors)),
+        affected=tuple(sorted(affected)),
         target_actors=tuple(sorted(target_actors.items())),
         errors=errors,
         notes=tuple(

@@ -100,6 +100,38 @@ class GitHubApiTests(unittest.TestCase):
         self.assertIn("--input", command)
         self.assertEqual(json.loads(run.call_args.kwargs["input"]), {"title": "Title"})
 
+    def test_create_issue_provisions_and_applies_missing_labels(self) -> None:
+        client = StubClient(
+            [
+                [[{"name": "go"}]],
+                {"name": "agricola"},
+                {"number": 1},
+            ]
+        )
+
+        issue = client.create_issue("Title", "Body", ("agricola", "go"))
+
+        self.assertEqual(issue["number"], 1)
+        self.assertEqual(
+            client.calls[0][0], "repos/tempoxyz/mpp-tools/labels?per_page=100"
+        )
+        self.assertTrue(client.calls[0][1]["paginate"])
+        self.assertEqual(
+            client.calls[1],
+            (
+                "repos/tempoxyz/mpp-tools/labels",
+                {
+                    "method": "POST",
+                    "fields": {
+                        "name": "agricola",
+                        "color": "6f42c1",
+                        "description": "Issues managed by Agricola",
+                    },
+                },
+            ),
+        )
+        self.assertEqual(client.calls[2][1]["fields"]["labels"], ["agricola", "go"])
+
     @patch("agricola.github.subprocess.run")
     def test_api_failure_is_contextual(self, run) -> None:
         run.return_value = subprocess.CompletedProcess([], 1, "", "bad credentials")

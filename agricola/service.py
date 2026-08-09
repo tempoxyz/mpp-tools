@@ -18,7 +18,7 @@ from .commands import (
     require_maintainer,
     resolve_labels,
 )
-from .github import GitHubError
+from .github import GitHubError, agricola_issue_labels
 from .ledger import CursorStore, DecisionLedger
 from .models import (
     AuditFindingContext,
@@ -116,7 +116,11 @@ def poll(
         elif issue:
             counters["deduplicated"] += 1
         else:
-            issue = client.create_issue(tracking_issue_title(change), plan)
+            issue = client.create_issue(
+                tracking_issue_title(change),
+                plan,
+                agricola_issue_labels(resolution.affected),
+            )
             counters["created"] += 1
         if issue and not resolution.disabled and not resolution.errors:
             propagations.extend(

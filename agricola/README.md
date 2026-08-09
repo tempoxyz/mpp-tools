@@ -156,6 +156,7 @@ Ledger filenames identify the canonical repository and pull request. Entries con
 The separate `ledger/audit.json` registry maps stable fingerprints to finding IDs. It does not store mutable CI or pull-request lifecycle state.
 
 Tracking issue deduplication scans the control repository's issue API directly for the stable marker; it does not depend on search indexing.
+New tracking and audit issues receive the `agricola` label plus one label for every affected SDK. The audit index receives only `agricola`. Agricola creates missing labels before opening an issue.
 
 State-changing replies are deferred until the state pull request has been updated. A failed state update therefore cannot leave a misleading acknowledgement. Reruns reuse deterministic idempotency keys.
 

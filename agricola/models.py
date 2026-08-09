@@ -256,6 +256,7 @@ class LabelEvent:
 class LabelResolution:
     labels: tuple[str, ...]
     targets: tuple[str, ...]
+    affected: tuple[str, ...] = ()
     target_actors: tuple[tuple[str, str], ...] = ()
     disabled: bool = False
     errors: tuple[str, ...] = ()
@@ -551,6 +552,7 @@ class PendingAuditFindingIssue(FrozenModel):
     marker: NonEmpty
     title: NonEmpty
     body: NonEmpty
+    labels: tuple[NonEmpty, ...] = ("agricola",)
 
 
 class PendingAuditReport(FrozenModel):
