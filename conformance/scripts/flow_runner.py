@@ -684,7 +684,19 @@ def compare_results(
             continue
         golden = expected_map[name]
         if entry.get("outcome", {}).get("skipped") and not golden.get("outcome", {}).get("skipped"):
-            results.append(RunResult(adapter=adapter, name=str(name), passed=True))
+            # The golden reference ran this case for real; the adapter skipped it
+            # because it lacks a capability. That capability is only ever missing
+            # here for `http.payment_request`, which HARNESS_SPEC.md documents as
+            # "Required for flow conformance" -- so this is a real conformance gap,
+            # not an optional feature the adapter is allowed to opt out of.
+            requires = entry.get("outcome", {}).get("requires")
+            results.append(RunResult(
+                adapter=adapter,
+                name=str(name),
+                passed=False,
+                error=f"adapter skipped a case the golden reference did not skip "
+                f"(missing required capability: {requires})",
+            ))
             unmatched.discard(name)
             continue
         diff = compute_diff(normalize_result(golden), normalize_result(entry))

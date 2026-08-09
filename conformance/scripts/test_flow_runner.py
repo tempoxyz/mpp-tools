@@ -7,7 +7,7 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-from flow_runner import main, perform_request
+from flow_runner import compare_results, main, perform_request
 
 
 class PerformRequestTests(unittest.TestCase):
@@ -28,6 +28,47 @@ class PerformRequestTests(unittest.TestCase):
                 request = urlopen.call_args.args[0]
                 self.assertEqual(request.data, b'{"amount":"1"}')
                 self.assertEqual(request.get_header("Content-type"), "application/json")
+
+
+class CompareResultsCapabilitySkipTests(unittest.TestCase):
+    def test_skipping_a_required_capability_fails_not_passes(self) -> None:
+        # HARNESS_SPEC.md documents http.payment_request as "Required for flow
+        # conformance". An adapter that skips a case because it lacks that
+        # capability has a real conformance gap and must not be marked passed,
+        # even though the golden reference ran the case for real.
+        golden = [
+            {
+                "name": "plain_payment_request",
+                "outcome": {"ok": True, "status": 200},
+            }
+        ]
+        actual = [
+            {
+                "name": "plain_payment_request",
+                "outcome": {
+                    "ok": True,
+                    "status": 0,
+                    "skipped": True,
+                    "requires": "http.payment_request",
+                },
+            }
+        ]
+
+        results = compare_results(golden, actual, "broken-adapter")
+
+        self.assertEqual(len(results), 1)
+        self.assertFalse(results[0].passed)
+        self.assertIn("http.payment_request", results[0].error or "")
+
+    def test_both_golden_and_actual_skipped_is_unaffected(self) -> None:
+        outcome = {"ok": True, "status": 0, "skipped": True, "requires": "http.payment_request"}
+        golden = [{"name": "plain_payment_request", "outcome": outcome}]
+        actual = [{"name": "plain_payment_request", "outcome": dict(outcome)}]
+
+        results = compare_results(golden, actual, "adapter")
+
+        self.assertEqual(len(results), 1)
+        self.assertTrue(results[0].passed)
 
 
 class FlowRunnerOutputTests(unittest.TestCase):
