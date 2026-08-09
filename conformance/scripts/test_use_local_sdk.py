@@ -9,7 +9,28 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from use_local_sdk import configure_go, go_sdk_version
+from use_local_sdk import configure_go, configure_rust, go_sdk_version
+
+
+class RustSdkConfigurationTest(unittest.TestCase):
+    def test_preserves_client_feature_for_local_checkout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / "conformance" / "adapters" / "rust" / "Cargo.toml"
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text(
+                '[dependencies]\nmpp = { version = "=0.11.0", features = ["client"] }\n',
+                encoding="utf-8",
+            )
+            sdk_path = root / "sdk"
+            sdk_path.mkdir()
+
+            configure_rust(root / "conformance", sdk_path)
+
+            self.assertIn(
+                f'mpp = {{ path = "{sdk_path}", features = ["client"] }}',
+                manifest.read_text(encoding="utf-8"),
+            )
 
 
 class GoSdkVersionTest(unittest.TestCase):

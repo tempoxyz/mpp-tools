@@ -1,9 +1,11 @@
 use hmac::{Hmac, KeyInit, Mac};
+use mpp::client::{Fetch, PaymentProvider};
 use mpp::protocol::core::{
     base64url_decode, base64url_encode, format_authorization, format_receipt,
     format_www_authenticate, parse_authorization, parse_receipt, parse_www_authenticate,
     Base64UrlJson, ChallengeEcho, PaymentChallenge, PaymentCredential, Receipt,
 };
+use mpp::MppError;
 use serde_json::{json, Value};
 use sha2::Sha256;
 use std::io::{self, Read, Write};
@@ -422,6 +424,14 @@ fn handle_adapter_request() {
     let op = request.get("op").and_then(|v| v.as_str()).unwrap_or("");
     let input_value = request.get("input").cloned().unwrap_or(json!({}));
 
+    if op == "http.payment_request" {
+        match run_http_payment_request(&input_value) {
+            Ok(value) => print_adapter_success(value),
+            Err(e) => print_adapter_error(&e, "http_error"),
+        }
+        return;
+    }
+
     let Some(command) = legacy_command_for_operation(op) else {
         print_adapter_error(
             &format!("Unknown operation: {}", op),
@@ -438,6 +448,108 @@ fn handle_adapter_request() {
     };
     let result = run_legacy_command(command, &legacy_input, &[]);
     print_adapter_from_legacy(op, result);
+}
+
+#[derive(Clone)]
+struct ConformancePaymentProvider {
+    payload: Value,
+    source: Option<String>,
+}
+
+impl PaymentProvider for ConformancePaymentProvider {
+    fn supports(&self, method: &str, intent: &str) -> bool {
+        method == "tempo" && intent == "charge"
+    }
+
+    async fn pay(&self, challenge: &PaymentChallenge) -> Result<PaymentCredential, MppError> {
+        Ok(PaymentCredential {
+            challenge: challenge.to_echo(),
+            source: self.source.clone(),
+            payload: self.payload.clone(),
+        })
+    }
+}
+
+fn run_http_payment_request(input: &Value) -> Result<Value, String> {
+    let url = input
+        .get("url")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "missing url".to_string())?;
+    let method = input
+        .get("method")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "missing method".to_string())?
+        .parse::<reqwest::Method>()
+        .map_err(|e| e.to_string())?;
+    let headers = input
+        .get("headers")
+        .and_then(Value::as_object)
+        .ok_or_else(|| "missing headers".to_string())?;
+    let body = input.get("body").and_then(Value::as_str);
+    let mode = input
+        .get("mode")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "missing mode".to_string())?;
+
+    let client = reqwest::Client::new();
+    let mut request = client.request(method, url);
+    for (name, value) in headers {
+        let value = value
+            .as_str()
+            .ok_or_else(|| format!("header {name} must be a string"))?;
+        request = request.header(name, value);
+    }
+    if let Some(body) = body {
+        request = request.body(body.to_owned());
+    }
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| e.to_string())?;
+    let response = match mode {
+        "plain" => runtime
+            .block_on(request.send())
+            .map_err(|e| e.to_string())?,
+        "payment" | "invalid_payload" => {
+            let payment = input
+                .get("payment")
+                .and_then(Value::as_object)
+                .ok_or_else(|| "missing payment".to_string())?;
+            let provider = ConformancePaymentProvider {
+                payload: payment.get("payload").cloned().unwrap_or_else(|| json!({})),
+                source: payment
+                    .get("source")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned),
+            };
+            runtime
+                .block_on(request.send_with_payment(&provider))
+                .map_err(|e| e.to_string())?
+        }
+        _ => return Err(format!("Unsupported http.payment_request mode: {mode}")),
+    };
+
+    let status = response.status().as_u16();
+    let headers = response
+        .headers()
+        .iter()
+        .filter_map(|(name, value)| {
+            value
+                .to_str()
+                .ok()
+                .map(|value| (name.to_string(), Value::String(value.to_owned())))
+        })
+        .collect::<serde_json::Map<_, _>>();
+    let body = runtime
+        .block_on(response.text())
+        .map_err(|e| e.to_string())?;
+
+    Ok(json!({
+        "status": status,
+        "headers": headers,
+        "body": body,
+    }))
 }
 
 fn legacy_command_for_operation(op: &str) -> Option<&'static str> {
