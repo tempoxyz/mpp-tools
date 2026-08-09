@@ -69,5 +69,22 @@ def generated_schemas() -> dict[str, dict[str, object]]:
     }
 
 
+def automation_token_scope(manifest: Manifest) -> dict[str, object]:
+    """Return the GitHub App installation scope for PR-enabled SDKs."""
+    repositories = [manifest.target(target).repo for target in manifest.pr_targets()]
+    owners = {repository.split("/", 1)[0] for repository in repositories}
+    if len(owners) != 1:
+        raise ManifestError(
+            "automation: pr repositories must share one GitHub owner for App tokens"
+        )
+    owner = next(iter(owners))
+    return {
+        "owner": owner,
+        "repositories": sorted(
+            repository.split("/", 1)[1] for repository in repositories
+        ),
+    }
+
+
 def print_schemas() -> str:
     return json.dumps(generated_schemas(), indent=2) + "\n"

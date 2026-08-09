@@ -25,15 +25,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-          cache: pip
+      - name: Setup Agricola
+        uses: ./.github/actions/setup-agricola
 
       - name: Build audit matrix
         id: matrix
         run: |
-          pip install .
           matrix="$(agricola audit-matrix | jq -c .)"
           canonical_repo="$(python -c 'from agricola.manifest import load_manifest; print(load_manifest().canonical.repo)')"
           spec_repo="$(python -c 'from agricola.manifest import load_manifest; print(load_manifest().spec.repo)')"
@@ -74,8 +71,12 @@ jobs:
           adapter: typescript
 
       - name: Install audit and conformance runner
+        uses: ./.github/actions/setup-agricola
+        with:
+          setup-python: "false"
+
+      - name: Install conformance runner
         run: |
-          pip install .
           uv sync --locked --project conformance --python 3.12
 
       - name: Point adapter at canonical checkout
@@ -169,8 +170,12 @@ jobs:
           ruby-bundler-cache: "false"
 
       - name: Install audit and conformance runner
+        uses: ./.github/actions/setup-agricola
+        with:
+          setup-python: "false"
+
+      - name: Install conformance runner
         run: |
-          pip install .
           uv sync --locked --project conformance --python 3.12
 
       - name: Build Java SDK checkout
@@ -267,19 +272,8 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
 
-      - name: Restore control-plane state
-        run: |
-          if git fetch origin "refs/heads/$STATE_BRANCH:refs/remotes/origin/$STATE_BRANCH"; then
-            git restore --source "origin/$STATE_BRANCH" -- ledger
-          fi
-
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-          cache: pip
-
-      - name: Install Agricola
-        run: pip install .
+      - name: Setup Agricola
+        uses: ./.github/actions/setup-agricola
 
       - name: Download audit snapshots
         continue-on-error: true
@@ -292,38 +286,20 @@ jobs:
       - name: Build audit roll-up
         run: |
           mkdir -p "$RUNNER_TEMP/snapshots"
-          agricola build-audit "$RUNNER_TEMP/snapshots" \
-            --report-file "$RUNNER_TEMP/audit-report.json"
+          agricola state-transaction \
+            --branch "$STATE_BRANCH" \
+            --base "$DEFAULT_BRANCH" \
+            -- \
+            agricola build-audit "$RUNNER_TEMP/snapshots" \
+              --report-file "$RUNNER_TEMP/audit-report.json"
           cat "$RUNNER_TEMP/audit-report.json"
 
-      - name: Persist audit registry
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+      - name: Ensure state pull request
+        uses: ./.github/actions/persist-agricola-state
         with:
           token: ${{ github.token }}
           base: ${{ env.DEFAULT_BRANCH }}
           branch: ${{ env.STATE_BRANCH }}
-          commit-message: "chore(agricola): update state"
-          title: "chore(agricola): update state"
-          body: |
-            > [!IMPORTANT]
-            > This pull request is maintained by automation. Merge it to checkpoint state on the default branch; do not close or edit it manually.
-
-            ## Motivation
-
-            Persist Agricola's durable cursor, decisions, and audit finding registry through the repository's required pull-request path.
-
-            ## Summary
-
-            - tracks the latest processed canonical merge
-            - records immutable source snapshots and maintainer decisions
-            - assigns stable IDs to recurring audit findings
-
-            ## Key design considerations
-
-            - workflow code always executes from the protected default branch
-            - this pull request is updated in place as state advances
-          add-paths: ledger
-          delete-branch: true
 
       - name: Create control repository token
         id: control-token

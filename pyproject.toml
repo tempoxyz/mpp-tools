@@ -12,8 +12,23 @@ dependencies = [
   "PyYAML>=6.0.2,<7",
 ]
 
+[dependency-groups]
+dev = [
+  "coverage==7.15.4",
+  "ruff==0.15.0",
+  "ty==0.0.69",
+]
+
 [project.scripts]
 agricola = "agricola.cli:main"
 
 [tool.setuptools]
 packages = ["agricola"]
+
+[tool.coverage.run]
+branch = true
+source = ["agricola"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true

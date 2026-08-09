@@ -1,0 +1,68 @@
+name: Ensure Agricola state pull request
+description: Ensure the compare-and-swap state branch has a checkpoint pull request
+
+inputs:
+  token:
+    description: Repository token allowed to create the state pull request
+    required: true
+  base:
+    description: Protected default branch
+    required: true
+  branch:
+    description: Durable state branch
+    default: agricola/state
+
+runs:
+  using: composite
+  steps:
+    - name: Ensure state pull request
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        BASE_BRANCH: ${{ inputs.base }}
+        STATE_BRANCH: ${{ inputs.branch }}
+      run: |
+        set +e
+        git ls-remote --exit-code --heads origin "refs/heads/$STATE_BRANCH" \
+          >/dev/null
+        branch_status=$?
+        set -e
+        if [ "$branch_status" = 2 ]; then
+          exit 0
+        fi
+        if [ "$branch_status" != 0 ]; then
+          exit "$branch_status"
+        fi
+
+        git fetch --force origin \
+          "refs/heads/$BASE_BRANCH:refs/remotes/origin/$BASE_BRANCH" \
+          "refs/heads/$STATE_BRANCH:refs/remotes/origin/$STATE_BRANCH"
+        if ! git rev-list -1 \
+          "refs/remotes/origin/$BASE_BRANCH..refs/remotes/origin/$STATE_BRANCH" \
+          | grep -q .; then
+          exit 0
+        fi
+
+        existing="$(gh pr list \
+          --state open \
+          --base "$BASE_BRANCH" \
+          --head "$STATE_BRANCH" \
+          --json number \
+          --jq '.[0].number // empty')"
+        if [ -n "$existing" ]; then
+          exit 0
+        fi
+
+        if ! gh pr create \
+          --base "$BASE_BRANCH" \
+          --head "$STATE_BRANCH" \
+          --title "chore(agricola): update state" \
+          --body-file .github/agricola/state-pr.md; then
+          existing="$(gh pr list \
+            --state open \
+            --base "$BASE_BRANCH" \
+            --head "$STATE_BRANCH" \
+            --json number \
+            --jq '.[0].number // empty')"
+          test -n "$existing"
+        fi

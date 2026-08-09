@@ -138,13 +138,13 @@ Generation and verification failures leave no decision, so the same request rema
 
 The weekly and manually dispatched audit is head-to-head and report-only. It uses `mppx` as the sole reference and evaluates every manifest SDK independently, including notification-only targets.
 
-The first pass reviews each repository's current default-branch checkout independently against the exact canonical `mppx` head. A read-only Codex run explores both implementations and emits schema-validated `semantic:<area>/<behavior>` findings with source evidence. Shared protocol vectors and conformance-adapter capabilities provide deterministic supporting evidence. The second pass clusters equivalent findings under SDK-independent fingerprints such as `semantic:receipt/verification-order`, `capability:challenge.parse`, or `vector:www-authenticate/basic/parse`. Stable `AGR-<year>-<sequence>` IDs are assigned in [`ledger/audit.json`](../ledger/audit.json).
+Each repository's current default-branch checkout is reviewed independently against the exact canonical `mppx` head. A read-only Codex run explores both implementations and emits schema-validated `semantic:<area>/<behavior>` findings with source evidence. Shared protocol vectors and conformance-adapter capabilities provide deterministic supporting evidence. The roll-up groups identical fingerprints such as `semantic:receipt/verification-order`, `capability:challenge.parse`, or `vector:www-authenticate/basic/parse`. Stable `AGR-<year>-<sequence>` IDs are assigned in [`ledger/audit.json`](../ledger/audit.json).
 
-One `[Agricola] SDK drift audit` index is updated in place, and every stable finding gets its own issue with exact audited commits, affected and clean SDKs, likely-origin heuristic, severity, confidence, linked source evidence, a suggested test, and action instructions. A healthy audit closes issues whose fingerprints disappear and reopens recurring findings. Incomplete audits never close findings. Findings never create branches or pull requests automatically; a maintainer may explicitly run `/ag fix` on the finding issue to open or update draft remediation pull requests. Their links and status survive later audit reconciliations.
+One `[Agricola] SDK drift audit` index is updated in place, and every stable finding gets its own issue with exact audited commits, affected SDKs, deterministic clean results, semantic findings not reported by other reviews, severity, confidence, linked source evidence, a suggested test, and action instructions. A missing semantic finding is not evidence that an SDK is clean. A healthy audit closes issues whose fingerprints disappear and reopens recurring findings. Incomplete audits never close findings. Findings never create branches or pull requests automatically; a maintainer may explicitly run `/ag fix` on the finding issue to open or update draft remediation pull requests. Their links and status survive later audit reconciliations.
 
 ## State and recovery
 
-The poller creates `ledger/cursor.json` on its first run. GitHub Actions restores ledger data from `agricola/state` and updates one stable state pull request, following the changelog release-PR pattern. Merge that pull request to checkpoint the ledger on the default branch. Do not close or edit it manually. The next state change creates or updates its successor, so at most one state pull request remains open.
+The poller creates `ledger/cursor.json` on its first run. Every state writer restores only `ledger` from `agricola/state`, applies its idempotent operation on trusted default-branch code, and pushes a complete snapshot guarded by the state commit it read. If another writer wins first, Git rejects the stale lease and Agricola replays the operation on the newer ledger. A stable state pull request checkpoints the result on the default branch. Merge it, but do not close or edit it manually. The next state change creates or updates its successor, so at most one state pull request remains open.
 
 Executable control-plane code always comes from the protected default branch. The initial cursor starts fifteen minutes behind the current time; combined with the one-hour replay overlap, the first API read covers approximately the previous 75 minutes. Later polls retain the overlap and deduplicate using source snapshots and decisions.
 
@@ -158,7 +158,7 @@ The separate `ledger/audit.json` registry maps stable fingerprints to finding ID
 Tracking issue deduplication scans the control repository's issue API directly for the stable marker; it does not depend on search indexing.
 New tracking and audit issues receive the `agricola` label plus one label for every affected SDK. The audit index receives only `agricola`. Agricola creates missing labels before opening an issue.
 
-State-changing replies are deferred until the state pull request has been updated. A failed state update therefore cannot leave a misleading acknowledgement. Reruns reuse deterministic idempotency keys.
+State-changing replies are deferred until the guarded state push succeeds and the state pull request has been ensured. A failed state update therefore cannot leave a misleading acknowledgement. Reruns reuse deterministic idempotency keys.
 
 ## CLI reference
 
@@ -166,6 +166,7 @@ State-changing replies are deferred until the state pull request has been update
 | --- | --- | --- |
 | `agricola validate` | Validates the manifest and all durable ledger state. | `agricola validate` |
 | `agricola schema` | Prints generated manifest and ledger JSON Schemas. | `agricola schema > schemas.json` |
+| `agricola token-scope` | Prints the manifest-derived GitHub App scope for PR-enabled SDKs. | `agricola token-scope` |
 | `agricola poll` | Processes newly merged canonical pull requests. | `agricola poll --control-repo tempoxyz/mpp-tools` |
 | `agricola handle-comment [event]` | Parses an `issue_comment` payload; defaults to `GITHUB_EVENT_PATH`. | `agricola handle-comment event.json` |
 | `agricola deliver-reply <file>` | Posts a deferred reply, optionally linking its Actions run. | `agricola deliver-reply reply.json --action-url "$RUN_URL"` |
@@ -179,6 +180,8 @@ State-changing replies are deferred until the state pull request has been update
 | `agricola verify-propagation <request>` | Runs the target's reviewed verification commands. | `agricola verify-propagation request.json --root downstream-sdk` |
 | `agricola collect-revision-feedback <request>` | Collects trusted unresolved review feedback and failed CI for the request's exact PR head. | `agricola collect-revision-feedback request.json --output revision.md` |
 | `agricola render-propagation <request>` | Renders deterministic downstream PR metadata. | `agricola render-propagation request.json --title-file title.txt --body-file body.md` |
+| `agricola publish-propagation <request>` | Publishes one verified commit idempotently to its stable draft pull request. | `agricola publish-propagation request.json --title-file title.txt --body-file body.md --output result.json` |
+| `agricola state-transaction -- <command>` | Replays a ledger-writing command until its guarded state-branch push succeeds. | `agricola state-transaction -- agricola poll` |
 | `agricola parse-command --author <login>` | Parses issue commands from standard input for diagnostics. | `printf '%s\n' '/ag status' \| agricola parse-command --author maintainer` |
 
 Live control-plane commands authenticate through `GH_TOKEN`; canonical polling can use a separate repository token:
@@ -195,9 +198,11 @@ See [Agricola Actions setup](../docs/agricola-actions.md) for GitHub App, secret
 With Ruff, `ty`, `uv`, Go, and Actionlint available:
 
 ```bash
-.venv/bin/python -m unittest discover -s agricola/tests -v
-.venv/bin/ruff format --check agricola
-.venv/bin/ruff check agricola
-uvx ty check agricola
-go run github.com/rhysd/actionlint/cmd/actionlint@latest .github/workflows/agricola.yml .github/workflows/agricola-audit.yml
+uv sync --locked --group dev
+uv run --locked coverage run -m unittest discover -s agricola/tests -v
+uv run --locked coverage report
+uv run --locked ruff format --check agricola
+uv run --locked ruff check agricola
+uv run --locked ty check agricola
+go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 .github/workflows/agricola.yml .github/workflows/agricola-audit.yml
 ```
