@@ -4,7 +4,7 @@ import json
 import os
 import re
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -20,6 +20,12 @@ from .models import (
 _SOURCE_MARKER = re.compile(
     r"<!--\s*agricola:source=([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#([1-9][0-9]*)\s*-->"
 )
+_AGRICOLA_LABEL_COLOR = "6f42c1"
+_SDK_LABEL_COLOR = "bfdadc"
+
+
+def agricola_issue_labels(targets: Iterable[str] = ()) -> tuple[str, ...]:
+    return ("agricola", *sorted(set(targets)))
 
 
 class GitHubError(RuntimeError):
@@ -39,6 +45,7 @@ class GitHubClient:
         if token:
             self.environment["GH_TOKEN"] = token
         self.repo_tokens = repo_tokens or {}
+        self._known_issue_labels: set[str] | None = None
 
     def api(
         self,
@@ -236,12 +243,43 @@ class GitHubClient:
     def create_issue(
         self, title: str, body: str, labels: Sequence[str] = ()
     ) -> dict[str, object]:
+        self._ensure_issue_labels(labels)
         fields: dict[str, object] = {"title": title, "body": body}
         if labels:
             fields["labels"] = list(labels)
         return self.api(
             f"repos/{self.control_repo}/issues", method="POST", fields=fields
         )
+
+    def _ensure_issue_labels(self, labels: Sequence[str]) -> None:
+        if not labels:
+            return
+        if self._known_issue_labels is None:
+            pages = self.api(
+                f"repos/{self.control_repo}/labels?per_page=100", paginate=True
+            )
+            self._known_issue_labels = {
+                str(item["name"]).casefold() for page in pages for item in page
+            }
+        for label in labels:
+            normalized = label.casefold()
+            if normalized in self._known_issue_labels:
+                continue
+            fields = {
+                "name": label,
+                "color": (
+                    _AGRICOLA_LABEL_COLOR
+                    if normalized == "agricola"
+                    else _SDK_LABEL_COLOR
+                ),
+                "description": (
+                    "Issues managed by Agricola"
+                    if normalized == "agricola"
+                    else f"Issues affecting the {label} SDK"
+                ),
+            }
+            self.api(f"repos/{self.control_repo}/labels", method="POST", fields=fields)
+            self._known_issue_labels.add(normalized)
 
     def update_issue(
         self,

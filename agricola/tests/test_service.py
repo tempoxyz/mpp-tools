@@ -24,7 +24,7 @@ class FakeGitHub:
     def __init__(self) -> None:
         self.change = change()
         self.tracking = None
-        self.created: list[tuple[str, str]] = []
+        self.created: list[tuple[str, str, tuple[str, ...]]] = []
         self.updated: list[tuple[int, str | None, str | None]] = []
         self.comments: list[tuple[int, str]] = []
         self.pull_requests = 0
@@ -57,7 +57,7 @@ class FakeGitHub:
         return self.tracking
 
     def create_issue(self, title, body, labels=()):
-        self.created.append((title, body))
+        self.created.append((title, body, tuple(labels)))
         self.tracking = {
             "number": 99,
             "title": title,
@@ -111,6 +111,7 @@ class PollTests(unittest.TestCase):
             self.assertEqual(len(client.created), 1)
             self.assertEqual(client.pull_requests, 2)
             self.assertEqual(first.propagations[0].target, "go")
+            self.assertEqual(client.created[0][2], ("agricola", "go"))
             self.assertEqual(first.propagations[0].target_base_sha, "mpp-go1234567")
             self.assertEqual(second.propagations[0], first.propagations[0])
             self.assertEqual(store.load().merged_at, client.change.merged_at)
@@ -152,6 +153,28 @@ class PollTests(unittest.TestCase):
             )
             self.assertEqual(result.suppressed, 1)
             self.assertFalse(client.created)
+
+    def test_notify_only_issue_has_affected_sdk_label(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeGitHub()
+            client.change = replace(client.change, labels=("agricola:ruby",))
+            client.events = (
+                LabelEvent(
+                    LabelAction.LABELED,
+                    "agricola:ruby",
+                    "maintainer",
+                    datetime(2026, 8, 7, 13, 59, tzinfo=UTC),
+                ),
+            )
+
+            poll(
+                client,
+                manifest(),
+                DecisionLedger(directory),
+                cursor_store(directory),
+            )
+
+            self.assertEqual(client.created[0][2], ("agricola", "ruby"))
 
     def test_none_conflict_creates_diagnostic_issue(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

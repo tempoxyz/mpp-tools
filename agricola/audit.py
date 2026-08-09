@@ -10,6 +10,7 @@ from typing import Protocol
 
 from pydantic import ValidationError
 
+from .github import agricola_issue_labels
 from .ledger import AuditStore
 from .models import (
     AuditFindingContext,
@@ -478,7 +479,7 @@ def deliver_audit_report(
     for finding in pending.finding_issues:
         issue = findings_by_marker.get(finding.marker)
         if issue is None:
-            issue = client.create_issue(finding.title, finding.body)
+            issue = client.create_issue(finding.title, finding.body, finding.labels)
         else:
             body = preserve_propagation_state(
                 finding.body,
@@ -500,7 +501,7 @@ def deliver_audit_report(
 
     body = _link_finding_issues(pending.body, urls)
     if rollup is None:
-        return client.create_issue(pending.title, body)
+        return client.create_issue(pending.title, body, agricola_issue_labels())
     return client.update_issue(
         int(str(rollup["number"])),
         title=pending.title,
@@ -653,6 +654,7 @@ def _render_finding_issue(
         marker=marker,
         title=title,
         body="\n".join(lines).rstrip() + "\n",
+        labels=agricola_issue_labels(finding.affected),
     )
 
 

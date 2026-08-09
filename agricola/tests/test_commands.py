@@ -151,12 +151,14 @@ class LabelTests(unittest.TestCase):
             [self.event(label) for label in labels], self.merged, self.manifest
         )
         self.assertEqual(result.targets, ("go", "rust"))
+        self.assertEqual(result.affected, ("go", "rust"))
 
     def test_all_expands_only_pr_targets(self) -> None:
         result = resolve_labels(
             [self.event("agricola:all")], self.merged, self.manifest
         )
         self.assertEqual(result.targets, ("go", "rust"))
+        self.assertEqual(result.affected, ("go", "ruby", "rust"))
         self.assertEqual(
             result.target_actors,
             (("go", "maintainer"), ("rust", "maintainer")),
@@ -168,6 +170,7 @@ class LabelTests(unittest.TestCase):
         )
 
         self.assertEqual(result.targets, ())
+        self.assertEqual(result.affected, ("ruby",))
         self.assertEqual(result.target_actors, ())
         self.assertEqual(
             result.notes,
