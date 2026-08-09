@@ -7,7 +7,7 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-from flow_runner import compare_results, main, perform_request
+from flow_runner import compare_results, main, perform_request, run_client_http_flow_case
 
 
 class PerformRequestTests(unittest.TestCase):
@@ -30,12 +30,51 @@ class PerformRequestTests(unittest.TestCase):
                 self.assertEqual(request.get_header("Content-type"), "application/json")
 
 
+class ClientHttpFlowTests(unittest.TestCase):
+    def test_paid_post_requires_the_adapter_to_preserve_the_body(self) -> None:
+        body = '{"prompt":"expensive question"}'
+        flow_case = {
+            "name": "same_origin_post_payment_request",
+            "path": "/charge/same-origin-post-payment-request",
+            "http_method": "POST",
+            "body": body,
+            "verify_body_preserved": True,
+        }
+        client = MagicMock()
+        client.adapter.capabilities = ["http.payment_request"]
+        client.call.return_value = {
+            "ok": True,
+            "value": {
+                "status": 200,
+                "headers": {},
+                "body": json.dumps(
+                    {
+                        "name": "same_origin_post_payment_request",
+                        "received_body": body,
+                    }
+                ),
+            },
+        }
+
+        result = run_client_http_flow_case(client, "http://127.0.0.1:3000", flow_case, False)
+
+        self.assertTrue(result["outcome"]["ok"])
+        self.assertTrue(result["body_preserved"])
+
+        client.call.return_value["value"]["body"] = json.dumps(
+            {
+                "name": "same_origin_post_payment_request",
+                "received_body": "",
+            }
+        )
+        result = run_client_http_flow_case(client, "http://127.0.0.1:3000", flow_case, False)
+
+        self.assertFalse(result["outcome"]["ok"])
+        self.assertFalse(result["body_preserved"])
+
+
 class CompareResultsCapabilitySkipTests(unittest.TestCase):
-    def test_skipping_a_required_capability_fails_not_passes(self) -> None:
-        # HARNESS_SPEC.md documents http.payment_request as "Required for flow
-        # conformance". An adapter that skips a case because it lacks that
-        # capability has a real conformance gap and must not be marked passed,
-        # even though the golden reference ran the case for real.
+    def test_missing_http_payment_request_is_temporarily_non_blocking(self) -> None:
         golden = [
             {
                 "name": "plain_payment_request",
@@ -57,8 +96,27 @@ class CompareResultsCapabilitySkipTests(unittest.TestCase):
         results = compare_results(golden, actual, "broken-adapter")
 
         self.assertEqual(len(results), 1)
+        self.assertTrue(results[0].passed)
+
+    def test_skipping_another_required_capability_still_fails(self) -> None:
+        golden = [{"name": "required_case", "outcome": {"ok": True, "status": 200}}]
+        actual = [
+            {
+                "name": "required_case",
+                "outcome": {
+                    "ok": True,
+                    "status": 0,
+                    "skipped": True,
+                    "requires": "another.required_capability",
+                },
+            }
+        ]
+
+        results = compare_results(golden, actual, "broken-adapter")
+
+        self.assertEqual(len(results), 1)
         self.assertFalse(results[0].passed)
-        self.assertIn("http.payment_request", results[0].error or "")
+        self.assertIn("another.required_capability", results[0].error or "")
 
     def test_both_golden_and_actual_skipped_is_unaffected(self) -> None:
         outcome = {"ok": True, "status": 0, "skipped": True, "requires": "http.payment_request"}

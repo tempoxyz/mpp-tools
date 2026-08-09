@@ -27,6 +27,7 @@ on:
         required: false
         type: string
         default: |
+          conformance/adapters/**
           conformance/vectors/**
           conformance/flows/**
           conformance/schemas/**

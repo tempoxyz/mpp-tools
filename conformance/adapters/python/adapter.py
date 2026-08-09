@@ -22,6 +22,7 @@ from mpp import (
     parse_payment_receipt,
     format_payment_receipt,
 )
+from mpp.client import Client
 
 MINIMUM_SECRET_KEY_BYTES = 32
 
@@ -216,6 +217,52 @@ def adapter_error(message: str, error_type: str = "unknown_error"):
     return {"ok": False, "error": {"type": error_type, "message": message}}
 
 
+class ConformancePaymentMethod:
+    name = "tempo"
+
+    def __init__(self, payload, source: str | None):
+        self.payload = payload
+        self.source = source
+
+    async def create_credential(self, challenge: Challenge) -> Credential:
+        return Credential(
+            challenge=challenge.to_echo(),
+            payload=self.payload,
+            source=self.source,
+        )
+
+
+async def run_http_payment_request(input_value: dict):
+    mode = input_value.get("mode")
+    if mode == "plain":
+        methods = []
+    elif mode in {"payment", "invalid_payload"}:
+        payment = input_value.get("payment") or {}
+        methods = [
+            ConformancePaymentMethod(
+                payload=payment.get("payload") or {},
+                source=payment.get("source"),
+            )
+        ]
+    else:
+        raise ValueError(f"Unsupported http.payment_request mode: {mode}")
+
+    async with Client(methods=methods) as client:
+        response = await client.request(
+            input_value["method"],
+            input_value["url"],
+            headers=input_value.get("headers") or {},
+            content=input_value.get("body"),
+            follow_redirects=True,
+        )
+
+    return {
+        "status": response.status_code,
+        "headers": dict(response.headers),
+        "body": response.text,
+    }
+
+
 def command_input_for_request(op: str, input_value):
     if op.endswith(".parse"):
         return input_value["header"]
@@ -284,6 +331,12 @@ def run_legacy_subprocess(command: str, input_data: str = ""):
 def run_adapter_request(request: dict):
     op = request.get("op")
     input_value = request.get("input")
+    if op == "http.payment_request":
+        try:
+            return adapter_success(asyncio.run(run_http_payment_request(input_value)))
+        except Exception as exc:
+            return adapter_error(str(exc), "http_error")
+
     command = OP_TO_COMMAND.get(op)
     if command is None:
         return adapter_error(f"Unknown operation: {op}", "unsupported_operation")

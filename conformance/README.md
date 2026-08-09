@@ -270,8 +270,8 @@ The referenced `mpp-tools` PR must be open or merged, and it must touch one of
 the configured conformance coverage paths. The SDK behavior gate will run
 against `refs/pull/<number>/head` for that conformance PR. By default the
 coverage paths are
-`conformance/vectors/**`, `conformance/flows/**`, `conformance/schemas/**`, and
-`conformance/operations.json`.
+`conformance/adapters/**`, `conformance/vectors/**`, `conformance/flows/**`,
+`conformance/schemas/**`, and `conformance/operations.json`.
 
 Set `require-conformance-reference: true` if an SDK repository wants to keep the
 stricter policy where every protocol-sensitive PR must reference a conformance

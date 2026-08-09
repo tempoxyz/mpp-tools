@@ -23,6 +23,7 @@
     "base64url.encode",
     "base64url.decode",
     "challenge.id",
+    "http.payment_request",
     "tempo.receipt.verify",
     "tempo.proof.typed_data"
   ]
