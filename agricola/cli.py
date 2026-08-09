@@ -27,7 +27,12 @@ from .executor import (
 )
 from .github import GitHubClient, GitHubError
 from .ledger import AuditStore, CursorStore, DecisionLedger, LedgerError
-from .manifest import ManifestError, load_manifest, print_schemas
+from .manifest import (
+    ManifestError,
+    automation_token_scope,
+    load_manifest,
+    print_schemas,
+)
 from .models import (
     AuditSemanticResult,
     Automation,
@@ -37,17 +42,26 @@ from .models import (
     PropagationOutcome,
     PropagationRequest,
 )
+from .publisher import PublicationError, SubprocessGit, publish
 from .revision import collect_revision_feedback
 from .service import handle_comment, poll, record_propagations
+from .state_transaction import GitStateStore, StateTransactionError, transact
 
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(prog="agricola")
     result.add_argument("--manifest", default="sdks.yaml", help="SDK manifest path")
-    result.add_argument("--ledger", default="ledger", help="decision ledger directory")
+    result.add_argument(
+        "--ledger",
+        default=os.environ.get("AGRICOLA_LEDGER", "ledger"),
+        help="decision ledger directory",
+    )
     subcommands = result.add_subparsers(dest="command", required=True)
     subcommands.add_parser("validate", help="validate the manifest and ledger")
     subcommands.add_parser("schema", help="print generated JSON Schemas")
+    subcommands.add_parser(
+        "token-scope", help="print the manifest-derived GitHub App target scope"
+    )
     subcommands.add_parser(
         "audit-semantic-schema",
         help="print the structured semantic audit result schema",
@@ -174,6 +188,26 @@ def parser() -> argparse.ArgumentParser:
     renderer.add_argument("--title-file", required=True)
     renderer.add_argument("--body-file", required=True)
 
+    publisher = subcommands.add_parser(
+        "publish-propagation",
+        help="publish one verified downstream commit and record its pull request",
+    )
+    publisher.add_argument("request", help="propagation request JSON")
+    publisher.add_argument("--title-file", required=True)
+    publisher.add_argument("--body-file", required=True)
+    publisher.add_argument("--revision-summary-file")
+    publisher.add_argument("--revision-stat-file")
+    publisher.add_argument("--output", required=True)
+
+    transaction = subcommands.add_parser(
+        "state-transaction",
+        help="replay a state operation until its guarded branch update succeeds",
+    )
+    transaction.add_argument("--branch", default="agricola/state")
+    transaction.add_argument("--base", default="HEAD")
+    transaction.add_argument("--attempts", type=int, default=20)
+    transaction.add_argument("operation", nargs=argparse.REMAINDER)
+
     command_parser = subcommands.add_parser(
         "parse-command", help="parse commands from stdin"
     )
@@ -276,12 +310,16 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         reply_directory = Path(args.reply_directory)
         reply_directory.mkdir(parents=True, exist_ok=True)
+        for path in reply_directory.glob("*.json"):
+            path.unlink()
         for reply in replies:
             (reply_directory / f"issue-{reply.issue_number}.json").write_text(
                 reply.model_dump_json(indent=2) + "\n"
             )
         issue_update_directory = Path(args.issue_update_directory)
         issue_update_directory.mkdir(parents=True, exist_ok=True)
+        for path in issue_update_directory.glob("*.json"):
+            path.unlink()
         for update in updates:
             (issue_update_directory / f"issue-{update.issue_number}.json").write_text(
                 update.model_dump_json(indent=2) + "\n"
@@ -337,6 +375,62 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         print(json.dumps({"rendered": request.target}))
         return 0
+    if args.command == "publish-propagation":
+        try:
+            request = PropagationRequest.model_validate_json(
+                Path(args.request).read_text()
+            )
+            result = publish(
+                request,
+                title=Path(args.title_file).read_text().strip(),
+                body=Path(args.body_file).read_text(),
+                git=SubprocessGit(),
+                github=GitHubClient(request.target_repo),
+                revision_summary=(
+                    Path(args.revision_summary_file).read_text().strip()
+                    if args.revision_summary_file
+                    else None
+                ),
+                revision_stat=(
+                    Path(args.revision_stat_file).read_text()
+                    if args.revision_stat_file
+                    else None
+                ),
+            )
+            Path(args.output).write_text(result.model_dump_json(indent=2) + "\n")
+        except (
+            GitHubError,
+            OSError,
+            PublicationError,
+            ValidationError,
+            ValueError,
+        ) as exc:
+            print(f"publication error: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps({"published": result.pr, "url": result.url}))
+        return 0
+    if args.command == "state-transaction":
+        operation = args.operation
+        if operation and operation[0] == "--":
+            operation = operation[1:]
+        try:
+            result = transact(
+                operation,
+                GitStateStore(
+                    ".",
+                    branch=args.branch,
+                    base=args.base,
+                    temporary_directory=os.environ.get("RUNNER_TEMP"),
+                ),
+                attempts=args.attempts,
+            )
+        except StateTransactionError as exc:
+            print(f"state transaction error: {exc}", file=sys.stderr)
+            return 2
+        if result.stderr:
+            print(result.stderr, end="", file=sys.stderr)
+        print(result.stdout, end="")
+        return 0
     try:
         manifest = load_manifest(args.manifest)
     except ManifestError as exc:
@@ -385,6 +479,14 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"valid: {len(manifest.sdks)} SDKs, {len(manifest.maintainers)} maintainer(s), {len(entries)} ledger entries"
         )
+        return 0
+    if args.command == "token-scope":
+        try:
+            scope = automation_token_scope(manifest)
+        except ManifestError as exc:
+            print(f"manifest error: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(scope, indent=2))
         return 0
     if args.command == "parse-command":
         body = sys.stdin.read()
@@ -436,6 +538,10 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 2
         event = json.loads(Path(args.event).read_text())
+        if args.reply_file:
+            Path(args.reply_file).unlink(missing_ok=True)
+        if args.issue_update_file:
+            Path(args.issue_update_file).unlink(missing_ok=True)
         result = handle_comment(client, manifest, ledger, event)
         if result.reply is not None:
             if args.reply_file:

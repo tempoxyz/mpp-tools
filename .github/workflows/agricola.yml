@@ -39,21 +39,19 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
 
-      - name: Restore control-plane state
-        run: |
-          if git fetch origin "refs/heads/$STATE_BRANCH:refs/remotes/origin/$STATE_BRANCH"; then
-            git restore --source "origin/$STATE_BRANCH" -- ledger
-          fi
+      - name: Setup Agricola
+        uses: ./.github/actions/setup-agricola
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-          cache: pip
-
-      - name: Install and validate Agricola
+      - name: Resolve downstream token scope
+        id: downstream-scope
         run: |
-          pip install .
-          agricola validate
+          scope="$(agricola token-scope)"
+          echo "owner=$(jq -r .owner <<< "$scope")" >> "$GITHUB_OUTPUT"
+          {
+            echo 'repositories<<EOF'
+            jq -r '.repositories[]' <<< "$scope"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create control repository token
         id: control-token
@@ -84,10 +82,8 @@ jobs:
         with:
           app-id: ${{ vars.AGRICOLA_APP_ID }}
           private-key: ${{ secrets.AGRICOLA_APP_PRIVATE_KEY }}
-          owner: tempoxyz
-          repositories: |
-            mpp-rs
-            pympp
+          owner: ${{ steps.downstream-scope.outputs.owner }}
+          repositories: ${{ steps.downstream-scope.outputs.repositories }}
           permission-contents: read
           permission-pull-requests: read
 
@@ -99,16 +95,26 @@ jobs:
           AGRICOLA_SDK_TOKEN: ${{ steps.downstream-read-token.outputs.token }}
         run: |
           result="$RUNNER_TEMP/agricola-result.json"
+          transaction=(
+            agricola state-transaction
+            --branch "$STATE_BRANCH"
+            --base "$DEFAULT_BRANCH"
+            --
+          )
           if [ "${{ github.event_name }}" = "issue_comment" ]; then
-            agricola handle-comment \
+            "${transaction[@]}" agricola handle-comment \
               --reply-file "$RUNNER_TEMP/agricola-reply.json" \
               --issue-update-file "$RUNNER_TEMP/agricola-issue-update.json" \
               > "$result"
           else
-            agricola poll > "$result"
+            "${transaction[@]}" agricola poll > "$result"
           fi
           cat "$result"
-          jq -c '{include: [.propagations[] | {request: .}]}' "$result" \
+          jq -c '{include: [.propagations[] | {
+            request: .,
+            owner: (.target_repo | split("/")[0]),
+            repository: (.target_repo | split("/")[1])
+          }]}' "$result" \
             | sed 's/^/propagation-matrix=/' >> "$GITHUB_OUTPUT"
           if jq -e '.propagations | length > 0' "$result" >/dev/null; then
             echo "has-propagations=true" >> "$GITHUB_OUTPUT"
@@ -131,33 +137,12 @@ jobs:
             "repos/$GITHUB_REPOSITORY/issues/comments/${{ github.event.comment.id }}/reactions" \
             -f content=eyes
 
-      - name: Persist control-plane state
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+      - name: Ensure state pull request
+        uses: ./.github/actions/persist-agricola-state
         with:
           token: ${{ github.token }}
           base: ${{ env.DEFAULT_BRANCH }}
           branch: ${{ env.STATE_BRANCH }}
-          commit-message: "chore(agricola): update state"
-          title: "chore(agricola): update state"
-          body: |
-            > [!IMPORTANT]
-            > This pull request is maintained by automation. Merge it to checkpoint state on the default branch; do not close or edit it manually.
-
-            ## Motivation
-
-            Persist Agricola's durable cursor and decision ledger through the repository's required pull-request path.
-
-            ## Summary
-
-            - tracks the latest processed canonical merge
-            - records immutable source snapshots and maintainer decisions
-
-            ## Key design considerations
-
-            - workflow code always executes from the protected default branch
-            - this pull request is updated in place as state advances
-          add-paths: ledger
-          delete-branch: true
 
       - name: Deliver command reply
         if: github.event_name == 'issue_comment'
@@ -221,22 +206,25 @@ jobs:
         with:
           app-id: ${{ vars.AGRICOLA_APP_ID }}
           private-key: ${{ secrets.AGRICOLA_APP_PRIVATE_KEY }}
-          owner: tempoxyz
-          repositories: |
-            mpp-rs
-            pympp
+          owner: ${{ matrix.owner }}
+          repositories: ${{ matrix.repository }}
           permission-actions: read
           permission-checks: read
           permission-contents: read
           permission-issues: read
           permission-pull-requests: read
 
+      - name: Setup Agricola for revision feedback
+        if: matrix.request.revision != null
+        uses: ./.agricola/control/.github/actions/setup-agricola
+        with:
+          project-path: .agricola/control
+
       - name: Collect revision feedback
         if: matrix.request.revision != null
         env:
           GH_TOKEN: ${{ steps.revision-token.outputs.token }}
         run: |
-          pip install .agricola/control
           agricola collect-revision-feedback .agricola/request.json \
             --output .agricola/revision.md
 
@@ -363,12 +351,11 @@ jobs:
           printf '%s\n' "$REQUEST_JSON" > .agricola/request.json
           git apply --index "$RUNNER_TEMP/patch/changes.patch"
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - name: Setup Agricola
         if: steps.patch.outputs.has-changes == 'true'
+        uses: ./.agricola/control/.github/actions/setup-agricola
         with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: .agricola/control/pyproject.toml
+          project-path: .agricola/control
 
       - name: Setup uv
         if: steps.patch.outputs.has-changes == 'true'
@@ -378,9 +365,7 @@ jobs:
 
       - name: Run manifest verification
         if: steps.patch.outputs.has-changes == 'true'
-        run: |
-          pip install .agricola/control
-          agricola verify-propagation .agricola/request.json
+        run: agricola verify-propagation .agricola/request.json
 
   publish:
     name: publish (${{ matrix.request.target }})
@@ -422,10 +407,8 @@ jobs:
         with:
           app-id: ${{ vars.AGRICOLA_APP_ID }}
           private-key: ${{ secrets.AGRICOLA_APP_PRIVATE_KEY }}
-          owner: tempoxyz
-          repositories: |
-            mpp-rs
-            pympp
+          owner: ${{ matrix.owner }}
+          repositories: ${{ matrix.repository }}
           permission-contents: write
           permission-issues: write
           permission-pull-requests: write
@@ -447,12 +430,11 @@ jobs:
           path: .agricola/control
           persist-credentials: false
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - name: Setup Agricola
         if: steps.patch.outputs.has-changes == 'true'
+        uses: ./.agricola/control/.github/actions/setup-agricola
         with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: .agricola/control/pyproject.toml
+          project-path: .agricola/control
 
       - name: Prepare downstream commit
         if: steps.patch.outputs.has-changes == 'true'
@@ -461,7 +443,6 @@ jobs:
         run: |
           printf '%s\n' "$REQUEST_JSON" > .agricola/request.json
           git apply --index "$RUNNER_TEMP/patch/changes.patch"
-          pip install .agricola/control
           agricola render-propagation .agricola/request.json \
             --title-file "$RUNNER_TEMP/pr-title.txt" \
             --body-file "$RUNNER_TEMP/pr-body.md"
@@ -484,124 +465,20 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.downstream-token.outputs.token }}
         run: |
-          repo="$(jq -r .target_repo .agricola/request.json)"
-          branch="$(jq -r .branch .agricola/request.json)"
-          owner="${repo%%/*}"
-          candidates="$(gh api --method GET "repos/$repo/pulls" \
-            -f state=all -f head="$owner:$branch" -f per_page=100)"
-          existing="$(jq -c --arg repo "$repo" \
-            '[.[] | select(.head.repo.full_name == $repo)][0] // {}' \
-            <<< "$candidates")"
-          state="$(jq -r 'if .merged_at then "MERGED" else (.state // "" | ascii_upcase) end' \
-            <<< "$existing")"
-          expected_pr="$(jq -r '.revision.pr // empty' .agricola/request.json)"
-          if [ -n "$expected_pr" ] && [ "$expected_pr" != "$repo#$(jq -r .number <<< "$existing")" ]; then
-            echo "Recorded revision PR does not match the stable branch" >&2
-            exit 1
-          fi
-          if [ -n "$expected_pr" ] && [ "$state" != "OPEN" ]; then
-            echo "Recorded revision PR is no longer open" >&2
-            exit 1
-          fi
-          if [ "$state" = "MERGED" ]; then
-            url="$(jq -r .html_url <<< "$existing")"
-            number="$(jq -r .number <<< "$existing")"
-          elif [ "$state" = "CLOSED" ]; then
-            echo "Existing Agricola PR is closed; use retry after reopening it" >&2
-            exit 1
-          else
-            if [ "$state" = "OPEN" ] && [ "$(jq -r .draft <<< "$existing")" != "true" ]; then
-              gh pr ready --undo "$(jq -r .number <<< "$existing")" --repo "$repo"
-            fi
-            revision_head="$(jq -r '.revision.head_sha // empty' .agricola/request.json)"
-            if [ -n "$revision_head" ]; then
-              request_key="$(jq -r .idempotency_key .agricola/request.json)"
-              git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch"
-              remote="$(git rev-parse "refs/remotes/origin/$branch")"
-              if [ "$remote" = "$revision_head" ]; then
-                git push origin "HEAD:refs/heads/$branch"
-              else
-                if ! git merge-base --is-ancestor "$revision_head" "$remote"; then
-                  echo "Revision branch no longer descends from the recorded PR head" >&2
-                  exit 1
-                fi
-                published_commit=""
-                while IFS= read -r candidate; do
-                  candidate_key="$(git show -s \
-                    --format='%(trailers:key=Agricola-Request,valueonly)' "$candidate")"
-                  if [ "$candidate_key" = "$request_key" ]; then
-                    published_commit="$candidate"
-                    break
-                  fi
-                done < <(git rev-list "$revision_head..$remote")
-                if [ -z "$published_commit" ]; then
-                  echo "Revision branch changed before publication" >&2
-                  exit 1
-                fi
-                git show -s --format='%(trailers:key=Agricola-Summary,valueonly)' \
-                  "$published_commit" > "$RUNNER_TEMP/summary/revision-summary.txt"
-                if [ ! -s "$RUNNER_TEMP/summary/revision-summary.txt" ]; then
-                  echo "Published revision has no stored summary" >&2
-                  exit 1
-                fi
-                git show --stat --format= --no-renames "$published_commit" \
-                  > "$RUNNER_TEMP/summary/revision-stat.txt"
-                echo "Revision was already published; resuming post-push steps"
-              fi
-            elif remote="$(git ls-remote --heads origin "refs/heads/$branch" | cut -f1)" && [ -n "$remote" ]; then
-              git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch"
-              git push --force-with-lease="refs/heads/$branch:$remote" origin "HEAD:refs/heads/$branch"
-            else
-              git push origin "HEAD:refs/heads/$branch"
-            fi
-            if [ "$state" = "OPEN" ]; then
-              url="$(jq -r .html_url <<< "$existing")"
-              number="$(jq -r .number <<< "$existing")"
-            else
-              url="$(gh pr create --repo "$repo" --head "$branch" --draft \
-                --title "$(tr -d '\n' < "$RUNNER_TEMP/pr-title.txt")" \
-                --body-file "$RUNNER_TEMP/pr-body.md")"
-              number="$(gh pr view "$url" --repo "$repo" --json number --jq .number)"
-            fi
-          fi
-          if [ -n "$expected_pr" ]; then
-            request_key="$(jq -r .idempotency_key .agricola/request.json)"
-            marker="<!-- agricola:revision-summary:$request_key -->"
-            {
-              echo "$marker"
-              echo 'Agricola updated this pull request from the latest review feedback and failing CI.'
-              echo
-              echo '### Summary of changes'
-              echo
-              sed 's/^/- /' "$RUNNER_TEMP/summary/revision-summary.txt"
-              echo
-              echo '### Changed files'
-              echo
-              echo '```text'
-              cat "$RUNNER_TEMP/summary/revision-stat.txt"
-              echo '```'
-              echo
-              echo "Requested from ${{ matrix.request.tracking_issue_url }}."
-            } > "$RUNNER_TEMP/revision-comment.md"
-            already_commented="$(
-              gh api --paginate "repos/$repo/issues/$number/comments?per_page=100" |
-                jq -s --arg marker "$marker" \
-                  'add | any(.[]; (.body // "") | contains($marker))'
-            )"
-            if [ "$already_commented" != "true" ]; then
-              gh pr comment "$number" --repo "$repo" \
-                --body-file "$RUNNER_TEMP/revision-comment.md"
-            fi
-          fi
           mkdir -p "$RUNNER_TEMP/results"
-          jq -n \
-            --slurpfile request .agricola/request.json \
-            --arg outcome published \
-            --arg pr "$repo#$number" \
-            --arg url "$url" \
-            --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{outcome: $outcome, request: $request[0], pr: $pr, url: $url, at: $at}' \
-            > "$RUNNER_TEMP/results/${{ matrix.request.target }}-${{ matrix.request.tracking_issue }}.json"
+          arguments=(
+            .agricola/request.json
+            --title-file "$RUNNER_TEMP/pr-title.txt"
+            --body-file "$RUNNER_TEMP/pr-body.md"
+            --output "$RUNNER_TEMP/results/${{ matrix.request.target }}-${{ matrix.request.tracking_issue }}.json"
+          )
+          if [ "$(jq -r '.revision != null' .agricola/request.json)" = "true" ]; then
+            arguments+=(
+              --revision-summary-file "$RUNNER_TEMP/summary/revision-summary.txt"
+              --revision-stat-file "$RUNNER_TEMP/summary/revision-stat.txt"
+            )
+          fi
+          agricola publish-propagation "${arguments[@]}"
 
       - name: Upload propagation result
         if: steps.patch.outputs.has-changes == 'true'
@@ -624,19 +501,8 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
 
-      - name: Restore control-plane state
-        run: |
-          if git fetch origin "refs/heads/$STATE_BRANCH:refs/remotes/origin/$STATE_BRANCH"; then
-            git restore --source "origin/$STATE_BRANCH" -- ledger
-          fi
-
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-          cache: pip
-
-      - name: Install Agricola
-        run: pip install .
+      - name: Setup Agricola
+        uses: ./.github/actions/setup-agricola
 
       - name: Download propagation results
         continue-on-error: true
@@ -649,37 +515,20 @@ jobs:
       - name: Record propagation decisions
         run: |
           mkdir -p "$RUNNER_TEMP/results"
-          agricola record-propagations "$RUNNER_TEMP/results" \
-            --reply-directory "$RUNNER_TEMP/replies" \
-            --issue-update-directory "$RUNNER_TEMP/issue-updates"
+          agricola state-transaction \
+            --branch "$STATE_BRANCH" \
+            --base "$DEFAULT_BRANCH" \
+            -- \
+            agricola record-propagations "$RUNNER_TEMP/results" \
+              --reply-directory "$RUNNER_TEMP/replies" \
+              --issue-update-directory "$RUNNER_TEMP/issue-updates"
 
-      - name: Persist propagation decisions
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+      - name: Ensure state pull request
+        uses: ./.github/actions/persist-agricola-state
         with:
           token: ${{ github.token }}
           base: ${{ env.DEFAULT_BRANCH }}
           branch: ${{ env.STATE_BRANCH }}
-          commit-message: "chore(agricola): update state"
-          title: "chore(agricola): update state"
-          body: |
-            > [!IMPORTANT]
-            > This pull request is maintained by automation. Merge it to checkpoint state on the default branch; do not close or edit it manually.
-
-            ## Motivation
-
-            Persist Agricola's durable cursor and decision ledger through the repository's required pull-request path.
-
-            ## Summary
-
-            - tracks the latest processed canonical merge
-            - records immutable source snapshots and maintainer decisions
-
-            ## Key design considerations
-
-            - workflow code always executes from the protected default branch
-            - this pull request is updated in place as state advances
-          add-paths: ledger
-          delete-branch: true
 
       - name: Create control repository token
         id: control-token

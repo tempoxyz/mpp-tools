@@ -265,7 +265,7 @@ class GitHubClient:
             normalized = label.casefold()
             if normalized in self._known_issue_labels:
                 continue
-            fields = {
+            fields: dict[str, object] = {
                 "name": label,
                 "color": (
                     _AGRICOLA_LABEL_COLOR

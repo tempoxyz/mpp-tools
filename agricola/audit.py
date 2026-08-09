@@ -65,7 +65,7 @@ class FindingDraft:
     reference: str | None
     affected: tuple[str, ...]
     clean: tuple[str, ...]
-    likely_origin: str
+    not_reported: tuple[str, ...]
     severity: AuditSeverity | None = None
     confidence: AuditConfidence | None = None
     semantic_evidence: tuple[AuditSemanticEvidence, ...] = ()
@@ -299,18 +299,14 @@ def analyze_deltas(
             group.affected.add(target.target)
             group.semantic_evidence[target.target] = finding
 
-    for fingerprint, group in groups.items():
-        if fingerprint.startswith("semantic:"):
-            group.clean.update(semantic_names - group.affected)
-
     findings = []
     for fingerprint, group in sorted(groups.items()):
         affected = tuple(sorted(group.affected))
         clean = tuple(sorted(group.clean))
-        compared_targets = (
-            len(semantic_targets)
+        not_reported = (
+            tuple(sorted(semantic_names - group.affected))
             if fingerprint.startswith("semantic:")
-            else len(valid_targets)
+            else ()
         )
         findings.append(
             FindingDraft(
@@ -319,7 +315,7 @@ def analyze_deltas(
                 reference=group.reference,
                 affected=affected,
                 clean=clean,
-                likely_origin=_likely_origin(len(affected), compared_targets),
+                not_reported=not_reported,
                 severity=_highest_severity(group.semantic_evidence.values()),
                 confidence=_lowest_confidence(group.semantic_evidence.values()),
                 semantic_evidence=tuple(
@@ -367,7 +363,7 @@ def build_audit_report(
             reference=draft.reference,
             affected=draft.affected,
             clean=draft.clean,
-            likely_origin=draft.likely_origin,
+            not_reported=draft.not_reported,
             severity=draft.severity,
             confidence=draft.confidence,
             semantic_evidence=draft.semantic_evidence,
@@ -409,20 +405,22 @@ def render_audit_report(report: AuditReport, manifest: Manifest) -> PendingAudit
     if report.findings:
         lines.extend(
             [
-                "| Finding | Source | Fingerprint | Severity | Affected | Clean | Likely origin |",
+                "| Finding | Source | Fingerprint | Severity | Affected | Clean | Not reported |",
                 "| --- | --- | --- | --- | --- | --- | --- |",
             ]
         )
         for finding in report.findings:
             lines.append(
-                "| {id} | {source} | `{fingerprint}` | {severity} | {affected} | {clean} | {origin} |".format(
+                "| {id} | {source} | `{fingerprint}` | {severity} | {affected} | {clean} | {not_reported} |".format(
                     id=finding.id,
                     source=_finding_source(finding.fingerprint),
                     fingerprint=_escape(finding.fingerprint),
                     severity=finding.severity or "—",
                     affected=", ".join(f"`{item}`" for item in finding.affected),
                     clean=", ".join(f"`{item}`" for item in finding.clean) or "—",
-                    origin=_escape(finding.likely_origin),
+                    not_reported=(
+                        ", ".join(f"`{item}`" for item in finding.not_reported) or "—"
+                    ),
                 )
             )
         lines.extend(
@@ -548,7 +546,11 @@ def _render_finding_issue(
         _snapshot_row(report.canonical),
         *(
             _snapshot_row(snapshots[target])
-            for target in (*finding.affected, *finding.clean)
+            for target in (
+                *finding.affected,
+                *finding.clean,
+                *finding.not_reported,
+            )
         ),
         "",
         "## Finding",
@@ -557,8 +559,9 @@ def _render_finding_issue(
         f"- Source: {_finding_source(finding.fingerprint)}",
         f"- Affected SDKs: {', '.join(f'`{item}`' for item in finding.affected)}",
         f"- Clean SDKs: {', '.join(f'`{item}`' for item in finding.clean) or 'none'}",
+        "- Not reported by semantic review: "
+        + (", ".join(f"`{item}`" for item in finding.not_reported) or "none"),
         f"- Canonical reference: `{finding.reference or 'conformance result'}`",
-        f"- Likely origin: {finding.likely_origin}",
     ]
     if finding.severity is not None:
         lines.append(f"- Severity: {finding.severity}")
@@ -795,14 +798,6 @@ def read_json_object(path: str | Path) -> dict[str, object]:
 
 def _component(value: str) -> str:
     return re.sub(r"[^a-z0-9._-]+", "-", value.lower()).strip("-") or "unknown"
-
-
-def _likely_origin(affected: int, total: int) -> str:
-    if total > 1 and affected == total - 1:
-        return "likely canonical change that did not fan out"
-    if affected == 1:
-        return "likely SDK-local divergence"
-    return "shared downstream divergence"
 
 
 def _highest_severity(

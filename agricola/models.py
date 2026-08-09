@@ -526,7 +526,7 @@ class AuditFinding(FrozenModel):
     reference: str | None = None
     affected: tuple[NonEmpty, ...] = Field(min_length=1)
     clean: tuple[NonEmpty, ...] = ()
-    likely_origin: NonEmpty
+    not_reported: tuple[NonEmpty, ...] = ()
     severity: AuditSeverity | None = None
     confidence: AuditConfidence | None = None
     semantic_evidence: tuple[AuditSemanticEvidence, ...] = ()

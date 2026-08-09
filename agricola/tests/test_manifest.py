@@ -6,8 +6,13 @@ from collections.abc import MutableMapping
 from pathlib import Path
 from typing import cast
 
-from agricola.manifest import ManifestError, generated_schemas, load_manifest
-from agricola.models import Automation, Changelog
+from agricola.manifest import (
+    ManifestError,
+    automation_token_scope,
+    generated_schemas,
+    load_manifest,
+)
+from agricola.models import Automation, Changelog, Manifest, SDK
 
 
 class ManifestTests(unittest.TestCase):
@@ -18,6 +23,34 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(manifest.pr_targets(), ("rust", "python"))
         self.assertEqual(manifest.sdks["rust"].changelog, Changelog.FRAGMENT)
         self.assertEqual(manifest.sdks["ruby"].automation, Automation.NOTIFY)
+
+    def test_automation_token_scope_comes_from_pr_targets(self) -> None:
+        manifest = load_manifest("sdks.yaml")
+
+        self.assertEqual(
+            automation_token_scope(manifest),
+            {"owner": "tempoxyz", "repositories": ["mpp-rs", "pympp"]},
+        )
+
+    def test_automation_token_scope_requires_one_installation_owner(self) -> None:
+        manifest = load_manifest("sdks.yaml")
+        mixed = manifest.model_copy(
+            update={
+                "sdks": {
+                    **manifest.sdks,
+                    "external": SDK(
+                        repo="example/mpp-external",
+                        automation=Automation.PR,
+                        owners=(),
+                        changelog=Changelog.NONE,
+                        verify=("make test",),
+                    ),
+                }
+            }
+        )
+
+        with self.assertRaisesRegex(ManifestError, "share one GitHub owner"):
+            automation_token_scope(Manifest.model_validate(mixed.model_dump()))
 
     def test_rejects_pr_target_without_verification(self) -> None:
         self.assert_invalid(

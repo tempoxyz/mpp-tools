@@ -218,10 +218,7 @@ class AuditTests(unittest.TestCase):
         )
         self.assertEqual(by_fingerprint[check].affected, ("go",))
         self.assertEqual(by_fingerprint[check].clean, ("rust",))
-        self.assertEqual(
-            by_fingerprint[check].likely_origin,
-            "likely canonical change that did not fan out",
-        )
+        self.assertFalse(by_fingerprint[check].not_reported)
 
     def test_normalizes_and_clusters_semantic_findings(self) -> None:
         canonical_sha = "canonical123"
@@ -265,7 +262,8 @@ class AuditTests(unittest.TestCase):
             if finding.fingerprint == "semantic:receipt/verification-order"
         )
         self.assertEqual(semantic.affected, ("go", "rust"))
-        self.assertEqual(semantic.clean, ("ruby",))
+        self.assertFalse(semantic.clean)
+        self.assertEqual(semantic.not_reported, ("ruby",))
         self.assertEqual(semantic.severity, AuditSeverity.HIGH)
         self.assertEqual(semantic.confidence, AuditConfidence.LOW)
         self.assertEqual(
@@ -400,6 +398,8 @@ class AuditTests(unittest.TestCase):
         pending = render_audit_report(report, manifest())
         body = pending.finding_issues[0].body
         self.assertIn("semantic:receipt/verification-order", pending.body)
+        self.assertIn("Not reported", pending.body)
+        self.assertNotIn("Likely origin", pending.body)
         self.assertIn("wevm/mppx/blob/typescript1234567/src/receipt.ts#L42", body)
         self.assertIn("tempoxyz/mpp-rs/blob/rust1234567/src/receipt.rs#L27", body)
 
