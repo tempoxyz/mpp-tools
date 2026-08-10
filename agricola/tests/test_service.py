@@ -154,6 +154,23 @@ class PollTests(unittest.TestCase):
             self.assertEqual(result.suppressed, 1)
             self.assertFalse(client.created)
 
+    def test_unlabeled_change_suppresses_tracking_issue(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeGitHub()
+            client.change = replace(client.change, labels=())
+            client.events = ()
+
+            result = poll(
+                client,
+                manifest(),
+                DecisionLedger(directory),
+                cursor_store(directory),
+            )
+
+            self.assertEqual(result.suppressed, 1)
+            self.assertFalse(client.created)
+            self.assertFalse(result.propagations)
+
     def test_notify_only_issue_has_affected_sdk_label(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             client = FakeGitHub()

@@ -426,7 +426,7 @@ class AuditTests(unittest.TestCase):
         self.assertFalse(pending.healthy)
         self.assertIn("go: semantic review is missing", pending.body)
 
-    def test_matrix_requires_every_manifest_adapter(self) -> None:
+    def test_matrix_includes_every_manifest_sdk(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for target in manifest().sdks:

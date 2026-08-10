@@ -255,6 +255,7 @@ def resolve_labels(
         targets=tuple(sorted(target_actors)),
         affected=tuple(sorted(affected)),
         target_actors=tuple(sorted(target_actors.items())),
+        disabled=not effective,
         errors=errors,
         notes=tuple(
             f"{target} is notify-only; no downstream PR was queued"

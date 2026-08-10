@@ -8,11 +8,11 @@ Both semantic analysis and downstream generation explicitly use `gpt-5.6-sol`. D
 
 | Trigger | Behavior |
 | --- | --- |
-| Ten-minute schedule | Poll merged `wevm/mppx` pull requests. GitHub may delay scheduled jobs. |
+| Ten-minute schedule | Poll merged `wevm/mppx` pull requests; create tracking issues only for authorized merge-time `agricola:all` or `agricola:<target>` labels. GitHub may delay scheduled jobs. |
 | `workflow_dispatch` | Run the poller manually. |
 | New `issue_comment` containing `/ag` | Handle a tracking-issue command. `/ag` must be the first token on a line; `/agricola` remains an alias for existing comments. |
 
-The audit workflow runs every Monday at 09:00 UTC and supports `workflow_dispatch`. For each manifest SDK, it checks out the exact current heads of that repository and `mppx`, runs an open-ended read-only Codex comparison, and requires schema-validated findings with linked code evidence. Shared vectors and conformance-adapter capabilities remain deterministic supporting signals. Agricola clusters matching `semantic:`, `vector:`, and `capability:` fingerprints, maintains one issue per finding, and updates a roll-up index. The audit itself is read-only outside `mpp-tools`; downstream publication requires a maintainer's explicit command on a finding issue.
+The audit workflow runs every Monday at 09:00 UTC and supports `workflow_dispatch`. Independently of canonical pull-request labels, every run re-baselines each manifest SDK against the same pinned current `mppx` head. Each matrix job checks out the exact current head of its SDK and the pinned `mppx` head, runs an open-ended read-only Codex comparison, and requires schema-validated findings with linked code evidence. Shared vectors and conformance-adapter capabilities remain deterministic supporting signals. Agricola clusters matching `semantic:`, `vector:`, and `capability:` fingerprints, maintains one issue per finding, and updates a roll-up index. The audit itself is read-only outside `mpp-tools`; downstream publication requires a maintainer's explicit command on a finding issue.
 
 Semantic findings are open-ended review results. If another SDK review does not report the same fingerprint, the roll-up says `not reported`; only deterministic capability and conformance checks can report an SDK as `clean`. The audit does not infer a likely origin from affected-target counts.
 
@@ -91,7 +91,7 @@ Ledger-only state pull requests skip repository CI and SDK conformance workflow 
 
 ## Labels, commands, and idempotency
 
-The maintainer allowlist lives in [`sdks.yaml`](../sdks.yaml). Agricola reconstructs label state from canonical issue events at or before merge. A label is effective only when its final pre-merge application came from a configured maintainer. Unknown labels and conflicts create diagnostic plans. A clean `agricola:none` result is recorded without an issue. Post-merge edits do not change recorded state.
+The maintainer allowlist lives in [`sdks.yaml`](../sdks.yaml). Agricola reconstructs label state from canonical issue events at or before merge. A label is effective only when its final pre-merge application came from a configured maintainer. An unlabeled change is recorded without an issue or propagation. Unknown labels and conflicts create diagnostic plans. A clean `agricola:none` result is also recorded without an issue. Post-merge edits do not change recorded state.
 
 Commands use deferred issue updates and replies so acknowledgements follow their corresponding state change. Canonical-change tables reflect the durable decision ledger. Audit-finding tables retain linked remediation pull requests across later audit runs. Skip decisions use the comment ID and line number. Canonical propagation branches use `agricola/<canonical-repo>-<pr-number>`; audit remediation branches use `agricola/<finding-id>`. Replaying a poll, comment, job, or state overlap therefore reuses existing work instead of opening duplicate pull requests.
 
