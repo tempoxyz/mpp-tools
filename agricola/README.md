@@ -78,7 +78,7 @@ Apply labels to the canonical pull request before merging:
 | `agricola:all` | Queue every manifest target with `automation: pr`. |
 | `agricola:<target>` | Queue the named target; target labels are additive. |
 | `agricola:none` | Disable propagation. A clean `none` result is recorded without a tracking issue. |
-| No Agricola label | Create a tracking issue and await a command. |
+| No Agricola label | Record the merge without creating a tracking issue or propagating it. |
 
 Only the last label event at or before merge counts, and its actor must be in `maintainers`. Later label edits cannot change the snapshot. Unknown authorized labels create a diagnostic plan. `agricola:none` wins over other labels, but conflicts and errors remain visible in a diagnostic tracking issue.
 
@@ -92,7 +92,7 @@ Each tracking issue contains the stable marker `<!-- agricola:source=OWNER/REPO#
 2. canonical behavior worth matching;
 3. incidental repository or TypeScript tooling files.
 
-Agricola does not infer SDK applicability from keywords or feature tags. Authorized merge-time labels and maintainer commands are the only propagation decisions. Plans show the selected targets and the manifest's general target inventory; `automation: notify` targets remain notification-only.
+Agricola does not infer SDK applicability from keywords or feature tags. Authorized merge-time labels are required to create a tracking issue from a canonical merge. Maintainer commands can then refine propagation decisions on that issue. Plans show the selected targets and the manifest's general target inventory; `automation: notify` targets remain notification-only.
 
 The tracking issue also contains a durable downstream propagation table. It lists every target as awaiting a decision, queued, skipped, notification-only, or recorded, and links each recorded downstream pull request. Table updates are delivered only after the corresponding ledger state has been persisted.
 

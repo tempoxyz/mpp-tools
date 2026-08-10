@@ -49,6 +49,24 @@ class AgricolaWorkflowTests(unittest.TestCase):
         self.assertIn("owner: ${{ matrix.owner }}", self.control_text)
         self.assertIn("repositories: ${{ matrix.repository }}", self.control_text)
 
+    def test_recurring_audit_compares_each_sdk_to_pinned_canonical(self) -> None:
+        target = self.audit["jobs"]["target"]
+        self.assertEqual(self.audit["on"]["schedule"][0]["cron"], "0 9 * * 1")
+        self.assertIn("agricola audit-matrix", self.audit_text)
+        self.assertEqual(
+            target["strategy"]["matrix"],
+            "${{ fromJSON(needs.prepare.outputs.matrix) }}",
+        )
+        self.assertIn("repository: ${{ matrix.repo }}", self.audit_text)
+        self.assertIn(
+            "repository: ${{ needs.prepare.outputs.canonical-repo }}",
+            self.audit_text,
+        )
+        self.assertIn(
+            "ref: ${{ needs.prepare.outputs.canonical-sha }}", self.audit_text
+        )
+        self.assertIn("Compare SDK implementation to canonical mppx", self.audit_text)
+
     def test_publication_logic_runs_through_tested_cli(self) -> None:
         self.assertIn("agricola publish-propagation", self.control_text)
         self.assertNotIn("gh pr create", self.control_text)

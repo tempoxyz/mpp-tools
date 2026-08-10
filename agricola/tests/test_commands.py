@@ -145,6 +145,14 @@ class LabelTests(unittest.TestCase):
     ) -> LabelEvent:
         return LabelEvent(action, label, actor, self.merged + timedelta(minutes=offset))
 
+    def test_no_label_disables_propagation(self) -> None:
+        result = resolve_labels([], self.merged, self.manifest)
+
+        self.assertTrue(result.disabled)
+        self.assertEqual(result.labels, ())
+        self.assertEqual(result.targets, ())
+        self.assertEqual(result.affected, ())
+
     def test_additive_targets(self) -> None:
         labels = ["agricola:go", "agricola:rust"]
         result = resolve_labels(
