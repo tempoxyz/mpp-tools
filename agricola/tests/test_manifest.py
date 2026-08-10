@@ -24,6 +24,17 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(manifest.sdks["rust"].changelog, Changelog.FRAGMENT)
         self.assertEqual(manifest.sdks["ruby"].automation, Automation.NOTIFY)
 
+    def test_python_lint_runs_before_tests(self) -> None:
+        verify = load_manifest("sdks.yaml").sdks["python"].verify
+
+        self.assertLess(
+            verify.index("uv run ruff check ."), verify.index("uv run pytest")
+        )
+        self.assertLess(
+            verify.index("uv run ruff format --check ."),
+            verify.index("uv run pytest"),
+        )
+
     def test_automation_token_scope_comes_from_pr_targets(self) -> None:
         manifest = load_manifest("sdks.yaml")
 

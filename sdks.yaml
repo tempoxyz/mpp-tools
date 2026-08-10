@@ -31,6 +31,8 @@ sdks:
     changelog: none
     verify:
       - uv sync --all-extras --dev
+      - uv run ruff check .
+      - uv run ruff format --check .
       - uv run pytest
 
   ruby:
