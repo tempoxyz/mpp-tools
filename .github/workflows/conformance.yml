@@ -137,7 +137,7 @@ jobs:
 
       - name: Upload vector results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: vector-results-${{ matrix.adapter }}
           path: |
@@ -199,7 +199,7 @@ jobs:
 
       - name: Upload flow results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: flow-results-${{ matrix.adapter }}
           path: |
@@ -260,7 +260,7 @@ jobs:
       - name: Download vector results
         if: needs.changes.outputs.run_conformance == 'true'
         continue-on-error: true
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.1
         with:
           pattern: vector-results-*
           path: conformance/vector-results
@@ -269,7 +269,7 @@ jobs:
       - name: Download flow results
         if: needs.changes.outputs.run_conformance == 'true'
         continue-on-error: true
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.1
         with:
           pattern: flow-results-*
           path: conformance/flow-results

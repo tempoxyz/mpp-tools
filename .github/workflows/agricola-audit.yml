@@ -118,7 +118,7 @@ jobs:
 
       - name: Upload canonical snapshot
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: agricola-audit-snapshot-typescript
           path: ${{ runner.temp }}/snapshots/typescript.json
@@ -250,7 +250,7 @@ jobs:
 
       - name: Upload SDK snapshot
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: agricola-audit-snapshot-${{ matrix.target }}
           path: ${{ runner.temp }}/snapshots/${{ matrix.target }}.json
@@ -277,7 +277,7 @@ jobs:
 
       - name: Download audit snapshots
         continue-on-error: true
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: agricola-audit-snapshot-*
           path: ${{ runner.temp }}/snapshots
@@ -303,7 +303,7 @@ jobs:
 
       - name: Create control repository token
         id: control-token
-        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ vars.AGRICOLA_APP_ID }}
           private-key: ${{ secrets.AGRICOLA_APP_PRIVATE_KEY }}
