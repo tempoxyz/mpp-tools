@@ -260,9 +260,16 @@ jobs:
     needs: [prepare, canonical, target]
     if: always() && needs.prepare.result == 'success'
     runs-on: ubuntu-latest
+    # contents: write lets `agricola state-transaction` push the
+    # agricola/state branch with the checkout credentials. The state pull
+    # request itself is opened with a short-lived GitHub App token minted via
+    # github-sts (authorized by .github/sts/agricola-audit-state.sts.yaml)
+    # because the built-in GITHUB_TOKEN is not allowed to create pull
+    # requests. id-token lets the job request the OIDC token the STS
+    # exchange verifies.
     permissions:
       contents: write
-      pull-requests: write
+      id-token: write
     env:
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       STATE_BRANCH: agricola/state
@@ -294,10 +301,16 @@ jobs:
               --report-file "$RUNNER_TEMP/audit-report.json"
           cat "$RUNNER_TEMP/audit-report.json"
 
+      - name: Fetch GitHub token via STS
+        id: sts
+        uses: tempoxyz/gh-actions/actions/github-sts@183a02178c660ce295e9a262edc5857cb7135f06 # main
+        with:
+          policy: agricola-audit-state
+
       - name: Ensure state pull request
         uses: ./.github/actions/persist-agricola-state
         with:
-          token: ${{ github.token }}
+          token: ${{ steps.sts.outputs.token }}
           base: ${{ env.DEFAULT_BRANCH }}
           branch: ${{ env.STATE_BRANCH }}
 
