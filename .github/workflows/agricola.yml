@@ -7,9 +7,16 @@ on:
   issue_comment:
     types: [created]
 
+# contents: write lets `agricola state-transaction` push the agricola/state
+# branch with the checkout credentials (branch pushes stay on the built-in
+# token). The state pull request itself is opened with a short-lived GitHub
+# App token minted via github-sts (authorized by
+# .github/sts/agricola-state.sts.yaml) because the built-in GITHUB_TOKEN is
+# not allowed to create pull requests. id-token lets those jobs request the
+# OIDC token the STS exchange verifies.
 permissions:
   contents: write
-  pull-requests: write
+  id-token: write
 
 concurrency:
   # Fixes are isolated by tracking issue. Ignored comments use unique groups so
@@ -137,10 +144,16 @@ jobs:
             "repos/$GITHUB_REPOSITORY/issues/comments/${{ github.event.comment.id }}/reactions" \
             -f content=eyes
 
+      - name: Fetch GitHub token via STS
+        id: sts
+        uses: tempoxyz/gh-actions/actions/github-sts@183a02178c660ce295e9a262edc5857cb7135f06 # main
+        with:
+          policy: agricola-state
+
       - name: Ensure state pull request
         uses: ./.github/actions/persist-agricola-state
         with:
-          token: ${{ github.token }}
+          token: ${{ steps.sts.outputs.token }}
           base: ${{ env.DEFAULT_BRANCH }}
           branch: ${{ env.STATE_BRANCH }}
 
@@ -523,10 +536,16 @@ jobs:
               --reply-directory "$RUNNER_TEMP/replies" \
               --issue-update-directory "$RUNNER_TEMP/issue-updates"
 
+      - name: Fetch GitHub token via STS
+        id: sts
+        uses: tempoxyz/gh-actions/actions/github-sts@183a02178c660ce295e9a262edc5857cb7135f06 # main
+        with:
+          policy: agricola-state
+
       - name: Ensure state pull request
         uses: ./.github/actions/persist-agricola-state
         with:
-          token: ${{ github.token }}
+          token: ${{ steps.sts.outputs.token }}
           base: ${{ env.DEFAULT_BRANCH }}
           branch: ${{ env.STATE_BRANCH }}
 
