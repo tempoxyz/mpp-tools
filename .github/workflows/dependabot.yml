@@ -5,10 +5,19 @@ on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
 
+# The approve and merge steps authenticate with a short-lived GitHub App
+# token minted via github-sts (authorized by .github/sts/dependabot.sts.yaml
+# in the repository the workflow runs against) rather than the built-in
+# GITHUB_TOKEN, which is not allowed to approve pull requests. The built-in
+# token keeps read scopes for the check-watching step; id-token lets the job
+# request the OIDC token the STS exchange verifies. workflow_call callers
+# must grant these same permissions and carry their own dependabot STS
+# policy.
 permissions:
   checks: read
-  contents: write
-  pull-requests: write
+  contents: read
+  pull-requests: read
+  id-token: write
 
 concurrency:
   group: dependabot-${{ github.repository }}-${{ github.event.pull_request.number }}
@@ -86,13 +95,22 @@ jobs:
           echo "Timed out waiting for pull request checks"
           exit 1
 
+      - name: Fetch GitHub token via STS
+        if: >-
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        id: sts
+        uses: tempoxyz/gh-actions/actions/github-sts@183a02178c660ce295e9a262edc5857cb7135f06 # main
+        with:
+          policy: dependabot
+
       - name: Approve update
         if: >-
           steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
           steps.metadata.outputs.update-type == 'version-update:semver-minor'
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.sts.outputs.token }}
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: gh pr review "$PR_URL" --approve
 
@@ -101,7 +119,7 @@ jobs:
           steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
           steps.metadata.outputs.update-type == 'version-update:semver-minor'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.sts.outputs.token }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: gh pr merge "$PR_URL" --squash --match-head-commit "$HEAD_SHA"
