@@ -24,6 +24,7 @@
     "base64url.encode",
     "base64url.decode",
     "challenge.id",
+    "http.payment_request",
     "server.verify"
   ]
 }

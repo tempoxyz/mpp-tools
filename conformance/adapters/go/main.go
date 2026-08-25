@@ -9,12 +9,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"github.com/tempoxyz/mpp-go/pkg/client"
 	"github.com/tempoxyz/mpp-go/pkg/mpp"
 	"github.com/tempoxyz/mpp-go/pkg/server"
 )
@@ -60,6 +62,41 @@ type credentialDTO struct {
 	Challenge mpp.Challenge   `json:"challenge"`
 	Payload   map[string]any  `json:"payload"`
 	Source    json.RawMessage `json:"source,omitempty"`
+}
+
+type httpPayment struct {
+	Payload map[string]any  `json:"payload"`
+	Source  json.RawMessage `json:"source"`
+}
+
+type httpPaymentRequest struct {
+	URL     string            `json:"url"`
+	Method  string            `json:"method"`
+	Headers map[string]string `json:"headers"`
+	Body    *string           `json:"body"`
+	Payment httpPayment       `json:"payment"`
+	Mode    string            `json:"mode"`
+}
+
+type conformancePaymentMethod struct {
+	payload map[string]any
+	source  string
+}
+
+func (m conformancePaymentMethod) Name() string {
+	return "tempo"
+}
+
+func (m conformancePaymentMethod) Intent() string {
+	return "charge"
+}
+
+func (m conformancePaymentMethod) CreateCredential(_ context.Context, challenge *mpp.Challenge) (*mpp.Credential, error) {
+	return &mpp.Credential{
+		Challenge: challenge.ToEcho(),
+		Payload:   m.payload,
+		Source:    m.source,
+	}, nil
 }
 
 type conformanceIntent struct {
@@ -267,6 +304,10 @@ func handleAdapterRequest() {
 		handleServerVerify(request.Input)
 		return
 	}
+	if request.Op == "http.payment_request" {
+		handleHTTPPaymentRequest(request.Input)
+		return
+	}
 
 	command, ok := legacyCommandForOperation(request.Op)
 	if !ok {
@@ -280,6 +321,83 @@ func handleAdapterRequest() {
 	}
 	result := runLegacyCommand(command, legacyInput, nil)
 	printAdapterFromLegacy(request.Op, result)
+}
+
+func handleHTTPPaymentRequest(raw json.RawMessage) {
+	printJSON(runHTTPPaymentRequest(raw))
+}
+
+func runHTTPPaymentRequest(raw json.RawMessage) adapterResponse {
+	var input httpPaymentRequest
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return adapterResponse{OK: false, Error: &adapterError{Type: "http_error", Message: err.Error()}}
+	}
+
+	var methods []client.Method
+	switch input.Mode {
+	case "plain":
+	case "payment", "invalid_payload":
+		methods = []client.Method{conformancePaymentMethod{
+			payload: input.Payment.Payload,
+			source:  stringSource(input.Payment.Source),
+		}}
+	default:
+		return adapterResponse{OK: false, Error: &adapterError{
+			Type:    "unsupported_operation",
+			Message: fmt.Sprintf("Unsupported http.payment_request mode: %s", input.Mode),
+		}}
+	}
+
+	var body io.Reader
+	if input.Body != nil {
+		body = strings.NewReader(*input.Body)
+	}
+	request, err := http.NewRequest(input.Method, input.URL, body)
+	if err != nil {
+		return adapterResponse{OK: false, Error: &adapterError{Type: "http_error", Message: err.Error()}}
+	}
+	for name, value := range input.Headers {
+		request.Header.Set(name, value)
+	}
+
+	var response *http.Response
+	if input.Mode == "plain" {
+		response, err = http.DefaultClient.Do(request)
+	} else {
+		response, err = client.New(methods).Do(request)
+	}
+	if err != nil {
+		message := err.Error()
+		if strings.Contains(message, "refusing cross-origin redirect") {
+			message = "Refusing to send payment credential across redirect"
+		}
+		return adapterResponse{OK: false, Error: &adapterError{Type: "http_error", Message: message}}
+	}
+	defer response.Body.Close()
+
+	responseBody, err := io.ReadAll(response.Body)
+	if err != nil {
+		return adapterResponse{OK: false, Error: &adapterError{Type: "http_error", Message: err.Error()}}
+	}
+	return adapterResponse{OK: true, Value: map[string]any{
+		"status":  response.StatusCode,
+		"headers": responseHeaders(response.Header),
+		"body":    string(responseBody),
+	}}
+}
+
+func stringSource(raw json.RawMessage) string {
+	var source string
+	_ = json.Unmarshal(raw, &source)
+	return source
+}
+
+func responseHeaders(header http.Header) map[string]string {
+	result := make(map[string]string, len(header))
+	for name, values := range header {
+		result[name] = strings.Join(values, ", ")
+	}
+	return result
 }
 
 func legacyCommandForOperation(op string) (string, bool) {
