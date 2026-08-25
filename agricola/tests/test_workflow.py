@@ -7,6 +7,14 @@ import yaml
 ROOT = Path(__file__).parents[2]
 
 
+def count_run_steps(workflow: dict, command: str) -> int:
+    return sum(
+        command in step.get("run", "")
+        for job in workflow["jobs"].values()
+        for step in job.get("steps", [])
+    )
+
+
 class AgricolaWorkflowTests(unittest.TestCase):
     def setUp(self) -> None:
         self.control_text = (ROOT / ".github/workflows/agricola.yml").read_text()
@@ -36,8 +44,8 @@ class AgricolaWorkflowTests(unittest.TestCase):
         )
 
         self.assertTrue(all("concurrency" not in job for job in writers))
-        self.assertEqual(self.control_text.count("agricola state-transaction"), 2)
-        self.assertEqual(self.audit_text.count("agricola state-transaction"), 1)
+        self.assertEqual(count_run_steps(self.control, "agricola state-transaction"), 2)
+        self.assertEqual(count_run_steps(self.audit, "agricola state-transaction"), 1)
         self.assertNotIn("agricola-state-writer", self.control_text + self.audit_text)
         self.assertNotIn("create-pull-request", self.state_action_text)
         self.assertIn("gh pr create", self.state_action_text)
