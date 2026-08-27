@@ -1,11 +1,7 @@
 name: Agricola control plane
 
 on:
-  schedule:
-    - cron: "*/10 * * * *"
   workflow_dispatch:
-  issue_comment:
-    types: [created]
 
 # contents: write lets `agricola state-transaction` push the agricola/state
 # branch with the checkout credentials (branch pushes stay on the built-in

@@ -1,4 +1,9 @@
-# Agricola Actions setup
+# Agricola Actions fallback
+
+> [!NOTE]
+> Agricola now runs primarily through [Auto](./agricola-auto.md). These workflows
+> are manual rollback paths; they no longer poll, audit on a schedule, or react
+> to issue comments automatically.
 
 Agricola propagation runs from [`.github/workflows/agricola.yml`](../.github/workflows/agricola.yml), and the head-to-head SDK audit runs from [`.github/workflows/agricola-audit.yml`](../.github/workflows/agricola-audit.yml). The repository-scoped `GITHUB_TOKEN` manages state, while a GitHub App supplies short-lived tokens for control-plane issue activity and cross-repository access. The official OpenAI action generates downstream patches and performs read-only semantic audits.
 
@@ -8,11 +13,9 @@ Both semantic analysis and downstream generation explicitly use `gpt-5.6-sol`. D
 
 | Trigger | Behavior |
 | --- | --- |
-| Ten-minute schedule | Poll merged `wevm/mppx` pull requests; create tracking issues only for authorized merge-time `agricola:all` or `agricola:<target>` labels. GitHub may delay scheduled jobs. |
-| `workflow_dispatch` | Run the poller manually. |
-| New `issue_comment` containing `/ag` | Handle a tracking-issue command. `/ag` must be the first token on a line; `/agricola` remains an alias for existing comments. |
+| `workflow_dispatch` | Run the legacy poller manually. |
 
-The audit workflow runs every Monday at 09:00 UTC and supports `workflow_dispatch`. Independently of canonical pull-request labels, every run re-baselines each manifest SDK against the same pinned current `mppx` head. Each matrix job checks out the exact current head of its SDK and the pinned `mppx` head, runs an open-ended read-only Codex comparison, and requires schema-validated findings with linked code evidence. Shared vectors and conformance-adapter capabilities remain deterministic supporting signals. Agricola clusters matching `semantic:`, `vector:`, and `capability:` fingerprints, maintains one issue per finding, and updates a roll-up index. The audit itself is read-only outside `mpp-tools`; downstream publication requires a maintainer's explicit command on a finding issue.
+The audit workflow supports manual `workflow_dispatch`. Every run re-baselines each manifest SDK against the same pinned current `mppx` head. Each matrix job checks out the exact current head of its SDK and the pinned `mppx` head, runs an open-ended read-only Codex comparison, and requires schema-validated findings with linked code evidence. Shared vectors and conformance-adapter capabilities remain deterministic supporting signals. Agricola clusters matching `semantic:`, `vector:`, and `capability:` fingerprints, maintains one issue per finding, and updates a roll-up index. The audit itself is read-only outside `mpp-tools`; downstream publication requires a maintainer's explicit command on a finding issue.
 
 Semantic findings are open-ended review results. If another SDK review does not report the same fingerprint, the roll-up says `not reported`; only deterministic capability and conformance checks can report an SDK as `clean`. The audit does not infer a likely origin from affected-target counts.
 

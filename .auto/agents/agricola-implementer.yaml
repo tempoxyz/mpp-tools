@@ -1,0 +1,186 @@
+name: agricola-implementer
+imports:
+  - ../fragments/environments/agricola-runtime.yaml
+displayTitle: "Agricola implementation"
+systemPrompt:
+  file: ../prompts/agricola-implementer.md
+bindings:
+  github.issue:
+    lifecycle: held
+    continuity: agent
+  github.pull_request:
+    lifecycle: held
+    continuity: agent
+mounts:
+  - name: control
+    kind: git
+    repository: tempoxyz/mpp-tools
+    mountPath: /workspace/mpp-tools
+    ref: main
+    auth:
+      kind: githubApp
+      capabilities:
+        contents: read
+        pullRequests: read
+        issues: write
+        checks: read
+        actions: read
+        workflows: none
+        secrets: none
+        merge: none
+  - name: canonical
+    kind: git
+    repository: wevm/mppx
+    mountPath: /workspace/mppx
+    ref: main
+    auth:
+      kind: none
+  - name: specification
+    kind: git
+    repository: tempoxyz/mpp-specs
+    mountPath: /workspace/mpp-specs
+    ref: main
+    auth:
+      kind: none
+  - name: rust
+    kind: git
+    repository: tempoxyz/mpp-rs
+    mountPath: /workspace/mpp-rs
+    ref: main
+    auth:
+      kind: githubApp
+      commitAuthor:
+        name: Agricola (auto)
+        email: agricola@agents.mpp.dev
+      capabilities:
+        contents: write
+        pullRequests: write
+        issues: write
+        checks: read
+        actions: read
+        workflows: none
+        secrets: none
+        merge: none
+  - name: python
+    kind: git
+    repository: tempoxyz/pympp
+    mountPath: /workspace/pympp
+    ref: main
+    auth:
+      kind: githubApp
+      commitAuthor:
+        name: Agricola (auto)
+        email: agricola@agents.mpp.dev
+      capabilities:
+        contents: write
+        pullRequests: write
+        issues: write
+        checks: read
+        actions: read
+        workflows: none
+        secrets: none
+        merge: none
+workingDirectory: /workspace/mpp-tools
+tools:
+  auto:
+    kind: local
+    implementation: auto
+  github:
+    kind: github
+triggers:
+  - name: proposal-approved
+    event: github.issue.labeled
+    where:
+      $.github.repository.fullName: tempoxyz/mpp-tools
+      $.github.label.name: agricola:approved
+      $.github.issue.labels:
+        contains: agricola
+    message: |
+      Agricola proposal #{{github.issue.number}} was approved. Read the issue
+      and its full discussion, implement the approved target, verify it, and
+      open or update its draft pull request.
+    routing:
+      kind: spawn
+      bind:
+        target: github.issue
+        lifecycle: held
+        continuity: agent
+  - name: proposal-feedback
+    event: github.issue.comment.created
+    where:
+      $.github.repository.fullName: tempoxyz/mpp-tools
+      $.github.auto.authored: false
+    message: |
+      New human feedback was posted on approved Agricola proposal
+      #{{github.issue.number}}. Read the comment and update the implementation
+      or reply with a focused question or blocker.
+    routing:
+      kind: bind
+      target: github.issue
+      onUnmatched: drop
+  - name: proposal-closed
+    event: github.issue.closed
+    where:
+      $.github.repository.fullName: tempoxyz/mpp-tools
+    message: |
+      The bound Agricola proposal was closed. Stop work, summarize any
+      outstanding state, and do not make further downstream changes.
+    routing:
+      kind: bind
+      target: github.issue
+      onUnmatched: drop
+      release: true
+  - name: pull-request-feedback
+    events:
+      - github.issue_comment.created
+      - github.issue_comment.edited
+      - github.pull_request_review.submitted
+      - github.pull_request_review.edited
+      - github.pull_request_review_comment.created
+      - github.pull_request_review_comment.edited
+    where:
+      $.github.repository.fullName:
+        in:
+          - tempoxyz/mpp-rs
+          - tempoxyz/pympp
+      $.github.auto.authored: false
+    message: |
+      Feedback arrived on the bound downstream pull request. Read the latest
+      review conversation, preserve human edits, make warranted revisions,
+      rerun the proposal's verification commands, and update the same branch.
+    routing:
+      kind: bind
+      target: github.pull_request
+      onUnmatched: drop
+  - name: pull-request-ci-failure
+    event: github.check_run.completed
+    where:
+      $.github.repository.fullName:
+        in:
+          - tempoxyz/mpp-rs
+          - tempoxyz/pympp
+      $.github.checkRun.conclusion: failure
+    message: |
+      CI check {{github.checkRun.name}} failed on the bound downstream pull
+      request. Inspect the failure, fix it when it is caused by this proposal,
+      rerun verification, and update the same branch. Report external blockers.
+    routing:
+      kind: bind
+      target: github.pull_request
+      onUnmatched: drop
+  - name: pull-request-closed
+    event: github.pull_request.closed
+    where:
+      $.github.repository.fullName:
+        in:
+          - tempoxyz/mpp-rs
+          - tempoxyz/pympp
+    message: |
+      The bound downstream pull request closed. If merged, post a concise
+      completion note on the proposal and close it. If closed unmerged, report
+      that outcome on the proposal and stop work.
+    routing:
+      kind: bind
+      target: github.pull_request
+      onUnmatched: drop
+      release: true

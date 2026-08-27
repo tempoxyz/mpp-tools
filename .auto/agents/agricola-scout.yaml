@@ -1,0 +1,127 @@
+name: agricola-scout
+imports:
+  - ../fragments/environments/agricola-runtime.yaml
+displayTitle: "Agricola discovery"
+systemPrompt:
+  file: ../prompts/agricola-scout.md
+session:
+  archiveAfterInactive:
+    seconds: 3600
+mounts:
+  - name: control
+    kind: git
+    repository: tempoxyz/mpp-tools
+    mountPath: /workspace/mpp-tools
+    ref: main
+    auth:
+      kind: githubApp
+      capabilities:
+        contents: read
+        pullRequests: read
+        issues: write
+        checks: read
+        actions: read
+        workflows: none
+        secrets: none
+        merge: none
+  - name: canonical
+    kind: git
+    repository: wevm/mppx
+    mountPath: /workspace/mppx
+    ref: main
+    auth:
+      kind: none
+  - name: specification
+    kind: git
+    repository: tempoxyz/mpp-specs
+    mountPath: /workspace/mpp-specs
+    ref: main
+    auth:
+      kind: none
+  - name: go
+    kind: git
+    repository: tempoxyz/mpp-go
+    mountPath: /workspace/mpp-go
+    ref: main
+    auth:
+      kind: none
+  - name: rust
+    kind: git
+    repository: tempoxyz/mpp-rs
+    mountPath: /workspace/mpp-rs
+    ref: main
+    auth:
+      kind: githubApp
+      capabilities:
+        contents: read
+        pullRequests: read
+        issues: read
+        checks: read
+        actions: read
+        workflows: none
+        secrets: none
+        merge: none
+  - name: python
+    kind: git
+    repository: tempoxyz/pympp
+    mountPath: /workspace/pympp
+    ref: main
+    auth:
+      kind: githubApp
+      capabilities:
+        contents: read
+        pullRequests: read
+        issues: read
+        checks: read
+        actions: read
+        workflows: none
+        secrets: none
+        merge: none
+  - name: ruby
+    kind: git
+    repository: stripe/mpp-rb
+    mountPath: /workspace/mpp-rb
+    ref: main
+    auth:
+      kind: none
+  - name: java
+    kind: git
+    repository: stripe/mpp-java
+    mountPath: /workspace/mpp-java
+    ref: main
+    auth:
+      kind: none
+workingDirectory: /workspace/mpp-tools
+tools:
+  github:
+    kind: github
+triggers:
+  - name: canonical-merge
+    event: github.pull_request.closed
+    where:
+      $.github.repository.fullName: wevm/mppx
+      $.github.pullRequest.merged: true
+    message: |
+      Canonical mppx PR #{{github.pullRequest.number}} merged at
+      {{github.pullRequest.mergeCommitSha}}. Identify downstream SDK behavior
+      that should be ported and create deduplicated proposal tickets.
+    routing:
+      kind: spawn
+  - name: continuous-scan
+    kind: heartbeat
+    cron: "*/30 * * * *"
+    timezone: UTC
+    message: |
+      Scan recent canonical mppx changes for downstream behavior that has not
+      yet received an Agricola proposal ticket. Keep this incremental.
+    routing:
+      kind: spawn
+  - name: weekly-audit
+    kind: heartbeat
+    cron: "0 9 * * 1"
+    timezone: UTC
+    message: |
+      Run the weekly cross-SDK drift review. Reconcile proposal tickets for
+      concrete behavioral differences and close resolved open proposals.
+    routing:
+      kind: spawn
