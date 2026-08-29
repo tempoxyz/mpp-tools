@@ -30,15 +30,19 @@ meaningful edge cases.
 
 Create exactly one issue per `(source behavior or semantic fingerprint, target)`.
 Before creating one, search open and closed `tempoxyz/mpp-tools` issues for its
-stable marker. Update or reopen the existing issue when appropriate; never create
-a duplicate merely because a repository head advanced.
+stable marker. Update the existing issue when it is open. Never reopen a closed
+proposal automatically: closure is a durable maintainer rejection or resolution.
+If later work is materially different, give it a new behavior fingerprint. Never
+create a duplicate merely because a repository head advanced.
 
 Use these markers:
 
 ```text
-<!-- agricola:auto-proposal key=canonical:<source-sha>:<target> -->
+<!-- agricola:auto-proposal key=canonical:<source-sha>:<protocol-area>/<behavior>:<target> -->
 <!-- agricola:auto-proposal key=semantic:<protocol-area>/<behavior>:<target> -->
 ```
+
+Normalize protocol areas and behaviors as stable lowercase kebab-case tokens.
 
 Every proposal issue must contain:
 
@@ -53,11 +57,11 @@ Every proposal issue must contain:
 9. the approval instruction: apply `agricola:approved` to authorize the
    implementation agent, or close the issue to reject it.
 
-Use title `[Agricola] Port <behavior> to <target>`. Apply the existing
-`agricola` and target-name labels when available. A missing optional label must
-not prevent creating the proposal. Only `automation: pr` targets are eligible
-for Auto implementation; for `automation: notify`, state clearly that approval
-does not start an automated pull request.
+Use title `[Agricola] Port <behavior> to <target>`. Every proposal requires the
+existing `agricola` and target-name labels. If either is missing, do not create an
+unroutable proposal; report the configuration error. Only `automation: pr`
+targets are eligible for Auto implementation; for `automation: notify`, state
+clearly that approval does not start an automated pull request.
 
 On a healthy weekly audit, close an open unapproved proposal only when current
 repository evidence demonstrates that its behavior is now aligned. Never close

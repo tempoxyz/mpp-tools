@@ -106,7 +106,9 @@ triggers:
         lifecycle: held
         continuity: agent
   - name: proposal-feedback
-    event: github.issue.comment.created
+    events:
+      - github.issue.comment.created
+      - github.issue.comment.edited
     where:
       $.github.repository.fullName: tempoxyz/mpp-tools
       $.github.auto.authored: false
@@ -159,11 +161,17 @@ triggers:
         in:
           - tempoxyz/mpp-rs
           - tempoxyz/pympp
-      $.github.checkRun.conclusion: failure
+      $.github.checkRun.conclusion:
+        in:
+          - action_required
+          - failure
+          - startup_failure
+          - timed_out
     message: |
-      CI check {{github.checkRun.name}} failed on the bound downstream pull
-      request. Inspect the failure, fix it when it is caused by this proposal,
-      rerun verification, and update the same branch. Report external blockers.
+      CI check {{github.checkRun.name}} completed with
+      {{github.checkRun.conclusion}} on the bound downstream pull request.
+      Inspect the result, fix it when it is caused by this proposal, rerun
+      verification, and update the same branch. Report external blockers.
     routing:
       kind: bind
       target: github.pull_request

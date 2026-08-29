@@ -37,8 +37,8 @@ reviews steer the bound implementation session.
 2. Install the Auto GitHub App on `mpp-tools`, `mpp-rs`, and `pympp`. Grant the
    project access to those repositories.
 3. Bind GitHub Sync to `tempoxyz/mpp-tools` on `main`.
-4. Create the `agricola:approved` label in `mpp-tools`. Existing `agricola`,
-   `rust`, and `python` labels are reused when present.
+4. Ensure the `agricola`, `rust`, and `python` labels exist in `mpp-tools`, then
+   create `agricola:approved`. These labels are required routing metadata.
 5. Review the PR's **Sync plan**, merge it, and confirm both agents apply.
 6. Start `agricola-scout` manually once. Confirm it can read every mount and
    create or reconcile a proposal without changing an SDK.

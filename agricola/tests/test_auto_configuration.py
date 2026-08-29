@@ -66,19 +66,34 @@ class AutoConfigurationTests(unittest.TestCase):
         self.assertEqual(approval["where"]["$.github.label.name"], "agricola:approved")
         self.assertEqual(approval["routing"]["bind"]["target"], "github.issue")
         self.assertEqual(
-            triggers["proposal-feedback"]["event"],
-            "github.issue.comment.created",
+            triggers["proposal-feedback"]["events"],
+            ["github.issue.comment.created", "github.issue.comment.edited"],
         )
         self.assertEqual(
             triggers["pull-request-feedback"]["routing"]["target"],
             "github.pull_request",
         )
+        self.assertEqual(
+            triggers["pull-request-ci-failure"]["where"][
+                "$.github.checkRun.conclusion"
+            ]["in"],
+            ["action_required", "failure", "startup_failure", "timed_out"],
+        )
 
     def test_scout_runs_continuously_and_weekly(self) -> None:
         scout = load_agent("agricola-scout")
         triggers = {item["name"]: item for item in scout["triggers"]}
+        self.assertEqual(scout["concurrency"], 1)
         self.assertEqual(triggers["continuous-scan"]["cron"], "*/30 * * * *")
         self.assertEqual(triggers["weekly-audit"]["cron"], "0 9 * * 1")
+
+    def test_scout_proposals_are_routable_and_preserve_closed_decisions(self) -> None:
+        prompt = (AUTO / "prompts" / "agricola-scout.md").read_text()
+        self.assertIn(
+            "canonical:<source-sha>:<protocol-area>/<behavior>:<target>", prompt
+        )
+        self.assertIn("Never reopen a closed\nproposal automatically", prompt)
+        self.assertIn("Every proposal requires", prompt)
 
 
 if __name__ == "__main__":

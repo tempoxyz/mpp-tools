@@ -77,6 +77,10 @@ Downstream code never runs in a job containing downstream write credentials. Gen
 
 ## Deployment checklist
 
+This checklist validates a complete rollback, not the manual-only standby state.
+Before steps 7, 9, and 10, restore the reviewed `issue_comment: types: [created]`
+trigger; `workflow_dispatch` cannot receive `/ag` comments.
+
 1. Review [`sdks.yaml`](../sdks.yaml), especially maintainers, repositories, automation modes, and verification commands.
 2. Create canonical labels `agricola:all`, `agricola:none`, and `agricola:<target>` for each desired target. Agricola validates labels but does not create them.
 3. Create and install the GitHub App with the repositories and permissions above.
