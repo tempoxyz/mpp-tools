@@ -1,6 +1,6 @@
 source "https://rubygems.org"
 
-gem "mpp-rb", "0.1.4"
+gem "mpp-rb", "0.1.5"
 gem "bigdecimal"
 gem "eth", "~> 0.5"
 gem "rlp", "~> 0.7"
