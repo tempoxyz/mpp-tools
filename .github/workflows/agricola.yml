@@ -242,7 +242,7 @@ jobs:
             --output .agricola/revision.md
 
       - name: Setup uv
-        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@6f436eb3a168279692739e8c0c9fdb52b94bfae7
+        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@3626124474a987bc74b41fc7ae65b2e23f8e4e4e
         with:
           version: "0.9.26"
 
@@ -372,7 +372,7 @@ jobs:
 
       - name: Setup uv
         if: steps.patch.outputs.has-changes == 'true'
-        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@6f436eb3a168279692739e8c0c9fdb52b94bfae7
+        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@3626124474a987bc74b41fc7ae65b2e23f8e4e4e
         with:
           version: "0.9.26"
 
