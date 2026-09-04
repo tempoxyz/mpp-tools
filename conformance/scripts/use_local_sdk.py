@@ -46,7 +46,7 @@ def configure_rust(conformance_dir: Path, sdk_path: Path) -> None:
     replace_one(
         manifest,
         r"^mpp\s*=\s*.+$",
-        f"mpp = {{ path = {json_string(sdk_path)} }}",
+        f"mpp = {{ path = {json_string(sdk_path)}, features = [\"client\"] }}",
         "Rust mpp dependency",
     )
 
