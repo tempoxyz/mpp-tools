@@ -140,11 +140,25 @@ const mpp = Server.Mppx.create({
 })
 
 function readBody(req: http.IncomingMessage): Promise<string> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
     req.on('data', (chunk: Buffer) => chunks.push(chunk))
     req.on('end', () => resolve(Buffer.concat(chunks).toString()))
+    // Without this an aborted upload leaves the promise pending forever and
+    // the unheard 'error' event tears down the whole server process.
+    req.on('error', reject)
   })
+}
+
+function deserializeCredentialSafely(
+  header: string | undefined,
+): ReturnType<typeof Credential.deserialize> | undefined {
+  if (!header) return undefined
+  try {
+    return Credential.deserialize(header)
+  } catch {
+    return undefined
+  }
 }
 
 function sendProblemDetails(
@@ -244,7 +258,7 @@ function sendJsonRpc(res: http.ServerResponse, body: unknown): void {
   res.end(JSON.stringify(body))
 }
 
-const handler: http.RequestListener = async (req, res) => {
+const handleRequest = async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
   const flowCase = caseByPath.get(url.pathname)
 
@@ -459,9 +473,7 @@ const handler: http.RequestListener = async (req, res) => {
   }
 
   if (flowCase.digest_binding) {
-    const credential = req.headers.authorization
-      ? Credential.deserialize(req.headers.authorization)
-      : undefined
+    const credential = deserializeCredentialSafely(req.headers.authorization)
     if (credential?.challenge.digest !== paymentDigest(requestBody ?? '')) {
       sendChallenge(res, flowChallenge(flowCase))
       return
@@ -469,9 +481,7 @@ const handler: http.RequestListener = async (req, res) => {
   }
 
   if (flowCase.bind_request_resource) {
-    const credential = req.headers.authorization
-      ? Credential.deserialize(req.headers.authorization)
-      : undefined
+    const credential = deserializeCredentialSafely(req.headers.authorization)
     const challengeRequest = credential?.challenge.request as Record<string, unknown> | undefined
     if (challengeRequest?.resource !== `${url.pathname}${url.search}`) {
       sendChallenge(res, flowChallenge(flowCase, undefined, flowRequest))
@@ -529,6 +539,26 @@ const handler: http.RequestListener = async (req, res) => {
   res.statusCode = response.status
   response.headers.forEach((value, key) => res.setHeader(key, value))
   res.end(await response.text())
+}
+
+// Error boundary: a malformed request (bad JSON-RPC body, garbage
+// Authorization header, invalid Host) must produce a 400 for that request,
+// not an unhandled rejection that kills the server for every remaining
+// flow case and adapter.
+const handler: http.RequestListener = async (req, res) => {
+  try {
+    await handleRequest(req, res)
+  } catch (err) {
+    console.error(`request failed: ${req.method} ${req.url}:`, err)
+    if (!res.headersSent) {
+      res.statusCode = 400
+      res.setHeader('Content-Type', 'application/json')
+      res.setHeader('Cache-Control', 'no-store')
+    }
+    if (!res.writableEnded) {
+      res.end(JSON.stringify({ ok: false, error: 'malformed request' }))
+    }
+  }
 }
 
 const server = http.createServer(handler)
