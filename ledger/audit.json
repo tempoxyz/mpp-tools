@@ -1,0 +1,450 @@
+{
+  "version": 1,
+  "findings": [
+    {
+      "id": "AGR-2026-001",
+      "fingerprint": "capability:http.payment_request",
+      "first_seen": "2026-08-08T18:32:36.578245Z"
+    },
+    {
+      "id": "AGR-2026-002",
+      "fingerprint": "capability:stripe.external_id_binding",
+      "first_seen": "2026-08-08T18:32:36.578245Z"
+    },
+    {
+      "id": "AGR-2026-003",
+      "fingerprint": "capability:tempo.proof.typed_data",
+      "first_seen": "2026-08-08T18:32:36.578245Z"
+    },
+    {
+      "id": "AGR-2026-004",
+      "fingerprint": "semantic:challenge-encoding/rfc8785-json-canonicalization",
+      "first_seen": "2026-08-08T19:06:57.224550Z"
+    },
+    {
+      "id": "AGR-2026-005",
+      "fingerprint": "semantic:challenge-selection/match-method-and-intent",
+      "first_seen": "2026-08-08T19:06:57.224550Z"
+    },
+    {
+      "id": "AGR-2026-006",
+      "fingerprint": "semantic:challenge-validation/reject-malformed-expiration",
+      "first_seen": "2026-08-08T19:06:57.224550Z"
+    },
+    {
+      "id": "AGR-2026-007",
+      "fingerprint": "semantic:client-negotiation/advertise-supported-payment-capabilities",
+      "first_seen": "2026-08-08T19:06:57.224550Z"
+    },
+    {
+      "id": "AGR-2026-008",
+      "fingerprint": "semantic:client-negotiation/advertise-supported-payment-ranges",
+      "first_seen": "2026-08-08T19:06:57.224550Z"
+    },
+    {
+      "id": "AGR-2026-009",
+      "fingerprint": "semantic:client-retries/follow-fresh-payment-challenges",
+      "first_seen": "2026-08-08T19:06:57.224550Z"
+    },
+    {
+      "id": "AGR-2026-010",
+      "fingerprint": "semantic:client-retries/retry-fresh-payment-challenges-up-to-default-limit",
+      "first_seen": "2026-08-08T19:06:57.224550Z"
+    },
+    {
+      "id": "AGR-2026-011",
+      "fingerprint": "semantic:client-transport/fresh-challenge-payment-retry",
+      "first_seen": "2026-08-08T19:06:57.224550Z"
+    },
+    {
+      "id": "AGR-2026-012",
+      "fingerprint": "semantic:http-client/retry-actionable-402-until-cap",
+      "first_seen": "2026-08-08T19:06:57.224550Z"
+    },
+    {
+      "id": "AGR-2026-013",
+      "fingerprint": "semantic:http-client/retry-final-same-origin-response-url",
+      "first_seen": "2026-08-08T19:06:57.224550Z"
+    },
+    {
+      "id": "AGR-2026-014",
+      "fingerprint": "semantic:payment-receipt/validate-success-and-preserve-extension-fields",
+      "first_seen": "2026-08-08T19:06:57.224550Z"
+    },
+    {
+      "id": "AGR-2026-015",
+      "fingerprint": "semantic:server-authentication/reject-secret-keys-shorter-than-32-bytes",
+      "first_seen": "2026-08-08T19:06:57.224550Z"
+    },
+    {
+      "id": "AGR-2026-016",
+      "fingerprint": "semantic:server-verification/failed-payment-returns-fresh-402-challenge",
+      "first_seen": "2026-08-08T19:06:57.224550Z"
+    },
+    {
+      "id": "AGR-2026-017",
+      "fingerprint": "semantic:tempo-charge/challenge-bound-transfer-memo",
+      "first_seen": "2026-08-08T19:06:57.224550Z"
+    },
+    {
+      "id": "AGR-2026-018",
+      "fingerprint": "semantic:tempo-charge/validate-signed-transaction-before-broadcast",
+      "first_seen": "2026-08-08T19:06:57.224550Z"
+    },
+    {
+      "id": "AGR-2026-019",
+      "fingerprint": "semantic:tempo-charge/zero-amount-proof-credentials",
+      "first_seen": "2026-08-08T19:06:57.224550Z"
+    },
+    {
+      "id": "AGR-2026-020",
+      "fingerprint": "semantic:tempo-subscription/recurring-payment-lifecycle",
+      "first_seen": "2026-08-08T19:06:57.224550Z"
+    },
+    {
+      "id": "AGR-2026-021",
+      "fingerprint": "semantic:challenge-negotiation/advertise-payment-capabilities",
+      "first_seen": "2026-08-08T19:52:20.848585Z"
+    },
+    {
+      "id": "AGR-2026-022",
+      "fingerprint": "semantic:challenge-negotiation/select-supported-method-intent",
+      "first_seen": "2026-08-08T19:52:20.848585Z"
+    },
+    {
+      "id": "AGR-2026-023",
+      "fingerprint": "semantic:challenge-parsing/enforce-method-identifier-grammar",
+      "first_seen": "2026-08-08T19:52:20.848585Z"
+    },
+    {
+      "id": "AGR-2026-024",
+      "fingerprint": "semantic:challenge-parsing/reject-unterminated-quoted-string",
+      "first_seen": "2026-08-08T19:52:20.848585Z"
+    },
+    {
+      "id": "AGR-2026-025",
+      "fingerprint": "semantic:challenge-parsing/validate-expiration-timestamp",
+      "first_seen": "2026-08-08T19:52:20.848585Z"
+    },
+    {
+      "id": "AGR-2026-026",
+      "fingerprint": "semantic:client-retries/retry-repeated-payment-challenges",
+      "first_seen": "2026-08-08T19:52:20.848585Z"
+    },
+    {
+      "id": "AGR-2026-027",
+      "fingerprint": "semantic:client-retry/fresh-challenge-retry",
+      "first_seen": "2026-08-08T19:52:20.848585Z"
+    },
+    {
+      "id": "AGR-2026-028",
+      "fingerprint": "semantic:credential-parsing/validate-required-challenge-fields",
+      "first_seen": "2026-08-08T19:52:20.848585Z"
+    },
+    {
+      "id": "AGR-2026-029",
+      "fingerprint": "semantic:http-transport/retry-fresh-payment-challenge",
+      "first_seen": "2026-08-08T19:52:20.848585Z"
+    },
+    {
+      "id": "AGR-2026-030",
+      "fingerprint": "semantic:negotiation/advertise-supported-method-intent-preferences",
+      "first_seen": "2026-08-08T19:52:20.848585Z"
+    },
+    {
+      "id": "AGR-2026-031",
+      "fingerprint": "semantic:negotiation/weighted-challenge-selection",
+      "first_seen": "2026-08-08T19:52:20.848585Z"
+    },
+    {
+      "id": "AGR-2026-032",
+      "fingerprint": "semantic:receipt-parsing/validate-required-receipt-fields",
+      "first_seen": "2026-08-08T19:52:20.848585Z"
+    },
+    {
+      "id": "AGR-2026-033",
+      "fingerprint": "semantic:server-configuration/enforce-minimum-challenge-secret-strength",
+      "first_seen": "2026-08-08T19:52:20.848585Z"
+    },
+    {
+      "id": "AGR-2026-034",
+      "fingerprint": "semantic:stripe-charge/idempotency-bound-to-challenge-and-spt",
+      "first_seen": "2026-08-08T19:52:20.848585Z"
+    },
+    {
+      "id": "AGR-2026-035",
+      "fingerprint": "semantic:stripe-charge/reject-idempotent-replay",
+      "first_seen": "2026-08-08T19:52:20.848585Z"
+    },
+    {
+      "id": "AGR-2026-036",
+      "fingerprint": "semantic:tempo-charge/require-challenge-bound-payment-memo",
+      "first_seen": "2026-08-08T19:52:20.848585Z"
+    },
+    {
+      "id": "AGR-2026-037",
+      "fingerprint": "semantic:tempo-charge/validate-transaction-before-broadcast",
+      "first_seen": "2026-08-08T19:52:20.848585Z"
+    },
+    {
+      "id": "AGR-2026-038",
+      "fingerprint": "semantic:tempo-relay/use-canonical-idempotency-key",
+      "first_seen": "2026-08-08T19:52:20.848585Z"
+    },
+    {
+      "id": "AGR-2026-039",
+      "fingerprint": "semantic:challenge-expiry/reject-malformed-expiration-before-payment",
+      "first_seen": "2026-08-10T09:38:20.026276Z"
+    },
+    {
+      "id": "AGR-2026-040",
+      "fingerprint": "semantic:challenge-negotiation/advertise-client-payment-capabilities",
+      "first_seen": "2026-08-10T09:38:20.026276Z"
+    },
+    {
+      "id": "AGR-2026-041",
+      "fingerprint": "semantic:challenge-negotiation/match-method-and-intent",
+      "first_seen": "2026-08-10T09:38:20.026276Z"
+    },
+    {
+      "id": "AGR-2026-042",
+      "fingerprint": "semantic:challenge-opaque/echo-raw-value-unchanged",
+      "first_seen": "2026-08-10T09:38:20.026276Z"
+    },
+    {
+      "id": "AGR-2026-043",
+      "fingerprint": "semantic:client-retries/multiple-payment-challenge-rounds",
+      "first_seen": "2026-08-10T09:38:20.026276Z"
+    },
+    {
+      "id": "AGR-2026-044",
+      "fingerprint": "semantic:http-caching/receipt-response-is-private",
+      "first_seen": "2026-08-10T09:38:20.026276Z"
+    },
+    {
+      "id": "AGR-2026-045",
+      "fingerprint": "semantic:http-verification/failure-returns-fresh-challenge",
+      "first_seen": "2026-08-10T09:38:20.026276Z"
+    },
+    {
+      "id": "AGR-2026-046",
+      "fingerprint": "semantic:payment-retries/distinguish-challenges-by-full-serialized-value",
+      "first_seen": "2026-08-10T09:38:20.026276Z"
+    },
+    {
+      "id": "AGR-2026-047",
+      "fingerprint": "semantic:receipts/preserve-method-extension-fields",
+      "first_seen": "2026-08-10T09:38:20.026276Z"
+    },
+    {
+      "id": "AGR-2026-048",
+      "fingerprint": "semantic:receipts/require-base-receipt-fields",
+      "first_seen": "2026-08-10T09:38:20.026276Z"
+    },
+    {
+      "id": "AGR-2026-049",
+      "fingerprint": "semantic:tempo-charge/accept-zero-amount-proof-credential",
+      "first_seen": "2026-08-10T09:38:20.026276Z"
+    },
+    {
+      "id": "AGR-2026-050",
+      "fingerprint": "semantic:tempo-charge/bind-unconfigured-memo-to-challenge",
+      "first_seen": "2026-08-10T09:38:20.026276Z"
+    },
+    {
+      "id": "AGR-2026-051",
+      "fingerprint": "semantic:tempo-relay/use-canonical-idempotency-key-namespace",
+      "first_seen": "2026-08-10T09:38:20.026276Z"
+    },
+    {
+      "id": "AGR-2026-052",
+      "fingerprint": "semantic:transport/retry-payment-challenges-up-to-default-limit",
+      "first_seen": "2026-08-10T09:38:20.026276Z"
+    },
+    {
+      "id": "AGR-2026-053",
+      "fingerprint": "semantic:challenge-selection/match-method-and-intent-capability",
+      "first_seen": "2026-08-17T09:21:27.755210Z"
+    },
+    {
+      "id": "AGR-2026-054",
+      "fingerprint": "semantic:client-retries/retry-payment-challenge-rounds",
+      "first_seen": "2026-08-17T09:21:27.755210Z"
+    },
+    {
+      "id": "AGR-2026-055",
+      "fingerprint": "semantic:http-errors/failed-payment-returns-fresh-challenge",
+      "first_seen": "2026-08-17T09:21:27.755210Z"
+    },
+    {
+      "id": "AGR-2026-056",
+      "fingerprint": "semantic:payment-negotiation/advertise-supported-payment-preferences",
+      "first_seen": "2026-08-17T09:21:27.755210Z"
+    },
+    {
+      "id": "AGR-2026-057",
+      "fingerprint": "semantic:payment-retry/configurable-retry-limit",
+      "first_seen": "2026-08-17T09:21:27.755210Z"
+    },
+    {
+      "id": "AGR-2026-058",
+      "fingerprint": "semantic:payment-retry/retry-repeated-actionable-challenges",
+      "first_seen": "2026-08-17T09:21:27.755210Z"
+    },
+    {
+      "id": "AGR-2026-059",
+      "fingerprint": "semantic:stripe-charge/replayed-processor-result-is-rejected",
+      "first_seen": "2026-08-17T09:21:27.755210Z"
+    },
+    {
+      "id": "AGR-2026-060",
+      "fingerprint": "semantic:stripe/idempotency-key-binds-payment-token",
+      "first_seen": "2026-08-17T09:21:27.755210Z"
+    },
+    {
+      "id": "AGR-2026-061",
+      "fingerprint": "semantic:subscription/tempo-recurring-payment-lifecycle",
+      "first_seen": "2026-08-17T09:21:27.755210Z"
+    },
+    {
+      "id": "AGR-2026-062",
+      "fingerprint": "semantic:tempo-charge/settlement-is-bound-to-challenge-memo",
+      "first_seen": "2026-08-17T09:21:27.755210Z"
+    },
+    {
+      "id": "AGR-2026-063",
+      "fingerprint": "semantic:transport/retry-successive-payment-challenges",
+      "first_seen": "2026-08-17T09:21:27.755210Z"
+    },
+    {
+      "id": "AGR-2026-064",
+      "fingerprint": "semantic:authorization/validate-required-challenge-echo-fields",
+      "first_seen": "2026-08-24T09:22:44.132539Z"
+    },
+    {
+      "id": "AGR-2026-065",
+      "fingerprint": "semantic:client-retries/retry-payment-challenges-up-to-default-limit",
+      "first_seen": "2026-08-24T09:22:44.132539Z"
+    },
+    {
+      "id": "AGR-2026-066",
+      "fingerprint": "semantic:error-handling/verification-failure-returns-fresh-challenge",
+      "first_seen": "2026-08-24T09:22:44.132539Z"
+    },
+    {
+      "id": "AGR-2026-067",
+      "fingerprint": "semantic:http-challenge/escape-non-latin1-quoted-values",
+      "first_seen": "2026-08-24T09:22:44.132539Z"
+    },
+    {
+      "id": "AGR-2026-068",
+      "fingerprint": "semantic:http-challenge/omit-problem-body-without-error",
+      "first_seen": "2026-08-24T09:22:44.132539Z"
+    },
+    {
+      "id": "AGR-2026-069",
+      "fingerprint": "semantic:negotiation/match-challenges-by-method-and-intent",
+      "first_seen": "2026-08-24T09:22:44.132539Z"
+    },
+    {
+      "id": "AGR-2026-070",
+      "fingerprint": "semantic:parsing/reject-malformed-challenge-set",
+      "first_seen": "2026-08-24T09:22:44.132539Z"
+    },
+    {
+      "id": "AGR-2026-071",
+      "fingerprint": "semantic:payment-receipt/preserve-extension-fields",
+      "first_seen": "2026-08-24T09:22:44.132539Z"
+    },
+    {
+      "id": "AGR-2026-072",
+      "fingerprint": "semantic:receipt/preserve-method-specific-fields",
+      "first_seen": "2026-08-24T09:22:44.132539Z"
+    },
+    {
+      "id": "AGR-2026-073",
+      "fingerprint": "semantic:replay-protection/replayed-stripe-credential-is-rejected",
+      "first_seen": "2026-08-24T09:22:44.132539Z"
+    },
+    {
+      "id": "AGR-2026-074",
+      "fingerprint": "semantic:retries/reuse-credential-for-identical-challenge",
+      "first_seen": "2026-08-24T09:22:44.132539Z"
+    },
+    {
+      "id": "AGR-2026-075",
+      "fingerprint": "semantic:tempo-charge/bind-settlement-to-challenge",
+      "first_seen": "2026-08-24T09:22:44.132539Z"
+    },
+    {
+      "id": "AGR-2026-076",
+      "fingerprint": "semantic:tempo-transaction/validate-transfer-before-broadcast",
+      "first_seen": "2026-08-24T09:22:44.132539Z"
+    },
+    {
+      "id": "AGR-2026-077",
+      "fingerprint": "semantic:transport/credential-retry-targets-final-same-origin-url",
+      "first_seen": "2026-08-24T09:22:44.132539Z"
+    },
+    {
+      "id": "AGR-2026-078",
+      "fingerprint": "semantic:authentication/selected-credential-header",
+      "first_seen": "2026-08-31T09:17:02.596794Z"
+    },
+    {
+      "id": "AGR-2026-079",
+      "fingerprint": "semantic:http-cache/preserve-origin-directives-and-mark-receipts-private",
+      "first_seen": "2026-08-31T09:17:02.596794Z"
+    },
+    {
+      "id": "AGR-2026-080",
+      "fingerprint": "semantic:http-success/automatic-receipt-response",
+      "first_seen": "2026-08-31T09:17:02.596794Z"
+    },
+    {
+      "id": "AGR-2026-081",
+      "fingerprint": "semantic:negotiation/select-by-method-and-intent",
+      "first_seen": "2026-08-31T09:17:02.596794Z"
+    },
+    {
+      "id": "AGR-2026-082",
+      "fingerprint": "semantic:receipts/extension-field-preservation",
+      "first_seen": "2026-08-31T09:17:02.596794Z"
+    },
+    {
+      "id": "AGR-2026-083",
+      "fingerprint": "semantic:receipts/preserve-method-specific-extension-fields",
+      "first_seen": "2026-08-31T09:17:02.596794Z"
+    },
+    {
+      "id": "AGR-2026-084",
+      "fingerprint": "semantic:receipts/preserve-method-specific-fields",
+      "first_seen": "2026-08-31T09:17:02.596794Z"
+    },
+    {
+      "id": "AGR-2026-085",
+      "fingerprint": "semantic:receipts/require-valid-base-fields-at-construction",
+      "first_seen": "2026-08-31T09:17:02.596794Z"
+    },
+    {
+      "id": "AGR-2026-086",
+      "fingerprint": "semantic:receipts/success-status-validation",
+      "first_seen": "2026-08-31T09:17:02.596794Z"
+    },
+    {
+      "id": "AGR-2026-087",
+      "fingerprint": "semantic:tempo-charge/challenge-bound-settlement",
+      "first_seen": "2026-08-31T09:17:02.596794Z"
+    },
+    {
+      "id": "AGR-2026-088",
+      "fingerprint": "semantic:tempo-charge/prebroadcast-transaction-validation",
+      "first_seen": "2026-08-31T09:17:02.596794Z"
+    },
+    {
+      "id": "AGR-2026-089",
+      "fingerprint": "semantic:verification/reissue-fresh-challenge-on-verification-failure",
+      "first_seen": "2026-08-31T09:17:02.596794Z"
+    }
+  ]
+}
