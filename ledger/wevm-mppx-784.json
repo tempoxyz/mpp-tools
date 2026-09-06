@@ -1,0 +1,21 @@
+{
+  "id": "mppx#784",
+  "source": {
+    "repo": "wevm/mppx",
+    "pr": 784,
+    "sha": "61f847e8621b559c25aded0e40e73642861593c4"
+  },
+  "labels": [
+    "agricola:rust"
+  ],
+  "decisions": [
+    {
+      "target": "rust",
+      "by": "brendanjryan",
+      "idempotency_key": "propagate:mppx#784:rust",
+      "at": "2026-08-14T01:21:35.479817Z",
+      "decision": "propagate",
+      "pr": "tempoxyz/mpp-rs#386"
+    }
+  ]
+}
