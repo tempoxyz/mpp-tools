@@ -36,6 +36,7 @@ from .manifest import (
 from .models import (
     AuditSemanticResult,
     Automation,
+    PendingAcknowledgement,
     PendingAuditReport,
     PendingIssueUpdate,
     PendingReply,
@@ -44,7 +45,12 @@ from .models import (
 )
 from .publisher import PublicationError, SubprocessGit, publish
 from .revision import collect_revision_feedback
-from .service import handle_comment, poll, record_propagations
+from .service import (
+    handle_comment,
+    poll,
+    record_propagations,
+    revision_acknowledgements,
+)
 from .state_transaction import GitStateStore, StateTransactionError, transact
 
 
@@ -103,6 +109,21 @@ def parser() -> argparse.ArgumentParser:
         help="append a link to the GitHub Actions run that produced the reply",
     )
     delivery.add_argument(
+        "--control-repo",
+        default=os.environ.get("GITHUB_REPOSITORY", "tempoxyz/mpp-tools"),
+    )
+
+    pr_delivery = subcommands.add_parser(
+        "deliver-pr-actions",
+        help="acknowledge polled PR commands and post their queued replies",
+    )
+    pr_delivery.add_argument("result_file")
+    pr_delivery.add_argument(
+        "--action-url",
+        required=True,
+        help="link to the GitHub Actions run processing the commands",
+    )
+    pr_delivery.add_argument(
         "--control-repo",
         default=os.environ.get("GITHUB_REPOSITORY", "tempoxyz/mpp-tools"),
     )
@@ -232,8 +253,49 @@ def main(argv: list[str] | None = None) -> int:
         body = reply.body
         if args.action_url:
             body = f"{body}\n\n[View fix run]({args.action_url})"
-        GitHubClient(args.control_repo).comment_issue(reply.issue_number, body)
+        client = GitHubClient(args.control_repo)
+        if reply.repository is None:
+            client.comment_issue(reply.issue_number, body)
+        else:
+            client.comment_repository_issue(reply.repository, reply.issue_number, body)
         print(json.dumps({"delivered": True, "issue_number": reply.issue_number}))
+        return 0
+    if args.command == "deliver-pr-actions":
+        try:
+            result = json.loads(Path(args.result_file).read_text())
+            acknowledgements = TypeAdapter(
+                tuple[PendingAcknowledgement, ...]
+            ).validate_python(result.get("acknowledgements", ()))
+            replies = TypeAdapter(tuple[PendingReply, ...]).validate_python(
+                result.get("replies", ())
+            )
+            if any(reply.repository is None for reply in replies):
+                raise ValueError("polled PR replies require a repository")
+        except (json.JSONDecodeError, OSError, ValidationError, ValueError) as exc:
+            print(f"PR action delivery error: {exc}", file=sys.stderr)
+            return 2
+        client = GitHubClient(args.control_repo)
+        for acknowledgement in acknowledgements:
+            client.react_to_issue_comment(
+                acknowledgement.repository,
+                acknowledgement.comment_id,
+                acknowledgement.content,
+            )
+        for reply in replies:
+            assert reply.repository is not None
+            client.comment_repository_issue(
+                reply.repository,
+                reply.issue_number,
+                f"{reply.body}\n\n[View fix run]({args.action_url})",
+            )
+        print(
+            json.dumps(
+                {
+                    "acknowledged": len(acknowledgements),
+                    "replies": len(replies),
+                }
+            )
+        )
         return 0
     if args.command == "deliver-issue-update":
         try:
@@ -519,8 +581,15 @@ def main(argv: list[str] | None = None) -> int:
                     **{
                         name: value
                         for name, value in result.__dict__.items()
-                        if name != "propagations"
+                        if name not in {"acknowledgements", "replies", "propagations"}
                     },
+                    "acknowledgements": [
+                        acknowledgement.model_dump(mode="json")
+                        for acknowledgement in result.acknowledgements
+                    ],
+                    "replies": [
+                        reply.model_dump(mode="json") for reply in result.replies
+                    ],
                     "propagations": [
                         request.model_dump(mode="json")
                         for request in result.propagations
@@ -543,6 +612,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.issue_update_file:
             Path(args.issue_update_file).unlink(missing_ok=True)
         result = handle_comment(client, manifest, ledger, event)
+        acknowledgements = revision_acknowledgements(
+            client, manifest, result.propagations
+        )
         if result.reply is not None:
             if args.reply_file:
                 Path(args.reply_file).write_text(
@@ -570,6 +642,10 @@ def main(argv: list[str] | None = None) -> int:
                     and bool(args.reply_file),
                     "issue_update_deferred": result.issue_update is not None
                     and bool(args.issue_update_file),
+                    "acknowledgements": [
+                        acknowledgement.model_dump(mode="json")
+                        for acknowledgement in acknowledgements
+                    ],
                     "propagations": [
                         request.model_dump(mode="json")
                         for request in result.propagations

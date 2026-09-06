@@ -15,18 +15,30 @@ from agricola.models import (
     PropagationResult,
     PropagationRevision,
     PropagationSkip,
+    PullRequestComment,
 )
-from agricola.service import handle_comment, poll, record_propagations
+from agricola.service import (
+    handle_comment,
+    poll,
+    record_propagations,
+    revision_acknowledgements,
+)
 from agricola.tests.helpers import change, manifest
 
 
 class FakeGitHub:
     def __init__(self) -> None:
         self.change = change()
+        self.changes = ()
+        self.poll_current_change = True
         self.tracking = None
+        self.tracking_issues: tuple[dict[str, object], ...] | None = None
+        self.pr_comments: dict[str, tuple[PullRequestComment, ...]] = {}
         self.created: list[tuple[str, str, tuple[str, ...]]] = []
         self.updated: list[tuple[int, str | None, str | None]] = []
         self.comments: list[tuple[int, str]] = []
+        self.repository_comments: list[tuple[str, int, str]] = []
+        self.reactions: list[tuple[str, int, str]] = []
         self.pull_requests = 0
         self.source_repo = "wevm/mppx"
         self.repository_heads: list[str] = []
@@ -40,7 +52,7 @@ class FakeGitHub:
         )
 
     def merged_changes(self, repo, cursor):
-        return [self.change]
+        return [self.change] if self.poll_current_change else list(self.changes)
 
     def pull_request(self, repo, number):
         self.pull_requests += 1
@@ -55,6 +67,11 @@ class FakeGitHub:
 
     def find_tracking_issue(self, marker):
         return self.tracking
+
+    def find_tracking_issues(self, marker):
+        if self.tracking_issues is not None:
+            return self.tracking_issues
+        return () if self.tracking is None else (self.tracking,)
 
     def create_issue(self, title, body, labels=()):
         self.created.append((title, body, tuple(labels)))
@@ -74,6 +91,13 @@ class FakeGitHub:
         self.comments.append((number, body))
         return {"id": len(self.comments)}
 
+    def comment_repository_issue(self, repository, number, body):
+        self.repository_comments.append((repository, number, body))
+        return {"id": len(self.repository_comments)}
+
+    def react_to_issue_comment(self, repository, comment_id, content="eyes"):
+        self.reactions.append((repository, comment_id, content))
+
     def source_from_body(self, body):
         if "agricola:source=" not in body:
             raise GitHubError("missing source")
@@ -88,6 +112,9 @@ class FakeGitHub:
             url=f"https://github.com/{reference.replace('#', '/pull/')}",
             head_sha="def1234567",
         )
+
+    def pull_request_comments(self, reference):
+        return self.pr_comments.get(reference, ())
 
 
 def cursor_store(directory: str) -> CursorStore:
@@ -270,6 +297,101 @@ class PollTests(unittest.TestCase):
             self.assertEqual(
                 tuple(item.target for item in result.propagations), ("go",)
             )
+
+    def test_queues_unacknowledged_pr_fix_with_freeform_instruction(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeGitHub()
+            client.poll_current_change = False
+            client.tracking_issues = (
+                {
+                    "number": 97,
+                    "title": "[Agricola] AGR-2026-022: Challenge selection differs",
+                    "html_url": "https://github.com/tempoxyz/mpp-tools/issues/97",
+                    "body": """<!-- agricola:audit-finding=AGR-2026-022 -->
+# AGR-2026-022 — Challenge selection differs
+
+## Audited heads
+
+| Target | Repository | Commit | Conformance | Semantic review |
+| --- | --- | --- | --- | --- |
+| `typescript` | `wevm/mppx` | [`b7ab48e38e3d`](https://github.com/wevm/mppx/commit/b7ab48e38e3d) | Complete | Reference |
+| `go` | `tempoxyz/mpp-go` | [`9cad840de723`](https://github.com/tempoxyz/mpp-go/commit/9cad840de723) | Complete | Complete |
+
+## Finding
+
+- Fingerprint: `semantic:challenge-negotiation/select-supported-method-intent`
+- Affected SDKs: `go`
+
+<!-- agricola:propagation-table:start -->
+| Target | Automation | Status | Pull request |
+| --- | --- | --- | --- |
+| `go` | pr | Recorded | [tempoxyz/mpp-go#91](https://github.com/tempoxyz/mpp-go/pull/91) |
+<!-- agricola:propagation-table:end -->
+""",
+                },
+            )
+            client.pr_comments["tempoxyz/mpp-go#91"] = (
+                PullRequestComment(
+                    id=55,
+                    body="/ag fix can you add more test coverage",
+                    author="maintainer",
+                    created_at=datetime(2026, 8, 8, 3, 22, tzinfo=UTC),
+                ),
+            )
+
+            result = poll(
+                client,
+                manifest(),
+                DecisionLedger(directory),
+                cursor_store(directory),
+            )
+
+            self.assertEqual(result.pr_commands, 1)
+            self.assertEqual(len(result.propagations), 1)
+            request = result.propagations[0]
+            self.assertEqual(request.target, "go")
+            self.assertEqual(request.instruction, "can you add more test coverage")
+            assert request.revision is not None
+            self.assertEqual(request.revision.pr, "tempoxyz/mpp-go#91")
+            self.assertEqual(result.acknowledgements[0].comment_id, 55)
+            self.assertEqual(result.replies[0].repository, "tempoxyz/mpp-go")
+            self.assertEqual(result.replies[0].issue_number, 91)
+
+    def test_ignores_pr_fix_already_reacted_to_with_eyes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeGitHub()
+            client.poll_current_change = False
+            client.tracking_issues = (
+                {
+                    "number": 99,
+                    "body": """<!-- agricola:source=wevm/mppx#412 -->
+<!-- agricola:propagation-table:start -->
+| Target | Automation | Status | Pull request |
+| --- | --- | --- | --- |
+| `go` | pr | Recorded | [tempoxyz/mpp-go#88](https://github.com/tempoxyz/mpp-go/pull/88) |
+<!-- agricola:propagation-table:end -->
+""",
+                },
+            )
+            client.pr_comments["tempoxyz/mpp-go#88"] = (
+                PullRequestComment(
+                    id=56,
+                    body="/ag fix add coverage",
+                    author="maintainer",
+                    created_at=datetime(2026, 8, 8, 3, 22, tzinfo=UTC),
+                    has_eyes=True,
+                ),
+            )
+
+            result = poll(
+                client,
+                manifest(),
+                DecisionLedger(directory),
+                cursor_store(directory),
+            )
+
+            self.assertEqual(result.pr_commands, 0)
+            self.assertFalse(result.acknowledgements)
 
 
 class CommentTests(unittest.TestCase):
@@ -702,6 +824,51 @@ class CommentTests(unittest.TestCase):
             assert result.reply is not None
             self.assertIn("merged canonical pull request", result.reply.body)
             self.assertEqual(client.pull_requests, 0)
+
+    def test_issue_revision_acknowledges_unhandled_pr_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeGitHub()
+            event = self.audit_event(
+                '/ag fix go "address the review and failing tests"'
+            )
+            event["issue"]["body"] += """
+<!-- agricola:propagation-table:start -->
+| Target | Automation | Status | Pull request |
+| --- | --- | --- | --- |
+| `go` | pr | Recorded | [tempoxyz/mpp-go#91](https://github.com/tempoxyz/mpp-go/pull/91) |
+<!-- agricola:propagation-table:end -->
+"""
+            client.pr_comments["tempoxyz/mpp-go#91"] = (
+                PullRequestComment(
+                    id=55,
+                    body="/ag fix add more coverage",
+                    author="maintainer",
+                    created_at=datetime(2026, 8, 8, 3, 22, tzinfo=UTC),
+                ),
+                PullRequestComment(
+                    id=56,
+                    body="/ag fix already handled",
+                    author="maintainer",
+                    created_at=datetime(2026, 8, 8, 3, 23, tzinfo=UTC),
+                    has_eyes=True,
+                ),
+            )
+
+            result = handle_comment(
+                client,
+                manifest(),
+                DecisionLedger(directory),
+                event,
+            )
+            acknowledgements = revision_acknowledgements(
+                client, manifest(), result.propagations
+            )
+
+            self.assertEqual(len(result.propagations), 1)
+            self.assertEqual(
+                [acknowledgement.comment_id for acknowledgement in acknowledgements],
+                [55],
+            )
 
 
 if __name__ == "__main__":
