@@ -725,7 +725,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pympp", extras = ["tempo"], specifier = "==0.10.1" }]
+requires-dist = [{ name = "pympp", extras = ["tempo"], specifier = "==0.11.0" }]
 
 [[package]]
 name = "multidict"
@@ -1054,14 +1054,15 @@ wheels = [
 
 [[package]]
 name = "pympp"
-version = "0.10.1"
+version = "0.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
+    { name = "rfc8785" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/68/71/2bcb7701570dcdeb779bf072af009a899206fc7c6dfc238b40f82bbf49d1/pympp-0.10.1.tar.gz", hash = "sha256:846ffee1cbf9109fef89694a7e3073e9f2114bed094d481ab3a93a108526dfe8", size = 171767, upload-time = "2026-08-09T15:45:32.489Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/50/b7/b030c30c6ef748bd1c38acbdc2237907918b55e5d47115b6e80e74f7fec2/pympp-0.11.0.tar.gz", hash = "sha256:5264850cc3b8c8e3610aac6efc1ac390120623a47f376fb0973bf433eac45855", size = 205469, upload-time = "2026-08-28T21:23:22.06Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0e/46/9adfc30b97e1851ce60ca333ec18a7481f78d2c7a661b2b30ac55979e2fc/pympp-0.10.1-py3-none-any.whl", hash = "sha256:878067e70dfa7509e0ce783c1f2e0ec5bfc279f84cb2fed030f2f3d0bf6faaf1", size = 95343, upload-time = "2026-08-09T15:45:31.444Z" },
+    { url = "https://files.pythonhosted.org/packages/72/50/756e7c2a5936125afa04a0b258637a50d5d5eeec8cbe5e93e39d5fc5e445/pympp-0.11.0-py3-none-any.whl", hash = "sha256:714cb93a3d4f4fba31f062545617876dc460a7bc712947a7f6910ea5f9afa262", size = 113199, upload-time = "2026-08-28T21:23:20.849Z" },
 ]
 
 [package.optional-dependencies]
@@ -1220,6 +1221,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ac/c3/e2a2b89f2d3e2179abd6d00ebd70bff6273f37fb3e0cc209f48b39d00cbf/requests-2.34.2.tar.gz", hash = "sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed", size = 142856, upload-time = "2026-05-14T19:25:27.735Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a0/f4/c67b0b3f1b9245e8d266f0f112c500d50e5b4e83cb6f3b71b6528104182a/requests-2.34.2-py3-none-any.whl", hash = "sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0", size = 73075, upload-time = "2026-05-14T19:25:26.443Z" },
+]
+
+[[package]]
+name = "rfc8785"
+version = "0.1.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ef/2f/fa1d2e740c490191b572d33dbca5daa180cb423c24396b856f5886371d8b/rfc8785-0.1.4.tar.gz", hash = "sha256:e545841329fe0eee4f6a3b44e7034343100c12b4ec566dc06ca9735681deb4da", size = 14321, upload-time = "2024-09-27T16:33:31.206Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4d/78/119878110660b2ad709888c8a1614fce7e2fab39080ab960656dc8605bf6/rfc8785-0.1.4-py3-none-any.whl", hash = "sha256:520d690b448ecf0703691c76e1a34a24ddcd4fc5bc41d589cb7c58ec651bcd48", size = 9240, upload-time = "2024-09-27T16:33:29.683Z" },
 ]
 
 [[package]]
