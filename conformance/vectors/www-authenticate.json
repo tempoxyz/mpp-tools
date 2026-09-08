@@ -9,10 +9,10 @@
   "scenarios": [
     {
       "name": "payment_authorization_header",
-      "description": "Preserves the optional credential header supported by Rust SDK 0.12+",
+      "description": "Preserves the optional credential header supported after Rust SDK 0.12.0",
       "tags": ["happy-path", "optional-fields"],
       "adapters": ["rust"],
-      "sdkVersions": { "rust": ">=0.12.0" },
+      "sdkVersions": { "rust": ">0.12.0" },
       "object": {
         "id": "ch_header",
         "realm": "api.example.com",

@@ -9,10 +9,10 @@
   "scenarios": [
     {
       "name": "credential_with_payment_authorization_header",
-      "description": "Preserves the optional header in the Rust SDK 0.12+ challenge echo",
+      "description": "Preserves the optional header in Rust SDK challenge echoes after 0.12.0",
       "tags": ["happy-path", "optional-fields"],
       "adapters": ["rust"],
-      "sdkVersions": { "rust": ">=0.12.0" },
+      "sdkVersions": { "rust": ">0.12.0" },
       "object": {
         "challenge": {
           "id": "ch_header",

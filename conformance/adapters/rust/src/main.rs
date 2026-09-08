@@ -329,6 +329,7 @@ fn handle_generate_challenge_id(input: &str) {
                 .unwrap_or(serde_json::json!({}));
             let expires = opt_str_field(&params, "expires");
             let digest = opt_str_field(&params, "digest");
+            let header = opt_str_field(&params, "header");
             let opaque = opt_str_field(&params, "opaque");
 
             let challenge_id_params = ChallengeIdParams {
@@ -339,6 +340,7 @@ fn handle_generate_challenge_id(input: &str) {
                 request: &request,
                 expires: expires.as_deref(),
                 digest: digest.as_deref(),
+                header: header.as_deref(),
                 opaque: opaque.as_deref(),
             };
 
@@ -553,6 +555,7 @@ struct ChallengeIdParams<'a> {
     request: &'a Value,
     expires: Option<&'a str>,
     digest: Option<&'a str>,
+    header: Option<&'a str>,
     opaque: Option<&'a str>,
 }
 
@@ -569,16 +572,22 @@ fn generate_conformance_challenge_id(params: ChallengeIdParams<'_>) -> Result<St
 
     let request_json = stable_json(params.request).map_err(|e| e.to_string())?;
     let request_b64 = base64url_encode(request_json.as_bytes());
-    let hmac_input = [
+    let mut hmac_input = vec![
         params.realm,
         params.method,
         params.intent,
         &request_b64,
         params.expires.unwrap_or(""),
         params.digest.unwrap_or(""),
-        params.opaque.unwrap_or(""),
-    ]
-    .join("|");
+    ];
+    if let Some(header) = params
+        .header
+        .filter(|header| !header.eq_ignore_ascii_case("Authorization"))
+    {
+        hmac_input.push(header);
+    }
+    hmac_input.push(params.opaque.unwrap_or(""));
+    let hmac_input = hmac_input.join("|");
 
     let mut mac = HmacSha256::new_from_slice(params.secret_key.as_bytes())
         .expect("HMAC can take key of any size");

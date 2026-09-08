@@ -57,20 +57,23 @@ def canonical_json(value) -> str:
     return json.dumps(value, separators=(",", ":"), sort_keys=True, ensure_ascii=False)
 
 
-def generate_conformance_challenge_id(*, secret_key: str, realm: str, method: str, intent: str, request, expires: str | None = None, digest: str | None = None, opaque: str | None = None) -> str:
+def generate_conformance_challenge_id(*, secret_key: str, realm: str, method: str, intent: str, request, expires: str | None = None, digest: str | None = None, header: str | None = None, opaque: str | None = None) -> str:
     if len(secret_key.encode("utf-8")) < MINIMUM_SECRET_KEY_BYTES:
         raise ValueError(f"secretKey must be at least {MINIMUM_SECRET_KEY_BYTES} bytes")
 
     request_b64 = base64.urlsafe_b64encode(canonical_json(request or {}).encode("utf-8")).decode("ascii").rstrip("=")
-    payload = "|".join([
+    payload_parts = [
         realm,
         method,
         intent,
         request_b64,
         expires or "",
         digest or "",
-        opaque or "",
-    ])
+    ]
+    if header and header.lower() != "authorization":
+        payload_parts.append(header)
+    payload_parts.append(opaque or "")
+    payload = "|".join(payload_parts)
     signature = hmac.new(secret_key.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).digest()
     return base64.urlsafe_b64encode(signature).decode("ascii").rstrip("=")
 
@@ -439,6 +442,7 @@ def main():
                 request=params.get("request", {}),
                 expires=params.get("expires"),
                 digest=params.get("digest"),
+                header=params.get("header"),
                 opaque=params.get("opaque"),
             )
             print(json.dumps(success(result)))

@@ -125,6 +125,7 @@ function generateConformanceChallengeId(params: {
 	request?: Record<string, unknown>
 	expires?: string
 	digest?: string
+	header?: string
 	opaque?: string
 }): string {
 	if (Buffer.byteLength(params.secretKey, 'utf8') < minimumSecretKeyBytes)
@@ -139,9 +140,11 @@ function generateConformanceChallengeId(params: {
 		requestB64,
 		params.expires ?? '',
 		params.digest ?? '',
-		params.opaque ?? '',
-	].join('|')
-	return createHmac('sha256', params.secretKey).update(payload).digest('base64url')
+	]
+	if (params.header && params.header.toLowerCase() !== 'authorization')
+		payload.push(params.header)
+	payload.push(params.opaque ?? '')
+	return createHmac('sha256', params.secretKey).update(payload.join('|')).digest('base64url')
 }
 
 async function verifyStripeExternalIdBinding(input: {

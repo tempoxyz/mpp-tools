@@ -67,9 +67,12 @@ def generate_conformance_challenge_id(params)
     params["intent"] || "",
     request_b64,
     params["expires"] || "",
-    params["digest"] || "",
-    params["opaque"] || ""
-  ].join("|")
+    params["digest"] || ""
+  ]
+  header = params["header"]
+  payload << header if header && !header.casecmp?("Authorization")
+  payload << (params["opaque"] || "")
+  payload = payload.join("|")
   digest = OpenSSL::HMAC.digest("SHA256", secret_key.encode("UTF-8"), payload.encode("UTF-8"))
   base64url_encode(digest)
 end

@@ -80,6 +80,18 @@ class VectorRunnerHelperTest(unittest.TestCase):
         self.assertFalse(applies)
         self.assertEqual(reason, "python@0.9.1 does not satisfy >0.9.1")
 
+    def test_scenario_version_constraint_excludes_last_unsupported_release(self) -> None:
+        scenario = {"sdkVersions": {"rust": ">0.12.0"}}
+        adapter = AdapterConfig(name="rust", command=["adapter"], capabilities=[])
+
+        for version, expected in (("0.12.0", False), ("0.12.1", True)):
+            with self.subTest(version=version):
+                runner = VectorRunner(
+                    output_format="json", sdk_version_resolver=lambda _: version
+                )
+                applies, _ = runner.scenario_version_applies(scenario, adapter)
+                self.assertEqual(applies, expected)
+
     def test_scenario_version_constraint_ignores_unspecified_adapter(self) -> None:
         scenario = {"sdkVersions": {"rust": ">=0.12.0"}}
 
