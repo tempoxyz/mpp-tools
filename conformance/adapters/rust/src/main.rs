@@ -4,6 +4,7 @@ use mpp::protocol::core::{
     format_www_authenticate, parse_authorization, parse_receipt, parse_www_authenticate,
     Base64UrlJson, ChallengeEcho, PaymentChallenge, PaymentCredential, Receipt,
 };
+use serde::{de::DeserializeOwned, Serialize};
 use serde_json::{json, Value};
 use sha2::Sha256;
 use std::io::{self, Read, Write};
@@ -99,6 +100,36 @@ fn opaque_to_json(opaque: &Base64UrlJson) -> Result<Value, String> {
     }
 }
 
+// SDK checkout CI can add optional fields before the pinned release has them.
+// Use the SDK's Serde representation instead of version-specific struct literals:
+// mpp 0.11 ignores `header`, while newer SDKs preserve it (or default to None).
+fn challenge_from_json<T: DeserializeOwned>(value: &Value) -> Result<T, String> {
+    let request = Base64UrlJson::from_value(&value.get("request").cloned().unwrap_or(json!({})))
+        .map_err(|e| e.to_string())?;
+    let opaque = opt_base64url_json_field(value, "opaque")?;
+    serde_json::from_value(json!({
+        "id": str_field(value, "id"),
+        "realm": str_field(value, "realm"),
+        "method": str_field(value, "method"),
+        "intent": str_field(value, "intent"),
+        "request": request,
+        "expires": opt_str_field(value, "expires"),
+        "description": opt_str_field(value, "description"),
+        "digest": opt_str_field(value, "digest"),
+        "opaque": opaque,
+        "header": opt_str_field(value, "header"),
+    }))
+    .map_err(|e| e.to_string())
+}
+
+fn copy_header(value: &impl Serialize, object: &mut Value) -> Result<(), String> {
+    let serialized = serde_json::to_value(value).map_err(|e| e.to_string())?;
+    if let Some(header) = serialized.get("header").filter(|header| !header.is_null()) {
+        object["header"] = header.clone();
+    }
+    Ok(())
+}
+
 fn challenge_to_json(challenge: &PaymentChallenge) -> Result<Value, String> {
     let request_decoded = challenge
         .request
@@ -127,6 +158,7 @@ fn challenge_to_json(challenge: &PaymentChallenge) -> Result<Value, String> {
             opaque_to_json(opaque).map_err(|e| format!("Invalid JSON in opaque: {}", e))?;
     }
 
+    copy_header(challenge, &mut obj)?;
     Ok(obj)
 }
 
@@ -158,6 +190,7 @@ fn credential_to_json(credential: &PaymentCredential) -> Result<Value, String> {
     if let Some(ref opaque) = credential.challenge.opaque {
         challenge_obj["opaque"] = opaque_to_json(opaque)?;
     }
+    copy_header(&credential.challenge, &mut challenge_obj)?;
 
     let mut obj = json!({
         "challenge": challenge_obj,
@@ -206,31 +239,12 @@ fn handle_format_www_authenticate(input: &str) {
                 print_error("id must not be empty", "format_error");
                 return;
             }
-            let request_obj = value.get("request").cloned().unwrap_or(json!({}));
-            let request_b64 = match Base64UrlJson::from_value(&request_obj) {
-                Ok(b64) => b64,
+            let challenge: PaymentChallenge = match challenge_from_json(&value) {
+                Ok(challenge) => challenge,
                 Err(e) => {
-                    print_error(&e.to_string(), "format_error");
+                    print_error(&e, "format_error");
                     return;
                 }
-            };
-
-            let challenge = PaymentChallenge {
-                id,
-                realm: str_field(&value, "realm"),
-                method: str_field(&value, "method").into(),
-                intent: str_field(&value, "intent").into(),
-                request: request_b64,
-                expires: opt_str_field(&value, "expires"),
-                description: opt_str_field(&value, "description"),
-                digest: opt_str_field(&value, "digest"),
-                opaque: match opt_base64url_json_field(&value, "opaque") {
-                    Ok(opaque) => opaque,
-                    Err(e) => {
-                        print_error(&e, "format_error");
-                        return;
-                    }
-                },
             };
 
             match format_www_authenticate(&challenge) {
@@ -246,30 +260,12 @@ fn handle_format_authorization(input: &str) {
     match serde_json::from_str::<Value>(input) {
         Ok(value) => {
             let challenge_val = value.get("challenge").cloned().unwrap_or(json!({}));
-            let request_obj = challenge_val.get("request").cloned().unwrap_or(json!({}));
-            let request_b64 = match Base64UrlJson::from_value(&request_obj) {
-                Ok(b64) => b64,
+            let challenge_echo: ChallengeEcho = match challenge_from_json(&challenge_val) {
+                Ok(challenge) => challenge,
                 Err(e) => {
-                    print_error(&e.to_string(), "format_error");
+                    print_error(&e, "format_error");
                     return;
                 }
-            };
-
-            let challenge_echo = ChallengeEcho {
-                id: str_field(&challenge_val, "id"),
-                realm: str_field(&challenge_val, "realm"),
-                method: str_field(&challenge_val, "method").into(),
-                intent: str_field(&challenge_val, "intent").into(),
-                request: request_b64,
-                expires: opt_str_field(&challenge_val, "expires"),
-                digest: opt_str_field(&challenge_val, "digest"),
-                opaque: match opt_base64url_json_field(&challenge_val, "opaque") {
-                    Ok(opaque) => opaque,
-                    Err(e) => {
-                        print_error(&e, "format_error");
-                        return;
-                    }
-                },
             };
 
             let payload_val = value.get("payload").cloned().unwrap_or(json!({}));
@@ -333,6 +329,7 @@ fn handle_generate_challenge_id(input: &str) {
                 .unwrap_or(serde_json::json!({}));
             let expires = opt_str_field(&params, "expires");
             let digest = opt_str_field(&params, "digest");
+            let header = opt_str_field(&params, "header");
             let opaque = opt_str_field(&params, "opaque");
 
             let challenge_id_params = ChallengeIdParams {
@@ -343,6 +340,7 @@ fn handle_generate_challenge_id(input: &str) {
                 request: &request,
                 expires: expires.as_deref(),
                 digest: digest.as_deref(),
+                header: header.as_deref(),
                 opaque: opaque.as_deref(),
             };
 
@@ -557,6 +555,7 @@ struct ChallengeIdParams<'a> {
     request: &'a Value,
     expires: Option<&'a str>,
     digest: Option<&'a str>,
+    header: Option<&'a str>,
     opaque: Option<&'a str>,
 }
 
@@ -573,16 +572,22 @@ fn generate_conformance_challenge_id(params: ChallengeIdParams<'_>) -> Result<St
 
     let request_json = stable_json(params.request).map_err(|e| e.to_string())?;
     let request_b64 = base64url_encode(request_json.as_bytes());
-    let hmac_input = [
+    let mut hmac_input = vec![
         params.realm,
         params.method,
         params.intent,
         &request_b64,
         params.expires.unwrap_or(""),
         params.digest.unwrap_or(""),
-        params.opaque.unwrap_or(""),
-    ]
-    .join("|");
+    ];
+    if let Some(header) = params
+        .header
+        .filter(|header| !header.eq_ignore_ascii_case("Authorization"))
+    {
+        hmac_input.push(header);
+    }
+    hmac_input.push(params.opaque.unwrap_or(""));
+    let hmac_input = hmac_input.join("|");
 
     let mut mac = HmacSha256::new_from_slice(params.secret_key.as_bytes())
         .expect("HMAC can take key of any size");

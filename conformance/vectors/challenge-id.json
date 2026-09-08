@@ -1,7 +1,7 @@
 {
   "version": "2.0.0",
   "spec_ref": "draft-ietf-httpauth-payment \u00a75.1.1",
-  "description": "Challenge ID generation using HMAC-SHA256. HMAC input format: realm|method|intent|canonicalized_request|expires|digest|opaque (pipe-delimited). Output: base64url(HMAC-SHA256(secretKey, input), no padding).",
+  "description": "Challenge ID generation using HMAC-SHA256. HMAC input format: realm|method|intent|canonicalized_request|expires|digest|[header|]opaque (pipe-delimited); a non-default credential header is inserted before opaque. Output: base64url(HMAC-SHA256(secretKey, input), no padding).",
   "commands": {
     "generate": "generate-challenge-id"
   },
@@ -85,6 +85,38 @@
         "opaque": "trace-123"
       },
       "expected": "1XJ-Ti0DACNe3E1zHvwH6OdnKlhUx6xKxDbhJyexng4"
+    },
+    {
+      "name": "with_payment_authorization_header",
+      "description": "A non-default credential header is inserted before opaque in the HMAC input",
+      "tags": ["happy-path", "optional-fields", "header-binding"],
+      "input": {
+        "secretKey": "test-vector-secret-minimum-32-byte-secret",
+        "realm": "api.example.com",
+        "method": "tempo",
+        "intent": "charge",
+        "request": {
+          "amount": "1000000"
+        },
+        "header": "Payment-Authorization"
+      },
+      "expected": "re8MIMJYpIJ0r_aiizscg6ghtipQM8IpOa_NtpwIU8E"
+    },
+    {
+      "name": "authorization_header_is_implicit_default",
+      "description": "An explicit Authorization header is normalized to the default and does not change the HMAC input",
+      "tags": ["happy-path", "optional-fields", "header-binding"],
+      "input": {
+        "secretKey": "test-vector-secret-minimum-32-byte-secret",
+        "realm": "api.example.com",
+        "method": "tempo",
+        "intent": "charge",
+        "request": {
+          "amount": "1000000"
+        },
+        "header": "Authorization"
+      },
+      "expected": "6QDs0BmhrI_v67iWeCMvGqQJEFQ6ErWKlk7zi5xL6t0"
     },
     {
       "name": "opaque_route_scope_binding",

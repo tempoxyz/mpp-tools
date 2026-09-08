@@ -329,9 +329,10 @@ public final class Adapter {
         Map<String, Object> request = requireMap(data.get("request"), "request", "generation_error");
         String expires = optionalString(data, "expires", "generation_error");
         String digest = optionalString(data, "digest", "generation_error");
+        String header = optionalString(data, "header", "generation_error");
         String opaque = optionalString(data, "opaque", "generation_error");
 
-        if (opaque == null) {
+        if (header == null && opaque == null) {
             try {
                 return ChallengeId.generate(
                     secretKey,
@@ -349,15 +350,19 @@ public final class Adapter {
         }
 
         String requestB64 = encodeJsonBase64Url(request, "generation_error");
-        String input = String.join("|",
+        List<String> inputParts = new ArrayList<>(List.of(
             requiredString(data, "realm", "generation_error", true),
             requiredString(data, "method", "generation_error", true),
             requiredString(data, "intent", "generation_error", true),
             requestB64,
             expires == null ? "" : expires,
-            digest == null ? "" : digest,
-            opaque
-        );
+            digest == null ? "" : digest
+        ));
+        if (header != null && !header.equalsIgnoreCase("Authorization")) {
+            inputParts.add(header);
+        }
+        inputParts.add(opaque == null ? "" : opaque);
+        String input = String.join("|", inputParts);
 
         try {
             Mac mac = Mac.getInstance("HmacSHA256");

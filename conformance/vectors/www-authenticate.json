@@ -8,6 +8,23 @@
   },
   "scenarios": [
     {
+      "name": "payment_authorization_header",
+      "description": "Preserves the optional credential header supported after Rust SDK 0.12.0",
+      "tags": ["happy-path", "optional-fields"],
+      "adapters": ["rust"],
+      "sdkVersions": { "rust": ">0.12.0" },
+      "object": {
+        "id": "ch_header",
+        "realm": "api.example.com",
+        "method": "tempo",
+        "intent": "charge",
+        "request": {},
+        "header": "Payment-Authorization"
+      },
+      "wire": "Payment id=\"ch_header\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\", header=\"Payment-Authorization\"",
+      "tests": { "parse": true, "format": true, "roundtrip": true }
+    },
+    {
       "name": "basic_challenge",
       "description": "Minimal challenge with only required fields",
       "tags": ["happy-path", "required-fields"],

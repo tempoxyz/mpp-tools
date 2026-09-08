@@ -278,6 +278,7 @@ func handleGenerateChallengeID(input string) {
 		mapField(data, "request"),
 		stringField(data, "expires"),
 		stringField(data, "digest"),
+		stringField(data, "header"),
 		stringField(data, "opaque"),
 	)
 	if err != nil {
@@ -658,22 +659,26 @@ func parseConformanceReceipt(header string) (*mpp.Receipt, error) {
 // string placed directly in the pipe-delimited HMAC input, which differs from
 // the library's map[string]string encoding. Once the spec settles on a single
 // encoding this can be replaced with mpp.GenerateChallengeID.
-func generateConformanceChallengeID(secretKey, realm, method, intent string, request map[string]any, expires, digest, opaque string) (string, error) {
+func generateConformanceChallengeID(secretKey, realm, method, intent string, request map[string]any, expires, digest, header, opaque string) (string, error) {
 	if len([]byte(secretKey)) < minimumSecretKeyBytes {
 		return "", fmt.Errorf("secretKey must be at least %d bytes", minimumSecretKeyBytes)
 	}
 
 	requestB64, _ := encodeJSONBase64URL(request)
 
-	input := strings.Join([]string{
+	inputParts := []string{
 		realm,
 		method,
 		intent,
 		requestB64,
 		expires,
 		digest,
-		opaque,
-	}, "|")
+	}
+	if header != "" && !strings.EqualFold(header, "Authorization") {
+		inputParts = append(inputParts, header)
+	}
+	inputParts = append(inputParts, opaque)
+	input := strings.Join(inputParts, "|")
 
 	mac := hmac.New(sha256.New, []byte(secretKey))
 	mac.Write([]byte(input))

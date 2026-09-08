@@ -43,7 +43,7 @@ Vectors live in `vectors/` and cover the core protocol surface:
 | `authorization.json` | Parsing and formatting `Authorization: Payment ...` credential headers. The credential is base64url-encoded JSON containing `challenge`, `payload`, and optional `source`. |
 | `receipt.json` | Parsing and formatting `Payment-Receipt: ...` headers. Base64url-encoded JSON with `status`, `method`, `timestamp`, `reference`. |
 | `base64url.json` | RFC 4648 §5 encoding: no padding, URL-safe alphabet (`-`/`_` instead of `+`/`/`). |
-| `challenge-id.json` | Deterministic challenge ID generation via HMAC-SHA256. Input is pipe-delimited (`realm\|method\|intent\|canonicalized_request\|expires\|digest\|opaque`), output is unpadded base64url. |
+| `challenge-id.json` | Deterministic challenge ID generation via HMAC-SHA256. Input is pipe-delimited (`realm\|method\|intent\|canonicalized_request\|expires\|digest\|[header\|]opaque`); a non-default credential header is inserted before `opaque`. Output is unpadded base64url. |
 | `tempo-proof.json` | EIP-712 typed-data shape for zero-amount Tempo proof credentials. Binds `challengeId` and `realm` under domain `MPP` version `2`. |
 
 Each vector file contains **scenarios** — individual test cases with a name, description, tags, and expected inputs/outputs:

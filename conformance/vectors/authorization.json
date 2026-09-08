@@ -8,6 +8,26 @@
   },
   "scenarios": [
     {
+      "name": "credential_with_payment_authorization_header",
+      "description": "Preserves the optional header in Rust SDK challenge echoes after 0.12.0",
+      "tags": ["happy-path", "optional-fields"],
+      "adapters": ["rust"],
+      "sdkVersions": { "rust": ">0.12.0" },
+      "object": {
+        "challenge": {
+          "id": "ch_header",
+          "realm": "api.example.com",
+          "method": "tempo",
+          "intent": "charge",
+          "request": {},
+          "header": "Payment-Authorization"
+        },
+        "payload": {}
+      },
+      "wire": "Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJjaF9oZWFkZXIiLCJyZWFsbSI6ImFwaS5leGFtcGxlLmNvbSIsIm1ldGhvZCI6InRlbXBvIiwiaW50ZW50IjoiY2hhcmdlIiwicmVxdWVzdCI6ImUzMCIsImhlYWRlciI6IlBheW1lbnQtQXV0aG9yaXphdGlvbiJ9LCJwYXlsb2FkIjp7fX0",
+      "tests": { "parse": true, "format": true, "roundtrip": true }
+    },
+    {
       "name": "basic_credential",
       "description": "Minimal credential with required fields",
       "tags": ["happy-path", "required-fields"],
