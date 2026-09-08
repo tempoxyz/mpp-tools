@@ -26,6 +26,10 @@ class AgricolaWorkflowTests(unittest.TestCase):
         self.control = yaml.load(self.control_text, Loader=yaml.BaseLoader)
         self.audit = yaml.load(self.audit_text, Loader=yaml.BaseLoader)
 
+    def test_legacy_workflows_are_manual_only(self) -> None:
+        for workflow in (self.control, self.audit):
+            self.assertEqual(workflow["on"], {"workflow_dispatch": ""})
+
     def test_concurrency_scopes_commands_to_tracking_issue(self) -> None:
         group = self.control["concurrency"]["group"]
         command_filter = "contains(github.event.comment.body, '/ag')"
@@ -57,9 +61,8 @@ class AgricolaWorkflowTests(unittest.TestCase):
         self.assertIn("owner: ${{ matrix.owner }}", self.control_text)
         self.assertIn("repositories: ${{ matrix.repository }}", self.control_text)
 
-    def test_recurring_audit_compares_each_sdk_to_pinned_canonical(self) -> None:
+    def test_manual_audit_compares_each_sdk_to_pinned_canonical(self) -> None:
         target = self.audit["jobs"]["target"]
-        self.assertEqual(self.audit["on"]["schedule"][0]["cron"], "0 9 * * 1")
         self.assertIn("agricola audit-matrix", self.audit_text)
         self.assertEqual(
             target["strategy"]["matrix"],
