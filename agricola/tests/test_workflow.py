@@ -75,6 +75,17 @@ class AgricolaWorkflowTests(unittest.TestCase):
         )
         self.assertIn("Compare SDK implementation to canonical mppx", self.audit_text)
 
+    def test_polling_token_can_acknowledge_downstream_pr_commands(self) -> None:
+        run = self.control["jobs"]["run"]
+        token = next(
+            step
+            for step in run["steps"]
+            if step.get("id") == "downstream-command-token"
+        )
+        self.assertNotIn("if", token)
+        self.assertEqual(token["with"]["permission-issues"], "write")
+        self.assertIn("agricola deliver-pr-actions", self.control_text)
+
     def test_publication_logic_runs_through_tested_cli(self) -> None:
         self.assertIn("agricola publish-propagation", self.control_text)
         self.assertNotIn("gh pr create", self.control_text)

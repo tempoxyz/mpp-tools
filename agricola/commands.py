@@ -16,7 +16,14 @@ from .models import (
 )
 
 _COMMAND_PREFIX = re.compile(r"^\s*/ag(?:ricola)?(?:\s+|$)", re.IGNORECASE)
+_PULL_REQUEST_FIX = re.compile(
+    r"^\s*/ag(?:ricola)?\s+fix(?:\s+(?P<instruction>.*?))?\s*$",
+    re.IGNORECASE,
+)
 _FIX_ALIASES = {"fix", "propagate", "propogate"}
+_DEFAULT_PULL_REQUEST_INSTRUCTION = (
+    "Address the current pull request feedback and failing CI."
+)
 
 
 class CommandError(ValueError):
@@ -34,6 +41,22 @@ def has_command_line(body: str) -> bool:
 def require_maintainer(author: str, manifest: Manifest) -> None:
     if author.lower() not in {login.lower() for login in manifest.maintainers}:
         raise AuthorizationError(f"@{author} is not authorized to operate Agricola")
+
+
+def parse_pull_request_fix(body: str, target: str) -> Command | None:
+    """Parse the first PR-local fix command, where the target is implicit."""
+    for line_number, line in enumerate(body.splitlines(), start=1):
+        match = _PULL_REQUEST_FIX.match(line)
+        if match is None:
+            continue
+        instruction = (match.group("instruction") or "").strip()
+        return Command(
+            verb=CommandVerb.PROPAGATE,
+            targets=(target,),
+            instruction=instruction or _DEFAULT_PULL_REQUEST_INSTRUCTION,
+            line=line_number,
+        )
+    return None
 
 
 def parse_commands(body: str, manifest: Manifest) -> list[Command]:

@@ -8,7 +8,7 @@ Both semantic analysis and downstream generation explicitly use `gpt-5.6-sol`. D
 
 | Trigger | Behavior |
 | --- | --- |
-| Ten-minute schedule | Poll merged `wevm/mppx` pull requests; create tracking issues only for authorized merge-time `agricola:all` or `agricola:<target>` labels. GitHub may delay scheduled jobs. |
+| Ten-minute schedule | Poll merged `wevm/mppx` pull requests and unacknowledged `/ag fix` comments on recorded downstream PRs; create tracking issues only for authorized merge-time `agricola:all` or `agricola:<target>` labels. GitHub may delay scheduled jobs. |
 | `workflow_dispatch` | Run the poller manually. |
 | New `issue_comment` containing `/ag` | Handle a tracking-issue command. `/ag` must be the first token on a line; `/agricola` remains an alias for existing comments. |
 
@@ -83,7 +83,7 @@ Downstream code never runs in a job containing downstream write credentials. Gen
 7. On a tracking issue, run `/ag fix <target>` and confirm the eyes reaction, generation, verification, a downstream draft pull request, and a recorded ledger decision.
 8. Run the SDK audit manually and confirm the `[Agricola] SDK drift audit` index links one issue per finding and records every exact audited commit.
 9. On an affected PR-enabled finding, copy and post `/ag fix` and confirm the finding links the resulting draft remediation pull request.
-10. Add a review comment or failing check to that draft, post `/ag fix "address the review and CI"` on its tracking issue, and confirm the same PR receives an incremental commit and summary comment.
+10. Post `/ag fix address the review and CI` on the draft PR, wait for the scheduled poll, and confirm the comment receives an eyes reaction, a run-link reply, and an incremental commit with a summary comment. A quoted `/ag fix "instruction"` on the tracking issue remains supported.
 
 The initial cursor starts fifteen minutes in the past. Because each poll replays a one-hour overlap, the first API read covers approximately the previous 75 minutes. To backfill a different window, update the state pull request with a reviewed `ledger/cursor.json` containing a timezone-aware ISO 8601 `merged_at`; polling begins one hour before it.
 
@@ -95,7 +95,7 @@ The maintainer allowlist lives in [`sdks.yaml`](../sdks.yaml). Agricola reconstr
 
 Commands use deferred issue updates and replies so acknowledgements follow their corresponding state change. Canonical-change tables reflect the durable decision ledger. Audit-finding tables retain linked remediation pull requests across later audit runs. Skip decisions use the comment ID and line number. Canonical propagation branches use `agricola/<canonical-repo>-<pr-number>`; audit remediation branches use `agricola/<finding-id>`. Replaying a poll, comment, job, or state overlap therefore reuses existing work instead of opening duplicate pull requests.
 
-On an audit-finding issue, `/ag fix` generates, verifies, and opens draft fixes for all affected PR-enabled SDKs. Optional target names narrow the request. Once a PR is recorded, `/ag fix "instruction"` ingests unresolved owner/member/collaborator review feedback plus failed checks and Actions logs, revises the exact current head, verifies it, fast-forwards the same branch, and posts a summary. Accepted fixes reply with a direct link to the exact Actions run. `/ag status` reports linked remediation pull requests. Every actionable finding includes a copy-ready quick command, and valid maintainer commands receive an eyes reaction when processing begins. `/agricola` remains a compatibility alias for the command prefix.
+On an audit-finding issue, `/ag fix` generates, verifies, and opens draft fixes for all affected PR-enabled SDKs. Optional target names narrow the request. Once a PR is recorded, `/ag fix "instruction"` on the tracking issue or `/ag fix instruction` on the PR ingests unresolved owner/member/collaborator review feedback plus failed checks and Actions logs, revises the exact current head, verifies it, fast-forwards the same branch, and posts a summary. PR-local targets are implicit, and all text after `fix` is the instruction. Scheduled polling ignores PR commands that already have an eyes reaction and acknowledges accepted commands before generation, so an overlapping issue-driven revision can mark the same feedback as handled. Accepted fixes reply with a direct link to the exact Actions run. `/ag status` reports linked remediation pull requests. Every actionable finding includes a copy-ready quick command, and valid maintainer commands receive an eyes reaction when processing begins. `/agricola` remains a compatibility alias for the command prefix.
 
 ## Manual poll
 

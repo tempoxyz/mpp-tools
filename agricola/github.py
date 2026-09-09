@@ -14,6 +14,7 @@ from .models import (
     LabelAction,
     LabelEvent,
     PropagationRevision,
+    PullRequestComment,
     PullRequestFile,
 )
 
@@ -299,10 +300,42 @@ class GitHubClient:
         )
 
     def comment_issue(self, number: int, body: str) -> dict[str, object]:
+        return self.comment_repository_issue(self.control_repo, number, body)
+
+    def comment_repository_issue(
+        self, repository: str, number: int, body: str
+    ) -> dict[str, object]:
         return self.api(
-            f"repos/{self.control_repo}/issues/{number}/comments",
+            f"repos/{repository}/issues/{number}/comments",
             method="POST",
             fields={"body": body},
+        )
+
+    def pull_request_comments(self, reference: str) -> tuple[PullRequestComment, ...]:
+        repository, number = reference.rsplit("#", 1)
+        pages = self.api(
+            f"repos/{repository}/issues/{int(number)}/comments?per_page=100",
+            paginate=True,
+        )
+        return tuple(
+            PullRequestComment(
+                id=int(item["id"]),
+                body=str(item.get("body") or ""),
+                author=str((item.get("user") or {}).get("login") or ""),
+                created_at=_time(item["created_at"]),
+                has_eyes=int((item.get("reactions") or {}).get("eyes") or 0) > 0,
+            )
+            for page in pages
+            for item in page
+        )
+
+    def react_to_issue_comment(
+        self, repository: str, comment_id: int, content: str = "eyes"
+    ) -> None:
+        self.api(
+            f"repos/{repository}/issues/comments/{comment_id}/reactions",
+            method="POST",
+            fields={"content": content},
         )
 
     def source_from_body(self, body: str) -> tuple[str, int]:
