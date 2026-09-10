@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import subprocess
@@ -13,6 +14,54 @@ from pathlib import Path
 
 
 SCRIPT = Path(__file__).with_name("check_conformance_policy.py")
+
+# Modules that each carry a copy of path_matches and must stay in sync.
+PATH_MATCH_MODULES = [
+    "check_conformance_policy",
+    "validate_conformance_pr",
+    "select_ci_adapters",
+]
+
+
+class PathMatchesTest(unittest.TestCase):
+    def each_path_matches(self):
+        sys.path.insert(0, str(SCRIPT.parent))
+        try:
+            for module_name in PATH_MATCH_MODULES:
+                module = importlib.import_module(module_name)
+                yield module_name, module.path_matches
+        finally:
+            sys.path.remove(str(SCRIPT.parent))
+
+    def test_directory_pattern_matches_files_under_directory(self) -> None:
+        for module_name, path_matches in self.each_path_matches():
+            with self.subTest(module=module_name):
+                self.assertTrue(path_matches("src/proto/wire.go", "src/proto/"))
+                self.assertTrue(path_matches("src/proto/nested/deep.rs", "src/proto/"))
+                self.assertTrue(path_matches("/src/proto/wire.go", "src/proto/"))
+
+    def test_directory_pattern_does_not_overmatch(self) -> None:
+        for module_name, path_matches in self.each_path_matches():
+            with self.subTest(module=module_name):
+                self.assertFalse(path_matches("src/protocol/wire.go", "src/proto/"))
+                self.assertFalse(path_matches("src/proto", "src/proto/"))
+                self.assertFalse(path_matches("other/src/proto/wire.go", "src/proto/"))
+
+    def test_recursive_glob_pattern_still_matches(self) -> None:
+        for module_name, path_matches in self.each_path_matches():
+            with self.subTest(module=module_name):
+                self.assertTrue(path_matches("conformance/vectors/receipt.json", "conformance/vectors/**"))
+                self.assertTrue(path_matches("conformance/vectors", "conformance/vectors/**"))
+                self.assertFalse(path_matches("conformance/schemas/x.json", "conformance/vectors/**"))
+
+    def test_exact_and_glob_patterns_still_match(self) -> None:
+        for module_name, path_matches in self.each_path_matches():
+            with self.subTest(module=module_name):
+                self.assertTrue(path_matches("conformance/operations.json", "conformance/operations.json"))
+                self.assertTrue(path_matches("pkg/parse.go", "pkg/*.go"))
+                self.assertFalse(path_matches("pkg/readme.md", "pkg/*.go"))
+                self.assertFalse(path_matches("pkg/parse.go", ""))
+                self.assertFalse(path_matches("pkg/parse.go", "/"))
 
 
 class CheckConformancePolicyTest(unittest.TestCase):
