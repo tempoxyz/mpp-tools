@@ -35,7 +35,7 @@ jobs:
       - name: Setup uv
         uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@3626124474a987bc74b41fc7ae65b2e23f8e4e4e
         with:
-          version: "0.9.26"
+          version: "0.12.11"
           python-version: "3.12"
           enable-cache: true
           cache-dependency-glob: uv.lock
@@ -88,7 +88,7 @@ jobs:
       - name: Setup uv
         uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@3626124474a987bc74b41fc7ae65b2e23f8e4e4e
         with:
-          version: "0.9.26"
+          version: "0.12.11"
           enable-cache: true
           cache-dependency-glob: conformance/uv.lock
 
