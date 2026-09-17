@@ -41,6 +41,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           path: sdk
+          persist-credentials: false
 
       - name: Resolve inputs
         id: resolve
@@ -69,6 +70,7 @@ jobs:
           repository: tempoxyz/mpp-tools
           ref: ${{ steps.resolve.outputs.conformance_ref }}
           path: mpp-tools
+          persist-credentials: false
 
       - name: Setup conformance adapter
         uses: ./mpp-tools/.github/actions/setup-conformance

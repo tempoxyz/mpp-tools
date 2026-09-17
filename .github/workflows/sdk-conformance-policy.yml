@@ -63,6 +63,7 @@ jobs:
           repository: tempoxyz/mpp-tools
           ref: ${{ inputs.default-conformance-ref }}
           path: mpp-tools
+          persist-credentials: false
 
       - name: Collect changed files
         if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
