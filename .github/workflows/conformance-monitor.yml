@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
   issues: write
   pull-requests: read
 
@@ -19,6 +20,7 @@ jobs:
     uses: ./.github/workflows/conformance.yml
     permissions:
       contents: read
+      id-token: write
       pull-requests: read
 
   report:
@@ -26,6 +28,8 @@ jobs:
     needs: conformance
     if: always()
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
       - name: Check existing issues
         id: check-issue
         run: |

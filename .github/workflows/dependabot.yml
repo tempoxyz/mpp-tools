@@ -30,6 +30,8 @@ jobs:
       !github.event.pull_request.draft
     runs-on: ubuntu-latest
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
       - name: Read Dependabot metadata
         id: metadata
         uses: tempoxyz/gh-actions/vendor/dependabot/fetch-metadata@b411ce7fe18d0775ae614ad5c4b873c768364979
