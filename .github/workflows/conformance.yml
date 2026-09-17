@@ -39,10 +39,7 @@ on:
         description: SDK versions used by flow tests.
         value: ${{ jobs.conformance.outputs.sdk_summary }}
 
-permissions:
-  contents: read
-  id-token: write
-  pull-requests: read
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -52,6 +49,10 @@ jobs:
   changes:
     name: select conformance scope
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: read
     outputs:
       adapters_csv: ${{ steps.select.outputs.adapters_csv }}
       adapters_json: ${{ steps.select.outputs.adapters_json }}
@@ -97,6 +98,9 @@ jobs:
   vectors:
     name: vector conformance (${{ matrix.adapter }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     needs: changes
     if: needs.changes.outputs.run_conformance == 'true'
     strategy:
@@ -153,6 +157,9 @@ jobs:
   flow:
     name: flow conformance (${{ matrix.adapter }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     needs: changes
     if: needs.changes.outputs.run_conformance == 'true'
     strategy:
@@ -217,6 +224,9 @@ jobs:
   server_verify:
     name: server verification conformance
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     needs: changes
     if: needs.changes.outputs.run_conformance == 'true'
     defaults:
@@ -244,6 +254,9 @@ jobs:
 
   conformance:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     needs:
       - changes
       - vectors

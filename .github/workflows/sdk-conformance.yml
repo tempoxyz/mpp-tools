@@ -18,9 +18,7 @@ on:
         type: boolean
         default: true
 
-permissions:
-  contents: read
-  id-token: write
+permissions: {}
 
 env:
   SDK_PATH: ${{ github.workspace }}/sdk
@@ -29,6 +27,9 @@ jobs:
   conformance:
     name: ${{ inputs.adapter }} conformance
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     defaults:
       run:
         working-directory: mpp-tools/conformance

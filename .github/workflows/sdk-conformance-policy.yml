@@ -40,15 +40,16 @@ on:
         description: Whether the PR changed a protocol-sensitive path.
         value: ${{ jobs.policy.outputs.protocol_changed }}
 
-permissions:
-  contents: read
-  id-token: write
-  pull-requests: read
+permissions: {}
 
 jobs:
   policy:
     name: conformance policy
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: read
     outputs:
       conformance_ref: ${{ steps.policy.outputs.conformance_ref }}
       protocol_changed: ${{ steps.policy.outputs.protocol_changed }}
