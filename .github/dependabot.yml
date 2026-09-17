@@ -11,35 +11,49 @@ multi-ecosystem-groups:
 updates:
   - package-ecosystem: "npm"
     directory: "/conformance"
+    cooldown:
+      default-days: 7
     patterns: ["*"]
     multi-ecosystem-group: "weekly-dependencies"
 
   - package-ecosystem: "cargo"
     directory: "/conformance/adapters/rust"
+    cooldown:
+      default-days: 7
     patterns: ["*"]
     multi-ecosystem-group: "weekly-dependencies"
 
   - package-ecosystem: "uv"
     directory: "/conformance/adapters/python"
+    cooldown:
+      default-days: 7
     patterns: ["*"]
     multi-ecosystem-group: "weekly-dependencies"
 
   - package-ecosystem: "gomod"
     directory: "/conformance/adapters/go"
+    cooldown:
+      default-days: 7
     patterns: ["*"]
     multi-ecosystem-group: "weekly-dependencies"
 
   - package-ecosystem: "bundler"
     directory: "/conformance/adapters/ruby"
+    cooldown:
+      default-days: 7
     patterns: ["*"]
     multi-ecosystem-group: "weekly-dependencies"
 
   - package-ecosystem: "gradle"
     directory: "/conformance/adapters/java"
+    cooldown:
+      default-days: 7
     patterns: ["*"]
     multi-ecosystem-group: "weekly-dependencies"
 
   - package-ecosystem: "github-actions"
     directory: "/"
+    cooldown:
+      default-days: 7
     patterns: ["*"]
     multi-ecosystem-group: "weekly-dependencies"

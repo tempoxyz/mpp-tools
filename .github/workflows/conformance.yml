@@ -39,9 +39,7 @@ on:
         description: SDK versions used by flow tests.
         value: ${{ jobs.conformance.outputs.sdk_summary }}
 
-permissions:
-  contents: read
-  pull-requests: read
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -51,14 +49,22 @@ jobs:
   changes:
     name: select conformance scope
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: read
     outputs:
       adapters_csv: ${{ steps.select.outputs.adapters_csv }}
       adapters_json: ${{ steps.select.outputs.adapters_json }}
       run_conformance: ${{ steps.select.outputs.run_conformance }}
       reason: ${{ steps.select.outputs.reason }}
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Collect changed files
         if: github.event_name == 'pull_request'
@@ -94,6 +100,9 @@ jobs:
   vectors:
     name: vector conformance (${{ matrix.adapter }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     needs: changes
     if: needs.changes.outputs.run_conformance == 'true'
     strategy:
@@ -104,8 +113,12 @@ jobs:
       run:
         working-directory: conformance
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup conformance adapter
         uses: ./.github/actions/setup-conformance
@@ -148,6 +161,9 @@ jobs:
   flow:
     name: flow conformance (${{ matrix.adapter }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     needs: changes
     if: needs.changes.outputs.run_conformance == 'true'
     strategy:
@@ -158,8 +174,12 @@ jobs:
       run:
         working-directory: conformance
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup conformance adapter
         uses: ./.github/actions/setup-conformance
@@ -210,14 +230,21 @@ jobs:
   server_verify:
     name: server verification conformance
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     needs: changes
     if: needs.changes.outputs.run_conformance == 'true'
     defaults:
       run:
         working-directory: conformance
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup conformance adapter
         uses: ./.github/actions/setup-conformance
@@ -235,6 +262,9 @@ jobs:
 
   conformance:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     needs:
       - changes
       - vectors
@@ -254,8 +284,12 @@ jobs:
       run:
         working-directory: conformance
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Download vector results
         if: needs.changes.outputs.run_conformance == 'true'

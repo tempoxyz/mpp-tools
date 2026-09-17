@@ -40,25 +40,30 @@ on:
         description: Whether the PR changed a protocol-sensitive path.
         value: ${{ jobs.policy.outputs.protocol_changed }}
 
-permissions:
-  contents: read
-  pull-requests: read
+permissions: {}
 
 jobs:
   policy:
     name: conformance policy
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: read
     outputs:
       conformance_ref: ${{ steps.policy.outputs.conformance_ref }}
       protocol_changed: ${{ steps.policy.outputs.protocol_changed }}
 
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
       - name: Checkout policy scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: tempoxyz/mpp-tools
           ref: ${{ inputs.default-conformance-ref }}
           path: mpp-tools
+          persist-credentials: false
 
       - name: Collect changed files
         if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'

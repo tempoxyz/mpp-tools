@@ -13,11 +13,7 @@ on:
 # request the OIDC token the STS exchange verifies. workflow_call callers
 # must grant these same permissions and carry their own dependabot STS
 # policy.
-permissions:
-  checks: read
-  contents: read
-  pull-requests: read
-  id-token: write
+permissions: {}
 
 concurrency:
   group: dependabot-${{ github.repository }}-${{ github.event.pull_request.number }}
@@ -29,7 +25,14 @@ jobs:
       github.event.pull_request.user.login == 'dependabot[bot]' &&
       !github.event.pull_request.draft
     runs-on: ubuntu-latest
+    permissions:
+      checks: read
+      contents: read
+      id-token: write
+      pull-requests: read
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
       - name: Read Dependabot metadata
         id: metadata
         uses: tempoxyz/gh-actions/vendor/dependabot/fetch-metadata@b411ce7fe18d0775ae614ad5c4b873c768364979

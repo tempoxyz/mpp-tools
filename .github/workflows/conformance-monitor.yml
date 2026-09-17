@@ -5,10 +5,7 @@ on:
     - cron: "0 8 * * *"
   workflow_dispatch:
 
-permissions:
-  contents: read
-  issues: write
-  pull-requests: read
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}
@@ -19,13 +16,20 @@ jobs:
     uses: ./.github/workflows/conformance.yml
     permissions:
       contents: read
+      id-token: write
       pull-requests: read
 
   report:
     runs-on: ubuntu-latest
     needs: conformance
     if: always()
+    permissions:
+      contents: read
+      id-token: write
+      issues: write
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
       - name: Check existing issues
         id: check-issue
         run: |

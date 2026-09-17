@@ -13,8 +13,7 @@ on:
     branches:
       - main
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -24,15 +23,22 @@ jobs:
   agricola-tests:
     name: Agricola tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup uv
         uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@3626124474a987bc74b41fc7ae65b2e23f8e4e4e
         with:
-          version: "0.9.26"
+          version: "0.12.11"
           python-version: "3.12"
           enable-cache: true
           cache-dependency-glob: uv.lock
@@ -67,13 +73,20 @@ jobs:
   script-tests:
     name: Python script tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     defaults:
       run:
         working-directory: conformance
 
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -83,7 +96,7 @@ jobs:
       - name: Setup uv
         uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@3626124474a987bc74b41fc7ae65b2e23f8e4e4e
         with:
-          version: "0.9.26"
+          version: "0.12.11"
           enable-cache: true
           cache-dependency-glob: conformance/uv.lock
 
