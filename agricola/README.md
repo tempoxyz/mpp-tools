@@ -1,5 +1,8 @@
 # Agricola
 
+> [!NOTE]
+> The primary deployment is the two-agent [Auto control plane](../docs/agricola-auto.md): a read-only scout creates proposal issues, and a maintainer authorizes a draft implementation PR by applying `agricola:approved`. The GitHub Actions deployment below remains available for manual rollback.
+
 Agricola is the GitHub-native control plane for propagating reviewed changes from the canonical `wevm/mppx` SDK to downstream MPP SDKs.
 
 It:
