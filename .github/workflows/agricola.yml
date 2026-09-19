@@ -43,7 +43,7 @@ jobs:
       STATE_BRANCH: agricola/state
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
+        uses: tempoxyz/gh-actions/actions/secure-runner@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
@@ -149,7 +149,7 @@ jobs:
 
       - name: Fetch GitHub token via STS
         id: sts
-        uses: tempoxyz/gh-actions/actions/github-sts@c0292122e255def866c64c55e5844d1e7d5fe7ad
+        uses: tempoxyz/gh-actions/actions/github-sts@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
         with:
           policy: agricola-state
 
@@ -191,7 +191,7 @@ jobs:
       id-token: write
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
+        uses: tempoxyz/gh-actions/actions/secure-runner@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
       - name: Checkout downstream SDK
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -248,12 +248,12 @@ jobs:
             --output .agricola/revision.md
 
       - name: Setup uv
-        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@3626124474a987bc74b41fc7ae65b2e23f8e4e4e
+        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
         with:
           version: "0.12.11"
 
       - name: Generate downstream changes
-        uses: tempoxyz/gh-actions/vendor/openai/codex-action@b411ce7fe18d0775ae614ad5c4b873c768364979
+        uses: tempoxyz/gh-actions/vendor/openai/codex-action@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           prompt-file: .agricola/control/.github/agricola/propagate.md
@@ -335,7 +335,7 @@ jobs:
       id-token: write
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
+        uses: tempoxyz/gh-actions/actions/secure-runner@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
       - name: Checkout downstream SDK
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -381,7 +381,7 @@ jobs:
 
       - name: Setup uv
         if: steps.patch.outputs.has-changes == 'true'
-        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@3626124474a987bc74b41fc7ae65b2e23f8e4e4e
+        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
         with:
           version: "0.12.11"
 
@@ -402,7 +402,7 @@ jobs:
       id-token: write
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
+        uses: tempoxyz/gh-actions/actions/secure-runner@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
       - name: Download verified patch
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -525,7 +525,7 @@ jobs:
       STATE_BRANCH: agricola/state
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
+        uses: tempoxyz/gh-actions/actions/secure-runner@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
@@ -555,7 +555,7 @@ jobs:
 
       - name: Fetch GitHub token via STS
         id: sts
-        uses: tempoxyz/gh-actions/actions/github-sts@c0292122e255def866c64c55e5844d1e7d5fe7ad
+        uses: tempoxyz/gh-actions/actions/github-sts@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
         with:
           policy: agricola-state
 
