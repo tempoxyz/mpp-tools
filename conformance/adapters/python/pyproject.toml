@@ -5,5 +5,5 @@ description = "Python conformance adapter for MPP tooling"
 license = { text = "MIT" }
 requires-python = ">=3.12"
 dependencies = [
-    "pympp[tempo]==0.10.1",
+    "pympp[tempo] @ git+https://github.com/tempoxyz/pympp.git@18390aed08d45dee178ad3875a272a669f34adf9",
 ]

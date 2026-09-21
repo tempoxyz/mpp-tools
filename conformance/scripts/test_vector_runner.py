@@ -236,6 +236,22 @@ class VectorRunnerHelperTest(unittest.TestCase):
 
         self.assertEqual(self.runner.scenario_wire(scenario), "abcbcbcd")
 
+    def test_exact_format_comparison_rejects_semantically_equivalent_wire(self) -> None:
+        expected = {"success": True, "result": 'description="\\u2014"'}
+        actual = {"success": True, "result": 'description="—"'}
+
+        passed, error = self.runner.compare_format_results(
+            self.adapter,
+            expected,
+            actual,
+            "format-www-authenticate",
+            "parse-www-authenticate",
+            exact=True,
+        )
+
+        self.assertFalse(passed)
+        self.assertIn("result mismatch", error or "")
+
 
 class VectorRunnerJsonArtifactTest(unittest.TestCase):
     """The json output format must stay machine-readable on stdout."""

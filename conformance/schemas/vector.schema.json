@@ -84,13 +84,20 @@
         { "$ref": "#/$defs/ExpectedError" }
       ]
     },
+    "FormatExpectation": {
+      "oneOf": [
+        { "const": true },
+        { "const": "exact" },
+        { "$ref": "#/$defs/ExpectedError" }
+      ]
+    },
     "Tests": {
       "type": "object",
       "minProperties": 1,
       "additionalProperties": false,
       "properties": {
         "parse": { "$ref": "#/$defs/TestExpectation" },
-        "format": { "$ref": "#/$defs/TestExpectation" },
+        "format": { "$ref": "#/$defs/FormatExpectation" },
         "roundtrip": { "const": true },
         "generate": { "$ref": "#/$defs/TestExpectation" }
       }
