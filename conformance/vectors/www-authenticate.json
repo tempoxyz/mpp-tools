@@ -190,7 +190,7 @@
         "request": {}
       },
       "wire": "Payment id=\"ch_unicode_bmp\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\", description=\"Payment \\u2014 coffee \\u2615\"",
-      "tests": {"parse": true, "format": true, "roundtrip": true}
+      "tests": {"parse": true, "format": "exact", "roundtrip": true}
     },
     {
       "name": "unicode_surrogate_pair",
@@ -206,7 +206,7 @@
         "request": {}
       },
       "wire": "Payment id=\"ch_unicode_astral\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\", description=\"Pay with \\ud83d\\ude00\"",
-      "tests": {"parse": true, "format": true, "roundtrip": true}
+      "tests": {"parse": true, "format": "exact", "roundtrip": true}
     },
     {
       "name": "unicode_escape_in_realm",
@@ -221,7 +221,7 @@
         "request": {}
       },
       "wire": "Payment id=\"ch_unicode_realm\", realm=\"merchant\\u2014api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\"",
-      "tests": {"parse": true, "format": true, "roundtrip": true}
+      "tests": {"parse": true, "format": "exact", "roundtrip": true}
     },
     {
       "name": "literal_unicode_escape",
@@ -237,7 +237,7 @@
         "request": {}
       },
       "wire": "Payment id=\"ch_unicode_literal\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\", description=\"literal \\\\u2014\"",
-      "tests": {"parse": true, "format": true, "roundtrip": true}
+      "tests": {"parse": true, "format": "exact", "roundtrip": true}
     },
     {
       "name": "truncated_unicode_escape",

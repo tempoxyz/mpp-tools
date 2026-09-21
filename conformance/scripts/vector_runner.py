@@ -516,6 +516,23 @@ class VectorRunner:
 
         return self.compare_parse_results_semantic(expected_parsed, actual_parsed, parse_command)
 
+    def compare_format_results(
+        self,
+        adapter: AdapterConfig,
+        expected: dict[str, Any],
+        actual: dict[str, Any],
+        format_command: str,
+        parse_command: str | None,
+        *,
+        exact: bool,
+    ) -> tuple[bool, str | None]:
+        """Compare formatted wire values exactly or by parsed semantics."""
+        if exact:
+            return self.compare_results(expected, actual)
+        return self.compare_format_results_semantic(
+            adapter, expected, actual, format_command, parse_command
+        )
+
     def run_vector_file(self, adapter: AdapterConfig, vector_path: Path, tag_filter: str | None = None) -> None:
         """Run all tests from a single vector file (v2 scenario format)."""
         vector_name = vector_path.stem
@@ -675,7 +692,7 @@ class VectorRunner:
                     format_input = obj
                 else:
                     format_input = json.dumps(obj)
-                if format_test is True:
+                if format_test is True or format_test == "exact":
                     expected_format = {"success": True, "result": wire}
                 else:
                     expected_format = format_test
@@ -686,8 +703,15 @@ class VectorRunner:
                     timeout=command_timeout,
                     validate_input=not expects_failure(expected_format),
                 )
-                if format_test is True:
-                    passed, error = self.compare_format_results_semantic(adapter, expected_format, result, format_cmd, parse_cmd)
+                if format_test is True or format_test == "exact":
+                    passed, error = self.compare_format_results(
+                        adapter,
+                        expected_format,
+                        result,
+                        format_cmd,
+                        parse_cmd,
+                        exact=format_test == "exact",
+                    )
                 else:
                     passed, error = self.compare_results(expected_format, result)
                 if passed:
