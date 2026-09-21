@@ -725,7 +725,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pympp", extras = ["tempo"], git = "https://github.com/tempoxyz/pympp.git?rev=4df203d73847b39ac9afcd55a6c3c6a70f5cef50" }]
+requires-dist = [{ name = "pympp", extras = ["tempo"], git = "https://github.com/tempoxyz/pympp.git?rev=18390aed08d45dee178ad3875a272a669f34adf9" }]
 
 [[package]]
 name = "multidict"
@@ -1064,7 +1064,7 @@ wheels = [
 [[package]]
 name = "pympp"
 version = "0.11.0"
-source = { git = "https://github.com/tempoxyz/pympp.git?rev=4df203d73847b39ac9afcd55a6c3c6a70f5cef50#4df203d73847b39ac9afcd55a6c3c6a70f5cef50" }
+source = { git = "https://github.com/tempoxyz/pympp.git?rev=18390aed08d45dee178ad3875a272a669f34adf9#18390aed08d45dee178ad3875a272a669f34adf9" }
 dependencies = [
     { name = "httpx" },
     { name = "rfc8785" },
