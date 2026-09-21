@@ -256,6 +256,22 @@
       "tests": {"parse": true}
     },
     {
+      "name": "unicode_ascii_escape",
+      "description": "A valid uXXXX escape below Latin-1 is decoded consistently with mppx",
+      "tags": ["happy-path", "quoted-string", "unicode", "mppx-parity"],
+      "adapters": ["typescript", "rust", "python", "go"],
+      "object": {
+        "description": "ascii a",
+        "id": "ch_unicode_ascii",
+        "intent": "charge",
+        "method": "tempo",
+        "realm": "api.example.com",
+        "request": {}
+      },
+      "wire": "Payment id=\"ch_unicode_ascii\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\", description=\"ascii \\u0061\"",
+      "tests": {"parse": true}
+    },
+    {
       "name": "raw_latin1_quoted_string",
       "description": "Raw Latin-1 text remains intact when parsing a quoted-string",
       "tags": ["happy-path", "quoted-string", "unicode", "latin1"],
