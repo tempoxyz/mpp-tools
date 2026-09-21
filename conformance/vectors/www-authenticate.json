@@ -1,5 +1,5 @@
 {
-  "version": "2.0.0",
+  "version": "2.1.0",
   "spec_ref": "draft-ietf-httpauth-payment §5.1",
   "description": "WWW-Authenticate header (Challenge) parsing and formatting",
   "commands": {
@@ -175,6 +175,116 @@
         "format": true,
         "roundtrip": true
       }
+    },
+    {
+      "name": "unicode_bmp_escapes",
+      "description": "Unicode above Latin-1 is serialized as uXXXX escapes and restored while parsing",
+      "tags": ["happy-path", "quoted-string", "unicode", "mppx-parity"],
+      "adapters": ["typescript", "rust", "python", "go"],
+      "object": {
+        "description": "Payment — coffee ☕",
+        "id": "ch_unicode_bmp",
+        "intent": "charge",
+        "method": "tempo",
+        "realm": "api.example.com",
+        "request": {}
+      },
+      "wire": "Payment id=\"ch_unicode_bmp\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\", description=\"Payment \\u2014 coffee \\u2615\"",
+      "tests": {"parse": true, "format": true, "roundtrip": true}
+    },
+    {
+      "name": "unicode_surrogate_pair",
+      "description": "A UTF-16 surrogate pair in a quoted-string is restored as one astral character",
+      "tags": ["happy-path", "quoted-string", "unicode", "mppx-parity"],
+      "adapters": ["typescript", "rust", "python", "go"],
+      "object": {
+        "description": "Pay with 😀",
+        "id": "ch_unicode_astral",
+        "intent": "charge",
+        "method": "tempo",
+        "realm": "api.example.com",
+        "request": {}
+      },
+      "wire": "Payment id=\"ch_unicode_astral\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\", description=\"Pay with \\ud83d\\ude00\"",
+      "tests": {"parse": true, "format": true, "roundtrip": true}
+    },
+    {
+      "name": "unicode_escape_in_realm",
+      "description": "Unicode escapes are decoded in binding-sensitive realm values, not only descriptions",
+      "tags": ["happy-path", "quoted-string", "unicode", "challenge-binding"],
+      "adapters": ["typescript", "rust", "python", "go"],
+      "object": {
+        "id": "ch_unicode_realm",
+        "intent": "charge",
+        "method": "tempo",
+        "realm": "merchant—api.example.com",
+        "request": {}
+      },
+      "wire": "Payment id=\"ch_unicode_realm\", realm=\"merchant\\u2014api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\"",
+      "tests": {"parse": true, "format": true, "roundtrip": true}
+    },
+    {
+      "name": "literal_unicode_escape",
+      "description": "A doubled backslash preserves literal uXXXX text instead of decoding it",
+      "tags": ["happy-path", "quoted-string", "unicode", "escaping"],
+      "adapters": ["typescript", "rust", "python", "go"],
+      "object": {
+        "description": "literal \\u2014",
+        "id": "ch_unicode_literal",
+        "intent": "charge",
+        "method": "tempo",
+        "realm": "api.example.com",
+        "request": {}
+      },
+      "wire": "Payment id=\"ch_unicode_literal\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\", description=\"literal \\\\u2014\"",
+      "tests": {"parse": true, "format": true, "roundtrip": true}
+    },
+    {
+      "name": "truncated_unicode_escape",
+      "description": "A truncated u escape follows ordinary quoted-pair semantics",
+      "tags": ["happy-path", "quoted-string", "unicode", "edge-case"],
+      "adapters": ["typescript", "rust", "python", "go"],
+      "object": {
+        "description": "short u12 tail",
+        "id": "ch_unicode_short",
+        "intent": "charge",
+        "method": "tempo",
+        "realm": "api.example.com",
+        "request": {}
+      },
+      "wire": "Payment id=\"ch_unicode_short\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\", description=\"short \\u12 tail\"",
+      "tests": {"parse": true}
+    },
+    {
+      "name": "raw_latin1_quoted_string",
+      "description": "Raw Latin-1 text remains intact when parsing a quoted-string",
+      "tags": ["happy-path", "quoted-string", "unicode", "latin1"],
+      "adapters": ["typescript", "rust", "python", "go"],
+      "object": {
+        "description": "café naïve",
+        "id": "ch_latin1",
+        "intent": "charge",
+        "method": "tempo",
+        "realm": "api.example.com",
+        "request": {}
+      },
+      "wire": "Payment id=\"ch_latin1\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\", description=\"café naïve\"",
+      "tests": {"parse": true}
+    },
+    {
+      "name": "extended_method_identifier",
+      "description": "Method identifiers accept mppx extension characters after the initial lowercase letter",
+      "tags": ["happy-path", "method-grammar", "mppx-parity"],
+      "adapters": ["typescript", "rust"],
+      "object": {
+        "id": "ch_method_extension",
+        "intent": "charge",
+        "method": "a1:b_2-c",
+        "realm": "api.example.com",
+        "request": {}
+      },
+      "wire": "Payment id=\"ch_method_extension\", realm=\"api.example.com\", method=\"a1:b_2-c\", intent=\"charge\", request=\"e30\"",
+      "tests": {"parse": true, "format": true, "roundtrip": true}
     },
     {
       "name": "error_crlf_in_description_format",
