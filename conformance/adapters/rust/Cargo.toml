@@ -9,7 +9,7 @@ name = "adapter"
 path = "src/main.rs"
 
 [dependencies]
-mpp = { git = "https://github.com/tempoxyz/mpp-rs", rev = "b0e189c6390774445dd356fd78575100c22ddcd3" }
+mpp = { git = "https://github.com/tempoxyz/mpp-rs", rev = "d171cc3d9f491205b2d523eb38c6e5375a317eaf" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 hmac = "0.13"
