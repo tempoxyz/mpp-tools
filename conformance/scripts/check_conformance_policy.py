@@ -41,14 +41,15 @@ def split_patterns(value: str) -> list[str]:
 
 def path_matches(path: str, pattern: str) -> bool:
     normalized = path.strip("/")
+    is_dir_pattern = pattern.endswith("/")
     normalized_pattern = pattern.strip("/")
     if not normalized_pattern:
         return False
     if normalized_pattern.endswith("/**"):
         prefix = normalized_pattern[:-3].rstrip("/")
         return normalized == prefix or normalized.startswith(prefix + "/")
-    if normalized_pattern.endswith("/"):
-        return normalized.startswith(normalized_pattern)
+    if is_dir_pattern:
+        return normalized.startswith(normalized_pattern + "/")
     return fnmatchcase(normalized, normalized_pattern)
 
 
