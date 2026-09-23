@@ -6,6 +6,7 @@ It:
 
 - validates the reviewed [`sdks.yaml`](../sdks.yaml) manifest;
 - polls merged canonical pull requests with a durable Git-backed cursor;
+- polls recorded downstream PRs for maintainer `/ag fix` comments without an eyes acknowledgement;
 - reconstructs authorized `agricola:*` labels as they existed at merge time;
 - creates one tracking issue per actionable canonical change;
 - accepts maintainer-only `plan`, `fix`, `status`, and `skip` commands;
@@ -109,7 +110,9 @@ The tracking issue also contains a durable downstream propagation table. It list
 
 On an audit-finding issue, `fix` selects every affected PR-enabled SDK. Optional targets limit it to named affected SDKs, and `status` reports linked remediation pull requests. Each actionable issue includes a copy-ready `/ag fix` block. After a pull request is recorded, `/ag fix "instruction"` checks out its exact head, collects unresolved trusted review feedback and failed CI, makes an incremental verified revision, and posts a summary to the same pull request. The finding's exact canonical and target commits are the immutable initial-generation inputs. `plan` and `skip` remain specific to canonical-change issues.
 
-Commands in canonical or downstream repositories are not supported. A failed unpublished propagation can be retried by repeating its issue command or rerunning its workflow; a published stable branch is updated idempotently.
+Recorded downstream pull requests also accept `/ag fix instruction` as a top-level PR comment. The target is implicit, so the unquoted remainder is free-form. Scheduled polling ignores comments that already carry an eyes reaction, combines other authorized commands for the same PR into one exact-head revision, acknowledges them before generation, and replies on the PR with the Actions run link.
+
+Commands in the canonical repository are not supported, and downstream PRs accept only `fix`; other commands remain tracking-issue operations. A failed unpublished propagation can be retried by repeating its issue command or rerunning its workflow; a published stable branch is updated idempotently.
 
 ## Downstream execution
 
@@ -169,6 +172,7 @@ State-changing replies are deferred until the guarded state push succeeds and th
 | `agricola token-scope` | Prints the manifest-derived GitHub App scope for PR-enabled SDKs. | `agricola token-scope` |
 | `agricola poll` | Processes newly merged canonical pull requests. | `agricola poll --control-repo tempoxyz/mpp-tools` |
 | `agricola handle-comment [event]` | Parses an `issue_comment` payload; defaults to `GITHUB_EVENT_PATH`. | `agricola handle-comment event.json` |
+| `agricola deliver-pr-actions <result>` | Adds eyes reactions and run-link replies for accepted polled PR commands. | `agricola deliver-pr-actions result.json --action-url "$RUN_URL"` |
 | `agricola deliver-reply <file>` | Posts a deferred reply, optionally linking its Actions run. | `agricola deliver-reply reply.json --action-url "$RUN_URL"` |
 | `agricola deliver-issue-update <file>` | Applies a deferred tracking-issue body update. | `agricola deliver-issue-update update.json` |
 | `agricola record-propagations <results>` | Records published PRs or explicit skips and renders deferred updates. | `agricola record-propagations results --reply-directory replies --issue-update-directory updates` |

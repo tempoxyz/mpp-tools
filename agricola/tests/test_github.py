@@ -256,6 +256,55 @@ class GitHubApiTests(unittest.TestCase):
         with self.assertRaisesRegex(GitHubError, "does not use"):
             client.pull_revision("tempoxyz/mpp-go#88", "agricola/mppx-412")
 
+    def test_pull_request_comments_expose_eyes_acknowledgement(self) -> None:
+        client = StubClient(
+            [
+                [
+                    [
+                        {
+                            "id": 55,
+                            "body": "/ag fix add coverage",
+                            "created_at": "2026-08-09T03:22:26+00:00",
+                            "user": {"login": "maintainer"},
+                            "reactions": {"eyes": 1},
+                        },
+                        {
+                            "id": 56,
+                            "body": "/ag fix add another test",
+                            "created_at": "2026-08-09T03:23:26+00:00",
+                            "user": {"login": "maintainer"},
+                            "reactions": {"eyes": 0},
+                        },
+                    ]
+                ]
+            ]
+        )
+
+        comments = client.pull_request_comments("tempoxyz/mpp-go#88")
+
+        self.assertTrue(comments[0].has_eyes)
+        self.assertFalse(comments[1].has_eyes)
+        endpoint, options = client.calls[0]
+        self.assertEqual(
+            endpoint, "repos/tempoxyz/mpp-go/issues/88/comments?per_page=100"
+        )
+        self.assertTrue(options["paginate"])
+
+    def test_reacts_to_issue_comment_in_selected_repository(self) -> None:
+        client = StubClient([{"id": 1, "content": "eyes"}])
+
+        client.react_to_issue_comment("tempoxyz/mpp-go", 55)
+
+        self.assertEqual(
+            client.calls,
+            [
+                (
+                    "repos/tempoxyz/mpp-go/issues/comments/55/reactions",
+                    {"method": "POST", "fields": {"content": "eyes"}},
+                )
+            ],
+        )
+
     def test_tracking_issue_deduplication_uses_direct_issue_listing(self) -> None:
         marker = "<!-- agricola:source=wevm/mppx#412 -->"
         client = StubClient([[[{"number": 9, "body": marker}]]])

@@ -15,6 +15,7 @@ from .commands import (
     CommandError,
     has_command_line,
     parse_commands,
+    parse_pull_request_fix,
     require_maintainer,
     resolve_labels,
 )
@@ -32,6 +33,7 @@ from .models import (
     DecisionKind,
     LabelEvent,
     Manifest,
+    PendingAcknowledgement,
     PendingIssueUpdate,
     PendingReply,
     PropagateDecision,
@@ -39,6 +41,7 @@ from .models import (
     PropagationRequest,
     PropagationRevision,
     PropagationSkip,
+    PullRequestComment,
     Source,
     SkipDecision,
 )
@@ -57,6 +60,7 @@ class GitHub(Protocol):
     def repository_head(self, repo: str) -> str: ...
     def label_events(self, repo: str, number: int) -> Sequence[LabelEvent]: ...
     def find_tracking_issue(self, marker: str) -> dict[str, object] | None: ...
+    def find_tracking_issues(self, marker: str) -> tuple[dict[str, object], ...]: ...
     def create_issue(
         self, title: str, body: str, labels: Sequence[str] = ()
     ) -> dict[str, object]: ...
@@ -68,6 +72,9 @@ class GitHub(Protocol):
     def pull_revision(
         self, reference: str, expected_branch: str
     ) -> PropagationRevision: ...
+    def pull_request_comments(
+        self, reference: str
+    ) -> tuple[PullRequestComment, ...]: ...
 
 
 @dataclass(frozen=True)
@@ -76,6 +83,9 @@ class PollResult:
     created: int = 0
     deduplicated: int = 0
     suppressed: int = 0
+    pr_commands: int = 0
+    acknowledgements: tuple[PendingAcknowledgement, ...] = ()
+    replies: tuple[PendingReply, ...] = ()
     propagations: tuple[PropagationRequest, ...] = ()
 
 
@@ -139,7 +149,119 @@ def poll(
             counters["deduplicated"] += 1
         cursor = cursor.advance(change)
         cursor_store.save(cursor)
-    return PollResult(**counters, propagations=tuple(propagations))
+    pr_commands, acknowledgements, replies, revisions = _poll_pr_commands(
+        client, manifest, ledger
+    )
+    propagations.extend(revisions)
+    return PollResult(
+        **counters,
+        pr_commands=pr_commands,
+        acknowledgements=acknowledgements,
+        replies=replies,
+        propagations=tuple(propagations),
+    )
+
+
+def _poll_pr_commands(
+    client: GitHub,
+    manifest: Manifest,
+    ledger: DecisionLedger,
+) -> tuple[
+    int,
+    tuple[PendingAcknowledgement, ...],
+    tuple[PendingReply, ...],
+    tuple[PropagationRequest, ...],
+]:
+    command_count = 0
+    acknowledgements: list[PendingAcknowledgement] = []
+    replies: list[PendingReply] = []
+    propagations: list[PropagationRequest] = []
+    seen_references: set[str] = set()
+    for issue in client.find_tracking_issues("<!-- agricola:"):
+        for target, reference in recorded_propagations(
+            str(issue.get("body") or "")
+        ).items():
+            if reference in seen_references:
+                continue
+            seen_references.add(reference)
+            try:
+                sdk = manifest.target(target)
+            except ValueError:
+                continue
+            repository, number_text = reference.rsplit("#", 1)
+            if sdk.automation is not Automation.PR or sdk.repo != repository:
+                continue
+            candidates: list[tuple[PullRequestComment, Command]] = []
+            for comment in client.pull_request_comments(reference):
+                if comment.has_eyes:
+                    continue
+                try:
+                    require_maintainer(comment.author, manifest)
+                except AuthorizationError:
+                    continue
+                command = parse_pull_request_fix(comment.body, target)
+                if command is not None:
+                    candidates.append((comment, command))
+            if not candidates:
+                continue
+            candidates.sort(key=lambda item: (item[0].created_at, item[0].id))
+            instructions = tuple(
+                dict.fromkeys(
+                    command.instruction
+                    for _, command in candidates
+                    if command.instruction is not None
+                )
+            )
+            combined = "\n".join(instructions)
+            latest = candidates[-1][0]
+            result = handle_comment(
+                client,
+                manifest,
+                ledger,
+                {
+                    "comment": {
+                        "id": "pr-comments-"
+                        + "-".join(str(comment.id) for comment, _ in candidates),
+                        "body": latest.body,
+                        "created_at": latest.created_at.isoformat(),
+                        "user": {"login": latest.author},
+                    },
+                    "issue": issue,
+                },
+                commands=(
+                    Command(
+                        verb=CommandVerb.PROPAGATE,
+                        targets=(target,),
+                        instruction=combined,
+                    ),
+                ),
+            )
+            if result.ignored or not result.commands:
+                continue
+            command_count += len(candidates)
+            acknowledgements.extend(
+                PendingAcknowledgement(
+                    repository=repository,
+                    comment_id=comment.id,
+                )
+                for comment, _ in candidates
+            )
+            if result.reply is not None:
+                replies.append(
+                    result.reply.model_copy(
+                        update={
+                            "repository": repository,
+                            "issue_number": int(number_text),
+                        }
+                    )
+                )
+            propagations.extend(result.propagations)
+    return (
+        command_count,
+        tuple(acknowledgements),
+        tuple(replies),
+        tuple(propagations),
+    )
 
 
 @dataclass(frozen=True)
@@ -152,31 +274,60 @@ class CommentResult:
     propagations: tuple[PropagationRequest, ...] = ()
 
 
+def revision_acknowledgements(
+    client: GitHub,
+    manifest: Manifest,
+    requests: Sequence[PropagationRequest],
+) -> tuple[PendingAcknowledgement, ...]:
+    acknowledgements: dict[tuple[str, int], PendingAcknowledgement] = {}
+    for request in requests:
+        if request.revision is None:
+            continue
+        for comment in client.pull_request_comments(request.revision.pr):
+            if comment.has_eyes:
+                continue
+            try:
+                require_maintainer(comment.author, manifest)
+            except AuthorizationError:
+                continue
+            if parse_pull_request_fix(comment.body, request.target) is None:
+                continue
+            acknowledgement = PendingAcknowledgement(
+                repository=request.target_repo,
+                comment_id=comment.id,
+            )
+            acknowledgements[(request.target_repo, comment.id)] = acknowledgement
+    return tuple(acknowledgements.values())
+
+
 def handle_comment(
     client: GitHub,
     manifest: Manifest,
     ledger: DecisionLedger,
     event: dict[str, object],
+    *,
+    commands: Sequence[Command] | None = None,
 ) -> CommentResult:
     comment = _object(event, "comment")
     issue = _object(event, "issue")
     author = str(_object(comment, "user").get("login", ""))
     body = str(comment.get("body") or "")
-    if not has_command_line(body):
+    if commands is None and not has_command_line(body):
         return CommentResult(ignored=True)
     try:
         require_maintainer(author, manifest)
     except AuthorizationError:
         return CommentResult(ignored=True)
-    try:
-        commands = parse_commands(body, manifest)
-    except CommandError as exc:
-        return CommentResult(
-            reply=PendingReply(
-                issue_number=int(str(issue["number"])),
-                body=f"Agricola command error: {exc}",
+    if commands is None:
+        try:
+            commands = parse_commands(body, manifest)
+        except CommandError as exc:
+            return CommentResult(
+                reply=PendingReply(
+                    issue_number=int(str(issue["number"])),
+                    body=f"Agricola command error: {exc}",
+                )
             )
-        )
     if not commands:
         return CommentResult(ignored=True)
 

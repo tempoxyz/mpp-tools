@@ -170,6 +170,60 @@ class CliTests(unittest.TestCase):
                 ],
             )
 
+    def test_delivers_polled_pr_acknowledgement_and_run_link(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result_path = Path(directory) / "poll.json"
+            result_path.write_text(
+                json.dumps(
+                    {
+                        "acknowledgements": [
+                            {
+                                "repository": "tempoxyz/mpp-go",
+                                "comment_id": 55,
+                                "content": "eyes",
+                            }
+                        ],
+                        "replies": [
+                            {
+                                "repository": "tempoxyz/mpp-go",
+                                "issue_number": 88,
+                                "body": "Queued revision of `go`.",
+                            }
+                        ],
+                    }
+                )
+            )
+            action_url = (
+                "https://github.com/tempoxyz/mpp-tools/actions/runs/31281480045"
+            )
+            client = FakeGitHub()
+
+            with (
+                patch("agricola.cli.GitHubClient", return_value=client),
+                redirect_stdout(StringIO()),
+            ):
+                delivered = main(
+                    [
+                        "deliver-pr-actions",
+                        str(result_path),
+                        "--action-url",
+                        action_url,
+                    ]
+                )
+
+            self.assertEqual(delivered, 0)
+            self.assertEqual(client.reactions, [("tempoxyz/mpp-go", 55, "eyes")])
+            self.assertEqual(
+                client.repository_comments,
+                [
+                    (
+                        "tempoxyz/mpp-go",
+                        88,
+                        f"Queued revision of `go`.\n\n[View fix run]({action_url})",
+                    )
+                ],
+            )
+
     def test_records_explicit_generation_skip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

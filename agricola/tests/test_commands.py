@@ -8,6 +8,7 @@ from agricola.commands import (
     CommandError,
     has_command_line,
     parse_commands,
+    parse_pull_request_fix,
     require_maintainer,
     resolve_labels,
 )
@@ -75,6 +76,28 @@ class CommandTests(unittest.TestCase):
     def test_unquoted_fix_instruction_is_an_unknown_target(self) -> None:
         with self.assertRaisesRegex(CommandError, "unknown SDK target"):
             parse_commands("/agricola fix address-comments", self.manifest)
+
+    def test_pr_fix_uses_implicit_target_and_freeform_instruction(self) -> None:
+        command = parse_pull_request_fix("/ag fix can you add more test coverage", "go")
+
+        self.assertIsNotNone(command)
+        assert command is not None
+        self.assertEqual(command.targets, ("go",))
+        self.assertEqual(command.instruction, "can you add more test coverage")
+
+    def test_pr_fix_without_instruction_uses_feedback_default(self) -> None:
+        command = parse_pull_request_fix("/ag fix", "go")
+
+        self.assertIsNotNone(command)
+        assert command is not None
+        assert command.instruction is not None
+        self.assertIn("pull request feedback", command.instruction)
+
+    def test_pr_parser_ignores_non_fix_commands_and_embedded_mentions(self) -> None:
+        self.assertIsNone(parse_pull_request_fix("/ag status", "go"))
+        self.assertIsNone(
+            parse_pull_request_fix("please run /ag fix add coverage", "go")
+        )
 
     def test_rejects_empty_fix_instruction(self) -> None:
         with self.assertRaisesRegex(CommandError, "must not be empty"):
