@@ -22,12 +22,12 @@ runs:
   using: composite
   steps:
     - name: Setup Python
-      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
       with:
         python-version: "3.12"
 
     - name: Install uv
-      uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@3626124474a987bc74b41fc7ae65b2e23f8e4e4e
+      uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@d39baa2b43f5eba5d261c047521a4fbd56101129 # 2026-09-23T04-31-11Z-d39baa2b
       with:
         version: "0.12.11"
         python-version: "3.12"
@@ -38,7 +38,7 @@ runs:
 
     - name: Setup Node.js
       if: inputs.setup-node == 'true' || inputs.adapter == 'typescript' || inputs.adapter == 'all'
-      uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
       with:
         node-version: "24.5"
         cache: npm
@@ -46,17 +46,17 @@ runs:
 
     - name: Setup Rust
       if: inputs.adapter == 'rust' || inputs.adapter == 'all'
-      uses: tempoxyz/gh-actions/vendor/dtolnay/rust-toolchain@3626124474a987bc74b41fc7ae65b2e23f8e4e4e
+      uses: tempoxyz/gh-actions/vendor/dtolnay/rust-toolchain@d39baa2b43f5eba5d261c047521a4fbd56101129 # 2026-09-23T04-31-11Z-d39baa2b
 
     - name: Cache Rust dependencies
       if: inputs.adapter == 'rust' || inputs.adapter == 'all'
-      uses: tempoxyz/gh-actions/vendor/Swatinem/rust-cache@3626124474a987bc74b41fc7ae65b2e23f8e4e4e
+      uses: tempoxyz/gh-actions/vendor/Swatinem/rust-cache@d39baa2b43f5eba5d261c047521a4fbd56101129 # 2026-09-23T04-31-11Z-d39baa2b
       with:
         workspaces: ${{ inputs.conformance-directory }}/adapters/rust -> target
 
     - name: Setup Go
       if: inputs.adapter == 'go' || inputs.adapter == 'all'
-      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
       with:
         go-version: "1.26.0"
         check-latest: true
@@ -64,7 +64,7 @@ runs:
 
     - name: Setup Java
       if: inputs.adapter == 'java' || inputs.adapter == 'all'
-      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
       with:
         distribution: temurin
         java-version: "17"
@@ -76,7 +76,7 @@ runs:
 
     - name: Setup Ruby
       if: inputs.adapter == 'ruby' || inputs.adapter == 'all'
-      uses: tempoxyz/gh-actions/vendor/ruby/setup-ruby@b411ce7fe18d0775ae614ad5c4b873c768364979
+      uses: tempoxyz/gh-actions/vendor/ruby/setup-ruby@d39baa2b43f5eba5d261c047521a4fbd56101129 # 2026-09-23T04-31-11Z-d39baa2b
       with:
         ruby-version: "3.3"
         bundler-cache: ${{ inputs.ruby-bundler-cache }}
