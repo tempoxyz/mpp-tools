@@ -22,7 +22,7 @@ runs:
   using: composite
   steps:
     - name: Setup Python
-      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
       with:
         python-version: "3.12"
 
@@ -38,7 +38,7 @@ runs:
 
     - name: Setup Node.js
       if: inputs.setup-node == 'true' || inputs.adapter == 'typescript' || inputs.adapter == 'all'
-      uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
       with:
         node-version: "24.5"
         cache: npm
@@ -56,7 +56,7 @@ runs:
 
     - name: Setup Go
       if: inputs.adapter == 'go' || inputs.adapter == 'all'
-      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
       with:
         go-version: "1.26.0"
         check-latest: true
@@ -64,7 +64,7 @@ runs:
 
     - name: Setup Java
       if: inputs.adapter == 'java' || inputs.adapter == 'all'
-      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
       with:
         distribution: temurin
         java-version: "17"

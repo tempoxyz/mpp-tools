@@ -38,7 +38,7 @@ jobs:
       - name: Secure runner
         uses: tempoxyz/gh-actions/actions/secure-runner@d39baa2b43f5eba5d261c047521a4fbd56101129 # 2026-09-23T04-31-11Z-d39baa2b
       - name: Checkout SDK
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: sdk
           persist-credentials: false
@@ -65,7 +65,7 @@ jobs:
           echo "conformance_ref=$REQUESTED_CONFORMANCE_REF" >> "$GITHUB_OUTPUT"
 
       - name: Checkout conformance suite
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: tempoxyz/mpp-tools
           ref: ${{ steps.resolve.outputs.conformance_ref }}
