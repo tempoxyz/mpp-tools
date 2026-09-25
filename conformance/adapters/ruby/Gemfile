@@ -3,5 +3,11 @@ source "https://rubygems.org"
 gem "mpp-rb", "0.1.4"
 gem "bigdecimal"
 gem "eth", "~> 0.5"
+# Remove this pin once rbsecp256k1 releases support for rubyzip 3.x:
+# https://github.com/etscrivner/rbsecp256k1/pull/85
+gem "rbsecp256k1", git: "https://github.com/etscrivner/rbsecp256k1.git",
+  ref: "e789ceddafc6ce5bdfe3f01af902facf4c1fbd04"
+# CVE-2026-85396 is fixed in rubyzip 3.4.0.
+gem "rubyzip", ">= 3.4.0", "< 4"
 gem "rlp", "~> 0.7"
 gem "sorbet-runtime", "~> 0.6"

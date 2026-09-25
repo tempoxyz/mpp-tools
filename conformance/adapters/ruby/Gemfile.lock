@@ -1,3 +1,13 @@
+GIT
+  remote: https://github.com/etscrivner/rbsecp256k1.git
+  revision: e789ceddafc6ce5bdfe3f01af902facf4c1fbd04
+  ref: e789ceddafc6ce5bdfe3f01af902facf4c1fbd04
+  specs:
+    rbsecp256k1 (6.0.0)
+      mini_portile2 (~> 2.8)
+      pkg-config (~> 1.5)
+      rubyzip (~> 3.2)
+
 GEM
   remote: https://rubygems.org/
   specs:
@@ -39,12 +49,8 @@ GEM
     openssl (3.3.3)
     pkg-config (1.6.5)
     rake (13.4.2)
-    rbsecp256k1 (6.0.0)
-      mini_portile2 (~> 2.8)
-      pkg-config (~> 1.5)
-      rubyzip (~> 2.3)
     rlp (0.7.3)
-    rubyzip (2.4.1)
+    rubyzip (3.7.0)
     scrypt (3.1.0)
       ffi-compiler (>= 1.0, < 2.0)
       rake (~> 13)
@@ -60,7 +66,9 @@ DEPENDENCIES
   bigdecimal
   eth (~> 0.5)
   mpp-rb (= 0.1.4)
+  rbsecp256k1!
   rlp (~> 0.7)
+  rubyzip (>= 3.4.0, < 4)
   sorbet-runtime (~> 0.6)
 
 CHECKSUMS
@@ -85,9 +93,9 @@ CHECKSUMS
   openssl (3.3.3) sha256=d46902138f2987c13122fab826030a11c2bb9b8a16394215cbfc5062c5e2d335
   pkg-config (1.6.5) sha256=33f9f81c5322983d22b439b8b672f27777b406fea23bfec74ff14bbeb42ec733
   rake (13.4.2) sha256=cb825b2bd5f1f8e91ca37bddb4b9aaf345551b4731da62949be002fa89283701
-  rbsecp256k1 (6.0.0) sha256=d38f563bfc6bcf3ce20c336a4798cc6990427f291e74c6817360363a72f11669
+  rbsecp256k1 (6.0.0)
   rlp (0.7.3) sha256=a4f3ac65b1206ac84212811bc8f8590c136a49d848071ab2e60ae621bac8869f
-  rubyzip (2.4.1) sha256=8577c88edc1fde8935eb91064c5cb1aef9ad5494b940cf19c775ee833e075615
+  rubyzip (3.7.0) sha256=65c19294da75297a939006f3516deacc33185fbd721ff1954f7a231db6d3e121
   scrypt (3.1.0) sha256=67fde35bc7e3b7fe906c5be9c242acf95fe4a886c89572f405f6b11df30aa6af
   sorbet-runtime (0.6.13433) sha256=55074ef646ed9089ea5cff4e564f2c5d53e629f0d6e681ca7364daabc1ce1e16
 
