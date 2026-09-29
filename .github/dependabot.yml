@@ -18,6 +18,8 @@ updates:
 
   - package-ecosystem: "cargo"
     directory: "/conformance/adapters/rust"
+    allow:
+      - dependency-type: "all"
     cooldown:
       default-days: 7
     patterns: ["*"]
