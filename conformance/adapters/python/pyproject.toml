@@ -9,4 +9,4 @@ dependencies = [
 ]
 
 [tool.uv]
-override-dependencies = ["pyjwt==2.14.0"]
+override-dependencies = ["pyjwt==2.15.0", "urllib3==2.8.0"]
