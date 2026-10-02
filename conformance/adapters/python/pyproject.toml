@@ -7,3 +7,6 @@ requires-python = ">=3.12"
 dependencies = [
     "pympp[tempo] @ git+https://github.com/tempoxyz/pympp.git@18390aed08d45dee178ad3875a272a669f34adf9",
 ]
+
+[tool.uv]
+override-dependencies = ["pyjwt==2.14.0"]
