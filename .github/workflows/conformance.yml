@@ -60,7 +60,7 @@ jobs:
       reason: ${{ steps.select.outputs.reason }}
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@55fe3b63d9612623cc51e6c62d9d62fbcb175fb0 # 2026-09-29T01-25-15Z-55fe3b63
+        uses: tempoxyz/gh-actions/actions/secure-runner@5e1c1d8d96398c49c836c10964038e10f9d071fc # 2026-10-03T06-17-35Z-5e1c1d8d
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -114,7 +114,7 @@ jobs:
         working-directory: conformance
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@55fe3b63d9612623cc51e6c62d9d62fbcb175fb0 # 2026-09-29T01-25-15Z-55fe3b63
+        uses: tempoxyz/gh-actions/actions/secure-runner@5e1c1d8d96398c49c836c10964038e10f9d071fc # 2026-10-03T06-17-35Z-5e1c1d8d
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -175,7 +175,7 @@ jobs:
         working-directory: conformance
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@55fe3b63d9612623cc51e6c62d9d62fbcb175fb0 # 2026-09-29T01-25-15Z-55fe3b63
+        uses: tempoxyz/gh-actions/actions/secure-runner@5e1c1d8d96398c49c836c10964038e10f9d071fc # 2026-10-03T06-17-35Z-5e1c1d8d
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -240,7 +240,7 @@ jobs:
         working-directory: conformance
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@55fe3b63d9612623cc51e6c62d9d62fbcb175fb0 # 2026-09-29T01-25-15Z-55fe3b63
+        uses: tempoxyz/gh-actions/actions/secure-runner@5e1c1d8d96398c49c836c10964038e10f9d071fc # 2026-10-03T06-17-35Z-5e1c1d8d
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -285,7 +285,7 @@ jobs:
         working-directory: conformance
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@55fe3b63d9612623cc51e6c62d9d62fbcb175fb0 # 2026-09-29T01-25-15Z-55fe3b63
+        uses: tempoxyz/gh-actions/actions/secure-runner@5e1c1d8d96398c49c836c10964038e10f9d071fc # 2026-10-03T06-17-35Z-5e1c1d8d
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
