@@ -1,6 +1,6 @@
 source "https://rubygems.org"
 
-gem "mpp-rb", "0.1.4"
+gem "mpp-rb", "0.1.6"
 gem "bigdecimal"
 gem "eth", "~> 0.5"
 # Remove this pin once rbsecp256k1 releases support for rubyzip 3.x:
