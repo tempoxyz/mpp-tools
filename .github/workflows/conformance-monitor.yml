@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   conformance:
-    uses: ./.github/workflows/conformance.yml
+    uses: ./.github/workflows/conformance.yml # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
     permissions:
       contents: read
       id-token: write

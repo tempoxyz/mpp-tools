@@ -31,7 +31,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Agricola
-        uses: ./.github/actions/setup-agricola
+        uses: ./.github/actions/setup-agricola # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
 
       - name: Build audit matrix
         id: matrix
@@ -76,12 +76,12 @@ jobs:
           persist-credentials: false
 
       - name: Setup conformance adapter
-        uses: ./.github/actions/setup-conformance
+        uses: ./.github/actions/setup-conformance # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
         with:
           adapter: typescript
 
       - name: Install audit and conformance runner
-        uses: ./.github/actions/setup-agricola
+        uses: ./.github/actions/setup-agricola # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
         with:
           setup-python: "false"
 
@@ -179,13 +179,13 @@ jobs:
           persist-credentials: false
 
       - name: Setup conformance adapter
-        uses: ./.github/actions/setup-conformance
+        uses: ./.github/actions/setup-conformance # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
         with:
           adapter: ${{ matrix.target }}
           ruby-bundler-cache: "false"
 
       - name: Install audit and conformance runner
-        uses: ./.github/actions/setup-agricola
+        uses: ./.github/actions/setup-agricola # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
         with:
           setup-python: "false"
 
@@ -297,7 +297,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Agricola
-        uses: ./.github/actions/setup-agricola
+        uses: ./.github/actions/setup-agricola # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
 
       - name: Download audit snapshots
         continue-on-error: true
@@ -325,7 +325,7 @@ jobs:
           policy: agricola-audit-state
 
       - name: Ensure state pull request
-        uses: ./.github/actions/persist-agricola-state
+        uses: ./.github/actions/persist-agricola-state # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
         with:
           token: ${{ steps.sts.outputs.token }}
           base: ${{ env.DEFAULT_BRANCH }}

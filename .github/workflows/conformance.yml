@@ -121,7 +121,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup conformance adapter
-        uses: ./.github/actions/setup-conformance
+        uses: ./.github/actions/setup-conformance # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
         with:
           adapter: ${{ matrix.adapter }}
 
@@ -182,7 +182,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup conformance adapter
-        uses: ./.github/actions/setup-conformance
+        uses: ./.github/actions/setup-conformance # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
         with:
           adapter: ${{ matrix.adapter }}
           setup-node: "true"
@@ -247,7 +247,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup conformance adapter
-        uses: ./.github/actions/setup-conformance
+        uses: ./.github/actions/setup-conformance # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
         with:
           adapter: go
 

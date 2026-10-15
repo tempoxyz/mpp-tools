@@ -50,7 +50,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Agricola
-        uses: ./.github/actions/setup-agricola
+        uses: ./.github/actions/setup-agricola # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
 
       - name: Resolve downstream token scope
         id: downstream-scope
@@ -154,7 +154,7 @@ jobs:
           policy: agricola-state
 
       - name: Ensure state pull request
-        uses: ./.github/actions/persist-agricola-state
+        uses: ./.github/actions/persist-agricola-state # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
         with:
           token: ${{ steps.sts.outputs.token }}
           base: ${{ env.DEFAULT_BRANCH }}
@@ -235,7 +235,7 @@ jobs:
 
       - name: Setup Agricola for revision feedback
         if: matrix.request.revision != null
-        uses: ./.agricola/control/.github/actions/setup-agricola
+        uses: ./.agricola/control/.github/actions/setup-agricola # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
         with:
           project-path: .agricola/control
 
@@ -375,7 +375,7 @@ jobs:
 
       - name: Setup Agricola
         if: steps.patch.outputs.has-changes == 'true'
-        uses: ./.agricola/control/.github/actions/setup-agricola
+        uses: ./.agricola/control/.github/actions/setup-agricola # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
         with:
           project-path: .agricola/control
 
@@ -457,7 +457,7 @@ jobs:
 
       - name: Setup Agricola
         if: steps.patch.outputs.has-changes == 'true'
-        uses: ./.agricola/control/.github/actions/setup-agricola
+        uses: ./.agricola/control/.github/actions/setup-agricola # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
         with:
           project-path: .agricola/control
 
@@ -532,7 +532,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Agricola
-        uses: ./.github/actions/setup-agricola
+        uses: ./.github/actions/setup-agricola # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
 
       - name: Download propagation results
         continue-on-error: true
@@ -560,7 +560,7 @@ jobs:
           policy: agricola-state
 
       - name: Ensure state pull request
-        uses: ./.github/actions/persist-agricola-state
+        uses: ./.github/actions/persist-agricola-state # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
         with:
           token: ${{ steps.sts.outputs.token }}
           base: ${{ env.DEFAULT_BRANCH }}

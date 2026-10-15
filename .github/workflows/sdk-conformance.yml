@@ -73,7 +73,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup conformance adapter
-        uses: ./mpp-tools/.github/actions/setup-conformance
+        uses: ./mpp-tools/.github/actions/setup-conformance # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
         with:
           adapter: ${{ steps.resolve.outputs.adapter }}
           conformance-directory: mpp-tools/conformance
