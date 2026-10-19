@@ -255,6 +255,7 @@ jobs:
       - name: Generate downstream changes
         uses: tempoxyz/gh-actions/vendor/openai/codex-action@947d9a3ccb2425a9c94d563fd721cc0e33c89e26 # 2026-10-15T00-15-06Z-947d9a3c
         with:
+          codex-version: "0.162.1" # Includes the matching platform package; published 2026-10-09.
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           prompt-file: .agricola/control/.github/agricola/propagate.md
           output-file: .agricola/codex-output.md
