@@ -1,6 +1,6 @@
 module mpp-conformance-adapter-go
 
-go 1.26
+go 1.26.10
 
 require github.com/tempoxyz/mpp-go v0.2.1-0.20260921155548-d3948998a76e
 
