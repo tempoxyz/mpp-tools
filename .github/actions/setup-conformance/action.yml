@@ -27,7 +27,7 @@ runs:
         python-version: "3.12"
 
     - name: Install uv
-      uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@947d9a3ccb2425a9c94d563fd721cc0e33c89e26 # 2026-10-15T00-15-06Z-947d9a3c
+      uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
       with:
         version: "0.12.11"
         python-version: "3.12"
@@ -46,11 +46,11 @@ runs:
 
     - name: Setup Rust
       if: inputs.adapter == 'rust' || inputs.adapter == 'all'
-      uses: tempoxyz/gh-actions/vendor/dtolnay/rust-toolchain@947d9a3ccb2425a9c94d563fd721cc0e33c89e26 # 2026-10-15T00-15-06Z-947d9a3c
+      uses: tempoxyz/gh-actions/vendor/dtolnay/rust-toolchain@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
 
     - name: Cache Rust dependencies
       if: inputs.adapter == 'rust' || inputs.adapter == 'all'
-      uses: tempoxyz/gh-actions/vendor/Swatinem/rust-cache@947d9a3ccb2425a9c94d563fd721cc0e33c89e26 # 2026-10-15T00-15-06Z-947d9a3c
+      uses: tempoxyz/gh-actions/vendor/Swatinem/rust-cache@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
       with:
         workspaces: ${{ inputs.conformance-directory }}/adapters/rust -> target
 
@@ -76,7 +76,7 @@ runs:
 
     - name: Setup Ruby
       if: inputs.adapter == 'ruby' || inputs.adapter == 'all'
-      uses: tempoxyz/gh-actions/vendor/ruby/setup-ruby@947d9a3ccb2425a9c94d563fd721cc0e33c89e26 # 2026-10-15T00-15-06Z-947d9a3c
+      uses: tempoxyz/gh-actions/vendor/ruby/setup-ruby@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
       with:
         ruby-version: "3.3"
         bundler-cache: ${{ inputs.ruby-bundler-cache }}
