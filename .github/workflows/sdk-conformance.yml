@@ -88,12 +88,37 @@ jobs:
         env:
           ADAPTER: ${{ steps.resolve.outputs.adapter }}
 
+      - name: Enable pnpm for TypeScript SDK checkout
+        if: steps.resolve.outputs.adapter == 'typescript'
+        id: pnpm
+        working-directory: sdk
+        run: |
+          corepack enable
+          echo "store=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      # Without a store cache every run installed the SDK's dependencies cold
+      # through Aegis (~100s). Only the caller's main branch writes the cache.
+      - name: Cache TypeScript SDK pnpm store
+        if: steps.resolve.outputs.adapter == 'typescript' && github.ref == 'refs/heads/main'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.pnpm.outputs.store }}
+          key: conformance-sdk-pnpm-${{ runner.os }}-${{ hashFiles('sdk/pnpm-lock.yaml') }}
+          restore-keys: conformance-sdk-pnpm-${{ runner.os }}-
+
+      - name: Restore TypeScript SDK pnpm store
+        if: steps.resolve.outputs.adapter == 'typescript' && github.ref != 'refs/heads/main'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.pnpm.outputs.store }}
+          key: conformance-sdk-pnpm-${{ runner.os }}-${{ hashFiles('sdk/pnpm-lock.yaml') }}
+          restore-keys: conformance-sdk-pnpm-${{ runner.os }}-
+
       - name: Build TypeScript SDK checkout
         if: steps.resolve.outputs.adapter == 'typescript'
         working-directory: sdk
         run: |
-          corepack enable
-          pnpm install --frozen-lockfile
+          pnpm install --frozen-lockfile --prefer-offline
           pnpm build
 
       - name: Install adapter dependencies

@@ -19,8 +19,11 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -180,9 +183,13 @@ class VectorRunner:
         verbose: bool = False,
         output_format: str = "text",
         sdk_version_resolver: Callable[[str], str] | None = None,
+        jobs: int | None = None,
     ):
         self.verbose = verbose
         self.output_format = output_format
+        self.jobs = max(1, jobs if jobs is not None else (os.cpu_count() or 1))
+        # Scenario workers record into a per-thread list (see _run_scenarios).
+        self._local = threading.local()
         self.results: list[TestResult] = []
         self.sdk_version_resolver = sdk_version_resolver or installed_version
         self.sdk_versions: dict[str, str] = {}
@@ -374,7 +381,8 @@ class VectorRunner:
         tags: list[str] | None = None,
         spec_ref: str | None = None,
     ) -> None:
-        self.results.append(TestResult(
+        target = getattr(self._local, "results", self.results)
+        target.append(TestResult(
             vector_file=vector_file,
             test_type=test_type,
             test_name=test_name,
@@ -564,6 +572,7 @@ class VectorRunner:
         is_base64url = parse_cmd and parse_cmd.startswith("base64url-")
         is_challenge_id = generate_cmd is not None
 
+        runnable: list[dict[str, Any]] = []
         for scenario in vectors.get("scenarios", []):
             self.scenario_version_constraints(scenario)
             name = scenario["name"]
@@ -581,224 +590,291 @@ class VectorRunner:
                     self.log(f"  {vector_name}::{name} SKIPPED ({reason})")
                 continue
 
-            description = scenario.get("description")
-            tags = scenario.get("tags", [])
-            tests = scenario.get("tests", {})
-            duration_limit_ms = self.duration_limit_ms(scenario, adapter)
-            command_timeout = self.command_timeout_seconds(duration_limit_ms)
+            runnable.append(scenario)
 
-            if operation:
-                expected = scenario["expected"]
-                result, elapsed_ms = self.run_operation_timed(
-                    adapter,
-                    operation,
-                    scenario["input"],
-                    context={"caseName": name, "vectorName": vector_name},
-                    timeout=command_timeout,
-                    validate_input=not expects_failure(expected, "ok"),
-                )
-                passed, error = self.compare_adapter_response(expected, result)
-                if passed:
-                    passed, error = self.compare_duration(duration_limit_ms, elapsed_ms)
-                self._record_result(
-                    vector_file=vector_name,
-                    test_type=TestType.OPERATION,
-                    test_name=name,
-                    adapter=adapter.name,
-                    passed=passed,
-                    expected=expected,
-                    actual=result,
-                    error=error,
-                )
-                continue
+        context = dict(
+            vector_name=vector_name,
+            spec_ref=spec_ref,
+            parse_cmd=parse_cmd,
+            format_cmd=format_cmd,
+            generate_cmd=generate_cmd,
+            operation=operation,
+            is_base64url=is_base64url,
+            is_challenge_id=is_challenge_id,
+        )
+        self._run_scenarios(adapter, runnable, context)
 
-            if is_challenge_id:
-                input_data = json.dumps(scenario["input"])
-                generate_test = tests.get("generate")
-                if generate_test is not None and generate_test is not True:
-                    expected = generate_test
-                else:
-                    expected = {"success": True, "result": scenario["expected"]}
-                result, elapsed_ms = self.run_adapter_timed(
-                    adapter,
-                    generate_cmd,
-                    input_data,
-                    timeout=command_timeout,
-                    validate_input=not expects_failure(expected),
-                )
-                passed, error = self.compare_results(expected, result)
-                if passed:
-                    passed, error = self.compare_duration(duration_limit_ms, elapsed_ms)
-                self._record_result(
-                    vector_file=vector_name,
-                    test_type=TestType.GENERATE,
-                    test_name=name,
-                    adapter=adapter.name,
-                    passed=passed,
-                    description=description,
-                    tags=tags,
-                    spec_ref=spec_ref,
-                    expected=expected,
-                    actual=result,
-                    error=error,
-                )
-                continue
+    def _run_scenarios(
+        self,
+        adapter: AdapterConfig,
+        scenarios: list[dict[str, Any]],
+        context: dict[str, Any],
+    ) -> None:
+        """Run scenarios concurrently and record results in scenario order.
 
-            if is_base64url:
-                obj = scenario.get("decoded")
-                wire = scenario.get("encoded")
+        Every check spawns an adapter process, so the suite is dominated by
+        process startup and parallelizes well. Scenarios with a duration limit
+        run one at a time afterwards so contention cannot skew their timing.
+        """
+
+        def run_one(scenario: dict[str, Any]) -> list[TestResult]:
+            self._local.results = []
+            try:
+                self._run_scenario(adapter, scenario, **context)
+                return self._local.results
+            finally:
+                del self._local.results
+
+        timed = [self.duration_limit_ms(s, adapter) is not None for s in scenarios]
+        results: list[list[TestResult] | None] = [None] * len(scenarios)
+        parallel = [i for i, is_timed in enumerate(timed) if not is_timed]
+        if self.jobs > 1 and len(parallel) > 1:
+            with ThreadPoolExecutor(max_workers=self.jobs) as pool:
+                for i, scenario_results in zip(parallel, pool.map(run_one, [scenarios[i] for i in parallel])):
+                    results[i] = scenario_results
+        else:
+            for i in parallel:
+                results[i] = run_one(scenarios[i])
+        for i, is_timed in enumerate(timed):
+            if is_timed:
+                results[i] = run_one(scenarios[i])
+        for scenario_results in results:
+            self.results.extend(scenario_results or [])
+
+    def _run_scenario(
+        self,
+        adapter: AdapterConfig,
+        scenario: dict[str, Any],
+        *,
+        vector_name: str,
+        spec_ref: str | None,
+        parse_cmd: str | None,
+        format_cmd: str | None,
+        generate_cmd: str | None,
+        operation: str | None,
+        is_base64url: bool,
+        is_challenge_id: bool,
+    ) -> None:
+        """Run one scenario's checks and record their results."""
+        name = scenario["name"]
+        description = scenario.get("description")
+        tags = scenario.get("tags", [])
+        tests = scenario.get("tests", {})
+        duration_limit_ms = self.duration_limit_ms(scenario, adapter)
+        command_timeout = self.command_timeout_seconds(duration_limit_ms)
+
+        if operation:
+            expected = scenario["expected"]
+            result, elapsed_ms = self.run_operation_timed(
+                adapter,
+                operation,
+                scenario["input"],
+                context={"caseName": name, "vectorName": vector_name},
+                timeout=command_timeout,
+                validate_input=not expects_failure(expected, "ok"),
+            )
+            passed, error = self.compare_adapter_response(expected, result)
+            if passed:
+                passed, error = self.compare_duration(duration_limit_ms, elapsed_ms)
+            self._record_result(
+                vector_file=vector_name,
+                test_type=TestType.OPERATION,
+                test_name=name,
+                adapter=adapter.name,
+                passed=passed,
+                expected=expected,
+                actual=result,
+                error=error,
+            )
+            return
+
+        if is_challenge_id:
+            input_data = json.dumps(scenario["input"])
+            generate_test = tests.get("generate")
+            if generate_test is not None and generate_test is not True:
+                expected = generate_test
             else:
-                obj = scenario.get("object")
-                wire = self.scenario_wire(scenario)
+                expected = {"success": True, "result": scenario["expected"]}
+            result, elapsed_ms = self.run_adapter_timed(
+                adapter,
+                generate_cmd,
+                input_data,
+                timeout=command_timeout,
+                validate_input=not expects_failure(expected),
+            )
+            passed, error = self.compare_results(expected, result)
+            if passed:
+                passed, error = self.compare_duration(duration_limit_ms, elapsed_ms)
+            self._record_result(
+                vector_file=vector_name,
+                test_type=TestType.GENERATE,
+                test_name=name,
+                adapter=adapter.name,
+                passed=passed,
+                description=description,
+                tags=tags,
+                spec_ref=spec_ref,
+                expected=expected,
+                actual=result,
+                error=error,
+            )
+            return
 
-            # Parse test
-            parse_test = tests.get("parse")
-            if parse_test is not None and parse_cmd and wire is not None:
-                if parse_test is True:
-                    expected = {"success": True, "result": obj}
-                else:
-                    expected = parse_test
-                result, elapsed_ms = self.run_adapter_timed(
-                    adapter,
-                    parse_cmd,
-                    wire,
-                    timeout=command_timeout,
-                    validate_input=not expects_failure(expected),
-                )
-                if parse_test is True:
-                    passed, error = self.compare_parse_results_semantic(expected, result, parse_cmd)
-                else:
-                    passed, error = self.compare_results(parse_test, result)
-                if passed:
-                    passed, error = self.compare_duration(duration_limit_ms, elapsed_ms)
-                self._record_result(
-                    vector_file=vector_name,
-                    test_type=TestType.PARSE,
-                    test_name=name,
-                    adapter=adapter.name,
-                    passed=passed,
-                    description=description,
-                    tags=tags,
-                    spec_ref=spec_ref,
-                    expected=expected,
-                    actual=result,
-                    error=error,
-                )
+        if is_base64url:
+            obj = scenario.get("decoded")
+            wire = scenario.get("encoded")
+        else:
+            obj = scenario.get("object")
+            wire = self.scenario_wire(scenario)
 
-            # Format test
-            format_test = tests.get("format")
-            if format_test is not None and format_cmd and obj is not None:
-                if is_base64url:
-                    format_input = obj
-                else:
-                    format_input = json.dumps(obj)
-                if format_test is True or format_test == "exact":
-                    expected_format = {"success": True, "result": wire}
-                else:
-                    expected_format = format_test
-                result, elapsed_ms = self.run_adapter_timed(
+        # Parse test
+        parse_test = tests.get("parse")
+        if parse_test is not None and parse_cmd and wire is not None:
+            if parse_test is True:
+                expected = {"success": True, "result": obj}
+            else:
+                expected = parse_test
+            result, elapsed_ms = self.run_adapter_timed(
+                adapter,
+                parse_cmd,
+                wire,
+                timeout=command_timeout,
+                validate_input=not expects_failure(expected),
+            )
+            if parse_test is True:
+                passed, error = self.compare_parse_results_semantic(expected, result, parse_cmd)
+            else:
+                passed, error = self.compare_results(parse_test, result)
+            if passed:
+                passed, error = self.compare_duration(duration_limit_ms, elapsed_ms)
+            self._record_result(
+                vector_file=vector_name,
+                test_type=TestType.PARSE,
+                test_name=name,
+                adapter=adapter.name,
+                passed=passed,
+                description=description,
+                tags=tags,
+                spec_ref=spec_ref,
+                expected=expected,
+                actual=result,
+                error=error,
+            )
+
+        # Format test
+        format_test = tests.get("format")
+        if format_test is not None and format_cmd and obj is not None:
+            if is_base64url:
+                format_input = obj
+            else:
+                format_input = json.dumps(obj)
+            if format_test is True or format_test == "exact":
+                expected_format = {"success": True, "result": wire}
+            else:
+                expected_format = format_test
+            result, elapsed_ms = self.run_adapter_timed(
+                adapter,
+                format_cmd,
+                format_input,
+                timeout=command_timeout,
+                validate_input=not expects_failure(expected_format),
+            )
+            if format_test is True or format_test == "exact":
+                passed, error = self.compare_format_results(
                     adapter,
+                    expected_format,
+                    result,
                     format_cmd,
-                    format_input,
-                    timeout=command_timeout,
-                    validate_input=not expects_failure(expected_format),
+                    parse_cmd,
+                    exact=format_test == "exact",
                 )
-                if format_test is True or format_test == "exact":
-                    passed, error = self.compare_format_results(
-                        adapter,
-                        expected_format,
-                        result,
-                        format_cmd,
-                        parse_cmd,
-                        exact=format_test == "exact",
-                    )
-                else:
-                    passed, error = self.compare_results(expected_format, result)
-                if passed:
-                    passed, error = self.compare_duration(duration_limit_ms, elapsed_ms)
-                self._record_result(
-                    vector_file=vector_name,
-                    test_type=TestType.FORMAT,
-                    test_name=name,
-                    adapter=adapter.name,
-                    passed=passed,
-                    description=description,
-                    tags=tags,
-                    spec_ref=spec_ref,
-                    expected=expected_format,
-                    actual=result,
-                    error=error,
-                )
+            else:
+                passed, error = self.compare_results(expected_format, result)
+            if passed:
+                passed, error = self.compare_duration(duration_limit_ms, elapsed_ms)
+            self._record_result(
+                vector_file=vector_name,
+                test_type=TestType.FORMAT,
+                test_name=name,
+                adapter=adapter.name,
+                passed=passed,
+                description=description,
+                tags=tags,
+                spec_ref=spec_ref,
+                expected=expected_format,
+                actual=result,
+                error=error,
+            )
 
-            # Roundtrip test
-            if tests.get("roundtrip") is True and parse_cmd and format_cmd and obj is not None:
-                if is_base64url:
-                    format_input = obj
-                else:
-                    format_input = json.dumps(obj)
-                format_result = self.run_adapter(adapter, format_cmd, format_input, timeout=command_timeout)
+        # Roundtrip test
+        if tests.get("roundtrip") is True and parse_cmd and format_cmd and obj is not None:
+            if is_base64url:
+                format_input = obj
+            else:
+                format_input = json.dumps(obj)
+            format_result = self.run_adapter(adapter, format_cmd, format_input, timeout=command_timeout)
 
-                if not format_result.get("success"):
-                    self._record_result(
-                        vector_file=vector_name,
-                        test_type=TestType.ROUNDTRIP,
-                        test_name=name,
-                        adapter=adapter.name,
-                        passed=False,
-                        description=description,
-                        tags=tags,
-                        spec_ref=spec_ref,
-                        expected=obj,
-                        actual=format_result,
-                        error=f"format failed: {format_result.get('error')}",
-                    )
-                    continue
-
-                formatted = format_result["result"]
-                parse_result = self.run_adapter(adapter, parse_cmd, formatted, timeout=command_timeout)
-
-                if not parse_result.get("success"):
-                    self._record_result(
-                        vector_file=vector_name,
-                        test_type=TestType.ROUNDTRIP,
-                        test_name=name,
-                        adapter=adapter.name,
-                        passed=False,
-                        description=description,
-                        tags=tags,
-                        spec_ref=spec_ref,
-                        expected=obj,
-                        actual=parse_result,
-                        error=f"parse failed: {parse_result.get('error')}",
-                    )
-                    continue
-
-                parsed = parse_result["result"]
-                if parse_cmd == "parse-authorization":
-                    parsed = self.normalize_credential_result(parsed)
-                    obj_normalized = self.normalize_credential_result(obj)
-                else:
-                    obj_normalized = obj
-
-                if parsed == obj_normalized:
-                    passed = True
-                    error = None
-                else:
-                    passed = False
-                    error = format_mismatch_error(obj_normalized, parsed, "roundtrip")
+            if not format_result.get("success"):
                 self._record_result(
                     vector_file=vector_name,
                     test_type=TestType.ROUNDTRIP,
                     test_name=name,
                     adapter=adapter.name,
-                    passed=passed,
+                    passed=False,
                     description=description,
                     tags=tags,
                     spec_ref=spec_ref,
-                    expected=obj_normalized,
-                    actual=parsed,
-                    error=error,
+                    expected=obj,
+                    actual=format_result,
+                    error=f"format failed: {format_result.get('error')}",
                 )
+                return
+
+            formatted = format_result["result"]
+            parse_result = self.run_adapter(adapter, parse_cmd, formatted, timeout=command_timeout)
+
+            if not parse_result.get("success"):
+                self._record_result(
+                    vector_file=vector_name,
+                    test_type=TestType.ROUNDTRIP,
+                    test_name=name,
+                    adapter=adapter.name,
+                    passed=False,
+                    description=description,
+                    tags=tags,
+                    spec_ref=spec_ref,
+                    expected=obj,
+                    actual=parse_result,
+                    error=f"parse failed: {parse_result.get('error')}",
+                )
+                return
+
+            parsed = parse_result["result"]
+            if parse_cmd == "parse-authorization":
+                parsed = self.normalize_credential_result(parsed)
+                obj_normalized = self.normalize_credential_result(obj)
+            else:
+                obj_normalized = obj
+
+            if parsed == obj_normalized:
+                passed = True
+                error = None
+            else:
+                passed = False
+                error = format_mismatch_error(obj_normalized, parsed, "roundtrip")
+            self._record_result(
+                vector_file=vector_name,
+                test_type=TestType.ROUNDTRIP,
+                test_name=name,
+                adapter=adapter.name,
+                passed=passed,
+                description=description,
+                tags=tags,
+                spec_ref=spec_ref,
+                expected=obj_normalized,
+                actual=parsed,
+                error=error,
+            )
 
     def run(
         self,
@@ -1009,6 +1085,12 @@ def main():
         help="Output format: text (default) or json",
     )
     parser.add_argument(
+        "--jobs", "-j",
+        type=int,
+        default=None,
+        help="Scenarios to run at once (default: CPU count)",
+    )
+    parser.add_argument(
         "--tag",
         type=str,
         help="Run only scenarios with the specified tag",
@@ -1018,7 +1100,7 @@ def main():
     adapter_names = args.adapters if args.adapters else None
     vector_names = [args.vector] if args.vector else None
 
-    runner = VectorRunner(verbose=args.verbose, output_format=args.output)
+    runner = VectorRunner(verbose=args.verbose, output_format=args.output, jobs=args.jobs)
     success = runner.run(adapter_names=adapter_names, vector_names=vector_names, tag_filter=args.tag)
     sys.exit(0 if success else 1)
 
