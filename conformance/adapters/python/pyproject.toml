@@ -9,4 +9,5 @@ dependencies = [
 ]
 
 [tool.uv]
-override-dependencies = ["pyjwt==2.15.0", "urllib3==2.8.0"]
+# The pinned pympp SDK requires an older yarl than patched aiohttp supports.
+override-dependencies = ["pyjwt==2.15.0", "urllib3==2.8.0", "yarl==1.25.1"]
