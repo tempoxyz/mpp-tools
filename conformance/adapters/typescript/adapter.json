@@ -4,8 +4,7 @@
   "name": "typescript",
   "language": "typescript",
   "command": [
-    "npx",
-    "tsx",
+    "node",
     "golden/adapter.ts"
   ],
   "cwd": "../..",
