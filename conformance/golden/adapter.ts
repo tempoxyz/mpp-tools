@@ -165,11 +165,15 @@ async function verifyStripeExternalIdBinding(input: {
 	| { ok: false; errorType: 'invalid_challenge' | 'verification_failed' }
 > {
 	const secretKey = 'conformance-stripe-secret-32-bytes-min'
+	// mppx >= 0.14.2 only verifies a standalone credential when the server has
+	// a realm configured that matches the challenge.
+	const realm = 'conformance.local'
 	const methodDetails =
 		typeof input.request.methodDetails === 'object' && input.request.methodDetails !== null
 			? (input.request.methodDetails as Record<string, unknown>)
 			: {}
 	const mppx = Mppx.create({
+		realm,
 		secretKey,
 		methods: [
 			stripe.charge({
@@ -206,7 +210,7 @@ async function verifyStripeExternalIdBinding(input: {
 	})
 	const challenge = Challenge.from({
 		secretKey,
-		realm: 'conformance.local',
+		realm,
 		method: 'stripe',
 		intent: 'charge',
 		request: input.request,
