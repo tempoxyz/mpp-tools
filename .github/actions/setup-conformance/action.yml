@@ -40,7 +40,7 @@ runs:
       if: inputs.setup-node == 'true' || inputs.adapter == 'typescript' || inputs.adapter == 'all'
       uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
       with:
-        node-version: "24.5"
+        node-version: "24.22.1"
         cache: npm
         cache-dependency-path: ${{ inputs.conformance-directory }}/package-lock.json
 
