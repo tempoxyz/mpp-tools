@@ -195,7 +195,14 @@ class VectorRunner:
         self.sdk_versions: dict[str, str] = {}
         self.known_adapter_names: set[str] | None = None
         self.version_skips = 0
+        # Vector files skipped because the adapter does not advertise the
+        # vector's operation; reported so they cannot vanish from a green run.
+        self.capability_skips: list[dict[str, Any]] = []
     
+    @property
+    def capability_skipped(self) -> int:
+        return sum(skip["scenarios"] for skip in self.capability_skips)
+
     def log(self, msg: str, end: str = "\n", flush: bool = False) -> None:
         """Print message only if output format is text."""
         if self.output_format == "text":
@@ -559,8 +566,23 @@ class VectorRunner:
 
         if operation:
             if operation not in adapter.capabilities:
-                if self.verbose:
-                    self.log(f"  {vector_name}.json SKIPPED ({adapter.name} lacks {operation})")
+                scenarios = [
+                    scenario
+                    for scenario in vectors.get("scenarios", [])
+                    if adapter.name in (self.scenario_adapters(scenario) or [adapter.name])
+                    and (not tag_filter or tag_filter in scenario.get("tags", []))
+                ]
+                if scenarios:
+                    self.capability_skips.append({
+                        "adapter": adapter.name,
+                        "vector": vector_name,
+                        "operation": operation,
+                        "scenarios": len(scenarios),
+                    })
+                    self.log(
+                        f"  {vector_name}.json SKIPPED ({adapter.name} lacks {operation}, "
+                        f"{len(scenarios)} scenario(s))"
+                    )
                 return
         elif not parse_cmd and not format_cmd and not generate_cmd:
             self.log(f"  ⚠ No commands defined in {vector_name}.json")
@@ -980,11 +1002,14 @@ class VectorRunner:
                             self.log(f"    {line}")
 
         if not self.results:
-            skip_detail = (
-                f" ({self.version_skips} scenario(s) were version-skipped)"
-                if self.version_skips
-                else ""
-            )
+            skip_reasons = []
+            if self.version_skips:
+                skip_reasons.append(f"{self.version_skips} scenario(s) were version-skipped")
+            if self.capability_skipped:
+                skip_reasons.append(
+                    f"{self.capability_skipped} scenario(s) need unadvertised capabilities"
+                )
+            skip_detail = f" ({'; '.join(skip_reasons)})" if skip_reasons else ""
             self._record_result(
                 vector_file="runner",
                 test_type=TestType.BUILD,
@@ -1030,6 +1055,8 @@ class VectorRunner:
             "passed": passed,
             "failed": failed,
             "skipped": self.version_skips,
+            "capability_skipped": self.capability_skipped,
+            "capability_skips": self.capability_skips,
             "checks": [r.to_check() for r in self.results],
             "errors": errors,
         }
@@ -1056,6 +1083,15 @@ class VectorRunner:
                     self.log("")
         else:
             self.log(f"PASSED: {passed} passed, {total} total")
+
+        if self.capability_skips:
+            self.log("")
+            self.log(f"Skipped: {self.capability_skipped} scenario(s) for unadvertised capabilities")
+            for skip in self.capability_skips:
+                self.log(
+                    f"  {skip['adapter']}::{skip['vector']} ({skip['scenarios']} scenario(s)) "
+                    f"needs {skip['operation']}"
+                )
 
 
 def main():
