@@ -1,0 +1,167 @@
+From 203ed8a82ad1ae76d3c62cf9970ea4a34bae7842 Mon Sep 17 00:00:00 2001
+From: Brendan Ryan <1572504+brendanjryan@users.noreply.github.com>
+Date: Fri, 23 Oct 2026 22:32:25 +0000
+Subject: [PATCH] feat(discovery): declare output schemas in generated OpenAPI
+ responses (specs#326)
+
+---
+ .changeset/discovery-output-schemas.md |  5 ++++
+ src/discovery/OpenApi.test.ts          | 31 +++++++++++++++++++++
+ src/discovery/OpenApi.ts               | 38 +++++++++++++++++++++++---
+ 3 files changed, 70 insertions(+), 4 deletions(-)
+ create mode 100644 .changeset/discovery-output-schemas.md
+
+diff --git a/.changeset/discovery-output-schemas.md b/.changeset/discovery-output-schemas.md
+new file mode 100644
+index 00000000..4d45a071
+--- /dev/null
++++ b/.changeset/discovery-output-schemas.md
+@@ -0,0 +1,5 @@
++---
++'mppx': patch
++---
++
++Added `responses` to discovery route config so `generate` can describe successful response representations with OpenAPI output schemas (draft-payment-discovery-01). Declaring a success status replaces the default description-only `200`; payable routes keep their `402` response.
+diff --git a/src/discovery/OpenApi.test.ts b/src/discovery/OpenApi.test.ts
+index 3441d57c..2b952203 100644
+--- a/src/discovery/OpenApi.test.ts
++++ b/src/discovery/OpenApi.test.ts
+@@ -162,6 +162,37 @@ describe('generate', () => {
+     `)
+   })
+ 
++  test('describes declared output schemas alongside the 402 response', () => {
++    const mppx = createMppx([charge])
++    const schema = {
++      additionalProperties: false,
++      properties: { id: { type: 'string' } },
++      required: ['id'],
++      type: 'object',
++    }
++    const doc = generate(mppx, {
++      routes: [
++        {
++          intent: 'charge',
++          method: 'post',
++          options: { amount: '100', currency: '0xUSDC', recipient: '0x123' },
++          path: '/api/jobs',
++          responses: {
++            '201': {
++              content: { 'application/json': { schema } },
++              description: 'Job created',
++            },
++          },
++        },
++      ],
++    }) as any
++
++    expect(doc.paths['/api/jobs'].post.responses).toEqual({
++      '201': { content: { 'application/json': { schema } }, description: 'Job created' },
++      '402': { description: 'Payment Required' },
++    })
++  })
++
+   test('supports handler-derived route config', () => {
+     const mppx = createMppx([charge])
+     const handler = mppx.charge({
+diff --git a/src/discovery/OpenApi.ts b/src/discovery/OpenApi.ts
+index dbf02d54..8ae15cf5 100644
+--- a/src/discovery/OpenApi.ts
++++ b/src/discovery/OpenApi.ts
+@@ -14,6 +14,13 @@ export type LegacyRouteConfig = {
+   options: Record<string, unknown>
+   path: string
+   requestBody?: Record<string, unknown>
++  /**
++   * OpenAPI `responses` entries describing successful representations (for
++   * example `{ '200': { description, content: { 'application/json': { schema } } } }`).
++   * Replaces the default description-only `200` response when any success
++   * status is declared. Payable routes always keep a `402` response.
++   */
++  responses?: Record<string, unknown>
+   summary?: string
+ }
+ 
+@@ -22,6 +29,13 @@ export type HandlerRouteConfig = {
+   method: string
+   path: string
+   requestBody?: Record<string, unknown>
++  /**
++   * OpenAPI `responses` entries describing successful representations (for
++   * example `{ '200': { description, content: { 'application/json': { schema } } } }`).
++   * Replaces the default description-only `200` response when any success
++   * status is declared. Payable routes always keep a `402` response.
++   */
++  responses?: Record<string, unknown>
+   summary?: string
+ }
+ 
+@@ -41,6 +55,7 @@ export type GenerateProxyConfig = {
+     path: string
+     payment: Record<string, unknown> | null
+     requestBody?: Record<string, unknown>
++    responses?: Record<string, unknown>
+     summary?: string
+   }>
+   serviceInfo?: ServiceInfo | undefined
+@@ -51,6 +66,7 @@ type ResolvedRoute = {
+   path: string
+   payment: Record<string, unknown> | null
+   requestBody?: Record<string, unknown>
++  responses?: Record<string, unknown>
+   summary?: string
+ }
+ 
+@@ -114,10 +130,7 @@ function createDocument(config: {
+   for (const route of config.routes) {
+     const method = route.method.toLowerCase()
+     const operation: Record<string, unknown> = {
+-      responses: {
+-        ...(route.payment ? { '402': { description: 'Payment Required' } } : {}),
+-        '200': { description: 'Successful response' },
+-      },
++      responses: resolveResponses(route),
+     }
+ 
+     if (route.payment) operation['x-payment-info'] = PaymentInfo.parse(route.payment)
+@@ -137,6 +150,21 @@ function createDocument(config: {
+   return doc
+ }
+ 
++/**
++ * Builds an operation's `responses`: declared success responses (with their
++ * output schemas) replace the default `200`, and payable routes always keep
++ * a `402` response.
++ */
++function resolveResponses(route: ResolvedRoute): Record<string, unknown> {
++  const declared = route.responses ?? {}
++  const declaresSuccess = Object.keys(declared).some((status) => /^2(\d\d|XX)$/i.test(status))
++  return {
++    ...(route.payment ? { '402': { description: 'Payment Required' } } : {}),
++    ...(declaresSuccess ? {} : { '200': { description: 'Successful response' } }),
++    ...declared,
++  }
++}
++
+ function resolveRoute(
+   route: RouteConfig,
+   methodsByKey: Map<string, Method.AnyServer>,
+@@ -154,6 +182,7 @@ function resolveRoute(
+         offers: Metadata.offers(internal).map(Metadata.paymentOffer),
+       },
+       ...(route.requestBody ? { requestBody: route.requestBody } : {}),
++      ...(route.responses ? { responses: route.responses } : {}),
+       ...(route.summary ? { summary: route.summary } : {}),
+     }
+   }
+@@ -178,6 +207,7 @@ function resolveRoute(
+     path: route.path,
+     payment: Metadata.paymentOffer(metadata),
+     ...(route.requestBody ? { requestBody: route.requestBody } : {}),
++    ...(route.responses ? { responses: route.responses } : {}),
+     ...(route.summary ? { summary: route.summary } : {}),
+   }
+ }
+-- 
+2.43.0
+
