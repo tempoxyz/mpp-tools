@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -131,4 +132,16 @@ func marshalRequest(t *testing.T, request httpPaymentRequest) json.RawMessage {
 		t.Fatal(fmt.Errorf("marshal request: %w", err))
 	}
 	return encoded
+}
+
+func TestGenerateConformanceChallengeIDRejectsNullOpaque(t *testing.T) {
+	secret := strings.Repeat("s", minimumSecretKeyBytes)
+	nullOpaque := base64.RawURLEncoding.EncodeToString([]byte("null"))
+	if _, err := generateConformanceChallengeID(secret, "api", "tempo", "charge", map[string]any{}, "", "", "", nullOpaque); err == nil {
+		t.Fatal("expected an error for a JSON null opaque")
+	}
+	emptyOpaque := base64.RawURLEncoding.EncodeToString([]byte("{}"))
+	if _, err := generateConformanceChallengeID(secret, "api", "tempo", "charge", map[string]any{}, "", "", "", emptyOpaque); err != nil {
+		t.Fatalf("empty opaque map should be accepted: %v", err)
+	}
 }

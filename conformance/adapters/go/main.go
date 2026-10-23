@@ -668,6 +668,11 @@ func generateConformanceChallengeID(secretKey, realm, method, intent string, req
 		if err := json.Unmarshal(decoded, &opaqueMap); err != nil {
 			return "", fmt.Errorf("opaque must encode a JSON string map: %w", err)
 		}
+		if opaqueMap == nil {
+			// JSON null decodes without error but would silently drop the
+			// opaque binding, colliding with an absent opaque.
+			return "", fmt.Errorf("opaque must encode a JSON string map, not null")
+		}
 	}
 
 	return mpp.GenerateChallengeID(mpp.GenerateChallengeIDInput{
