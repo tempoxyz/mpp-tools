@@ -293,6 +293,22 @@ class VectorRunnerCapabilitySkipTest(unittest.TestCase):
         runner, _ = self.run_skipping_file("json", tag_filter="a")
         self.assertEqual(runner.capability_skipped, 1)
 
+    def test_version_excluded_scenarios_are_not_capability_skips(self) -> None:
+        vector = dict(self.VECTOR)
+        vector["scenarios"] = [
+            dict(self.VECTOR["scenarios"][0], sdkVersions={"python": ">1.0.0"}),
+            self.VECTOR["scenarios"][1],
+        ]
+        runner = VectorRunner(output_format="json", sdk_version_resolver=lambda _: "0.9.1")
+        adapter = AdapterConfig(name="python", command=["python"], capabilities=[])
+        with tempfile.TemporaryDirectory() as tmp:
+            vector_path = Path(tmp) / "cosign.json"
+            vector_path.write_text(json.dumps(vector), encoding="utf-8")
+            with mock.patch("vector_runner.load_vector", return_value=vector), contextlib.redirect_stdout(io.StringIO()):
+                runner.run_vector_file(adapter, vector_path)
+        self.assertEqual(runner.capability_skipped, 1)
+        self.assertEqual(runner.version_skips, 1)
+
     def test_json_artifact_reports_capability_skips(self) -> None:
         runner, _ = self.run_skipping_file("json")
         stdout = io.StringIO()

@@ -564,27 +564,7 @@ class VectorRunner:
         generate_cmd = commands.get("generate")
         operation = commands.get("operation")
 
-        if operation:
-            if operation not in adapter.capabilities:
-                scenarios = [
-                    scenario
-                    for scenario in vectors.get("scenarios", [])
-                    if adapter.name in (self.scenario_adapters(scenario) or [adapter.name])
-                    and (not tag_filter or tag_filter in scenario.get("tags", []))
-                ]
-                if scenarios:
-                    self.capability_skips.append({
-                        "adapter": adapter.name,
-                        "vector": vector_name,
-                        "operation": operation,
-                        "scenarios": len(scenarios),
-                    })
-                    self.log(
-                        f"  {vector_name}.json SKIPPED ({adapter.name} lacks {operation}, "
-                        f"{len(scenarios)} scenario(s))"
-                    )
-                return
-        elif not parse_cmd and not format_cmd and not generate_cmd:
+        if not operation and not parse_cmd and not format_cmd and not generate_cmd:
             self.log(f"  ⚠ No commands defined in {vector_name}.json")
             return
 
@@ -613,6 +593,22 @@ class VectorRunner:
                 continue
 
             runnable.append(scenario)
+
+        if operation and operation not in adapter.capabilities:
+            # Scenarios already excluded by adapter, tag or SDK-version filters
+            # are not capability skips; only count the ones that would run.
+            if runnable:
+                self.capability_skips.append({
+                    "adapter": adapter.name,
+                    "vector": vector_name,
+                    "operation": operation,
+                    "scenarios": len(runnable),
+                })
+                self.log(
+                    f"  {vector_name}.json SKIPPED ({adapter.name} lacks {operation}, "
+                    f"{len(runnable)} scenario(s))"
+                )
+            return
 
         context = dict(
             vector_name=vector_name,
