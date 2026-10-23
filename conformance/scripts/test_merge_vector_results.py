@@ -60,6 +60,23 @@ class MergeVectorResultsTest(unittest.TestCase):
         self.assertEqual(merged["num_checks"], 12)
         self.assertEqual(merged["failed"], 0)
 
+    def test_capability_skips_are_merged(self) -> None:
+        skip = {"adapter": "go", "vector": "tempo-proof", "operation": "tempo.proof.typed_data", "scenarios": 3}
+        merged = self.merge(
+            "go,python",
+            {
+                "go": {
+                    "status": "pass", "num_checks": 5, "passed": 5, "failed": 0, "errors": [],
+                    "capability_skipped": 3, "capability_skips": [skip],
+                },
+                "python": {"status": "pass", "num_checks": 7, "passed": 7, "failed": 0, "errors": []},
+            },
+        )
+
+        self.assertEqual(merged["status"], "pass")
+        self.assertEqual(merged["capability_skipped"], 3)
+        self.assertEqual(merged["capability_skips"], [skip])
+
     def test_empty_json_object_artifact_fails(self) -> None:
         merged = self.merge("go", {"go": {}})
 
