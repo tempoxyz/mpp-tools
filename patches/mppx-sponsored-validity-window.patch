@@ -1,0 +1,410 @@
+From 7f1b763640875f86001ceb8689ee003c8b411d88 Mon Sep 17 00:00:00 2001
+From: Brendan Ryan <1572504+brendanjryan@users.noreply.github.com>
+Date: Fri, 23 Oct 2026 22:26:26 +0000
+Subject: [PATCH] fix(tempo): widen the sponsored validBefore window to 60s and
+ enforce the 15s floor at issuance
+
+---
+ .changeset/sponsored-validity-window.md |   5 +
+ src/Method.ts                           |   2 +
+ src/server/Mppx.ts                      |   1 +
+ src/tempo/client/Charge.test.ts         |  93 +++++++++++++++++-
+ src/tempo/client/Charge.ts              |  20 +++-
+ src/tempo/internal/defaults.ts          |  10 ++
+ src/tempo/internal/fee-payer.ts         |   6 +-
+ src/tempo/server/Charge.expires.test.ts | 119 ++++++++++++++++++++++++
+ src/tempo/server/Charge.ts              |  14 ++-
+ 9 files changed, 264 insertions(+), 6 deletions(-)
+ create mode 100644 .changeset/sponsored-validity-window.md
+ create mode 100644 src/tempo/server/Charge.expires.test.ts
+
+diff --git a/.changeset/sponsored-validity-window.md b/.changeset/sponsored-validity-window.md
+new file mode 100644
+index 00000000..0ee46146
+--- /dev/null
++++ b/.changeset/sponsored-validity-window.md
+@@ -0,0 +1,5 @@
++---
++'mppx': patch
++---
++
++Widened the Tempo charge client's expiring-nonce `validBefore` window from 25 to 60 seconds (still capped at the challenge expiry), leaving room for clock skew against the fee payer's 15-second remaining-validity minimum. Clients now refuse to sign a sponsored challenge that expires in under 15 seconds, and servers refuse to issue one.
+diff --git a/src/Method.ts b/src/Method.ts
+index 31a6f344..87a45062 100755
+--- a/src/Method.ts
++++ b/src/Method.ts
+@@ -99,6 +99,8 @@ export type VerifiedChallengeEnvelope<
+ export type RequestContext<method extends Method> = {
+   capturedRequest?: CapturedRequest
+   credential?: Credential.Credential | null
++  /** Expiry (ISO 8601) of the challenge being issued, or echoed by `credential`. */
++  expires?: string | undefined
+   request: z.input<method['schema']['request']>
+ }
+ 
+diff --git a/src/server/Mppx.ts b/src/server/Mppx.ts
+index 1ce9b1f3..e156ed44 100644
+--- a/src/server/Mppx.ts
++++ b/src/server/Mppx.ts
+@@ -2181,6 +2181,7 @@ async function resolveRouteChallenge(parameters: {
+       ? ((await parameters.request({
+           capturedRequest: parameters.capturedRequest,
+           credential: parameters.credential,
++          expires: parameters.expires,
+           request: merged,
+         } as never)) as Record<string, unknown>)
+       : merged
+diff --git a/src/tempo/client/Charge.test.ts b/src/tempo/client/Charge.test.ts
+index 528c169e..4d03b3d0 100644
+--- a/src/tempo/client/Charge.test.ts
++++ b/src/tempo/client/Charge.test.ts
+@@ -971,8 +971,15 @@ describe('tempo.charge client', () => {
+     const at = (seconds: number) => new Date(seconds * 1000).toISOString()
+ 
+     test.each([
+-      { label: 'no challenge expiry', now: base, expires: undefined, expected: base + 25 },
+-      { label: 'expiry after the window', now: base, expires: at(base + 60), expected: base + 25 },
++      { label: 'no challenge expiry', now: base, expires: undefined, expected: base + 60 },
++      { label: 'expiry after the window', now: base, expires: at(base + 120), expected: base + 60 },
++      { label: 'expiry at the window', now: base, expires: at(base + 60), expected: base + 60 },
++      {
++        label: 'expiry just inside the window',
++        now: base,
++        expires: at(base + 45),
++        expected: base + 46,
++      },
+       { label: 'expiry inside the window', now: base, expires: at(base + 10), expected: base + 11 },
+       { label: 'fractional expiry', now: base, expires: at(base + 10.5), expected: base + 11 },
+       { label: 'sub-second expiry', now: base + 0.2, expires: at(base + 0.5), expected: base + 1 },
+@@ -1026,6 +1033,88 @@ describe('tempo.charge client', () => {
+     })
+   })
+ 
++  describe('sponsored challenge expiry', () => {
++    const base = 1_800_000_000
++    const at = (seconds: number) => new Date(seconds * 1000).toISOString()
++
++    async function sign(parameters: { expires: string; feePayer?: boolean | undefined }) {
++      vi.resetModules()
++      vi.useFakeTimers({ now: base * 1000, toFake: ['Date'] })
++      const prepareTransactionRequest = vi.fn(
++        async (_client: unknown, _parameters: Record<string, unknown>) => ({}),
++      )
++      const sendTransactionSync = vi.fn()
++      const signTransaction = vi.fn(async () => '0xdeadbeef')
++      vi.doMock('viem/actions', () => ({
++        prepareTransactionRequest,
++        sendCallsSync: vi.fn(),
++        sendTransactionSync,
++        signTransaction,
++        signTypedData: vi.fn(),
++      }))
++
++      try {
++        const { charge: chargeWithMockedActions } = await import('./Charge.js')
++        const client = createClient({
++          account,
++          chain: { ...tempoLocalnet, id: 42431 },
++          transport: http('http://127.0.0.1'),
++        })
++        const method = chargeWithMockedActions({ account, getClient: () => client })
++        const result = await method
++          .createCredential({
++            challenge: {
++              ...createChallenge({
++                amount: '1',
++                chainId: 42431,
++                feePayer: parameters.feePayer,
++                supportedModes: ['pull'],
++              }),
++              expires: parameters.expires,
++            },
++            context: {},
++          })
++          .then(
++            () => undefined,
++            (error: Error) => error,
++          )
++        return { prepareTransactionRequest, result, sendTransactionSync, signTransaction }
++      } finally {
++        vi.useRealTimers()
++        vi.doUnmock('viem/actions')
++        vi.resetModules()
++      }
++    }
++
++    test('refuses a sponsored challenge expiring in under 15 seconds', async () => {
++      const { prepareTransactionRequest, result, sendTransactionSync, signTransaction } =
++        await sign({ expires: at(base + 14.999), feePayer: true })
++      expect(result?.message).toContain('Sponsored challenge expires in less than 15 seconds')
++      expect(prepareTransactionRequest).not.toHaveBeenCalled()
++      expect(signTransaction).not.toHaveBeenCalled()
++      expect(sendTransactionSync).not.toHaveBeenCalled()
++    })
++
++    test('signs a sponsored challenge expiring in exactly 15 seconds', async () => {
++      const { prepareTransactionRequest, result, signTransaction } = await sign({
++        expires: at(base + 15),
++        feePayer: true,
++      })
++      expect(result).toBeUndefined()
++      expect(prepareTransactionRequest.mock.calls[0]?.[1]).toMatchObject({
++        nonceKey: 'expiring',
++        validBefore: base + 16,
++      })
++      expect(signTransaction).toHaveBeenCalledOnce()
++    })
++
++    test('signs an unsponsored challenge expiring in under 15 seconds', async () => {
++      const { prepareTransactionRequest, result } = await sign({ expires: at(base + 5) })
++      expect(result).toBeUndefined()
++      expect(prepareTransactionRequest.mock.calls[0]?.[1]).toMatchObject({ validBefore: base + 6 })
++    })
++  })
++
+   describe('in-flight signing', () => {
+     const challenge = (id = 'shared', recipient?: Address) => {
+       const base = createChallenge({ amount: '1', chainId: 42431, supportedModes: ['pull'] })
+diff --git a/src/tempo/client/Charge.ts b/src/tempo/client/Charge.ts
+index c223d8b6..82c7321b 100644
+--- a/src/tempo/client/Charge.ts
++++ b/src/tempo/client/Charge.ts
+@@ -27,6 +27,16 @@ import * as Proof from '../internal/proof.js'
+ import * as Methods from '../Methods.js'
+ import type * as AccountResolution from './ResolveAccount.js'
+ 
++/**
++ * Seconds from now the client sets as the expiring-nonce `validBefore`,
++ * capped at the challenge expiry.
++ *
++ * Fee payers require at least `defaults.minRemainingValiditySeconds` (15s) of
++ * remaining validity when they co-sign, so a 60s window leaves about 45s for
++ * clock skew between client and server, signing and round trips.
++ */
++export const validityWindowSeconds = 60
++
+ /** Runtime context accepted by the Tempo charge client method. */
+ export type ChargeContext = {
+   account?: Account.getResolver.Parameters['account'] | undefined
+@@ -134,6 +144,14 @@ export function charge(parameters: charge.Parameters = {}) {
+         })
+       }
+ 
++      if (methodDetails?.feePayer === true && challenge.expires) {
++        const remainingMs = new Date(challenge.expires).getTime() - Date.now()
++        if (!(remainingMs >= defaults.minRemainingValiditySeconds * 1000))
++          throw new Error(
++            `Sponsored challenge expires in less than ${defaults.minRemainingValiditySeconds} seconds; the fee payer would reject the transaction. Request a new challenge.`,
++          )
++      }
++
+       const currency = request.currency as Address
+       const isMachineTokenCurrency = MachineTokenCharge.isMachineToken({ chainId, currency })
+       const memo = Attribution.encode({
+@@ -238,7 +256,7 @@ export function charge(parameters: charge.Parameters = {}) {
+       })()
+ 
+       const validBefore = (() => {
+-        const defaultExpiry = Math.floor(Date.now() / 1000) + 25
++        const defaultExpiry = Math.floor(Date.now() / 1000) + validityWindowSeconds
+         if (!challenge.expires) return defaultExpiry
+         // `validBefore` is an exclusive whole-second bound, so cap at the second
+         // after a (possibly fractional) expiry to stay valid as long as the challenge.
+diff --git a/src/tempo/internal/defaults.ts b/src/tempo/internal/defaults.ts
+index 8fab315b..b0f11926 100644
+--- a/src/tempo/internal/defaults.ts
++++ b/src/tempo/internal/defaults.ts
+@@ -48,6 +48,16 @@ export const machineToken = Object.freeze({
+  */
+ export const decimals = 6
+ 
++/**
++ * Minimum remaining validity, in seconds, of a fee-sponsored transaction.
++ *
++ * Servers refuse to co-sign a sponsored transaction whose `validBefore` is
++ * closer than this, clients refuse to sign for a sponsored challenge that
++ * expires sooner, and servers refuse to issue a sponsored challenge that
++ * expires sooner after issuance.
++ */
++export const minRemainingValiditySeconds = 15
++
+ /** Default payment-channel escrow contract addresses per chain. */
+ export const escrowContract = {
+   [chainId.mainnet]: '0x33b901018174DDabE4841042ab76ba85D4e24f25',
+diff --git a/src/tempo/internal/fee-payer.ts b/src/tempo/internal/fee-payer.ts
+index 8ebe1613..918d4035 100644
+--- a/src/tempo/internal/fee-payer.ts
++++ b/src/tempo/internal/fee-payer.ts
+@@ -600,8 +600,10 @@ export function assertRemainingValidity(parameters: {
+     return fail('fee-sponsored transaction must declare validBefore for the expiring nonce')
+   if (validBefore <= Math.floor(now.getTime() / 1_000))
+     fail('fee-sponsored transaction has already expired')
+-  if (validBefore < Math.ceil(now.getTime() / 1_000) + 15)
+-    fail('fee-sponsored transaction needs at least 15 seconds of remaining validity')
++  if (validBefore < Math.ceil(now.getTime() / 1_000) + defaults.minRemainingValiditySeconds)
++    fail(
++      `fee-sponsored transaction needs at least ${defaults.minRemainingValiditySeconds} seconds of remaining validity`,
++    )
+ }
+ 
+ /** Validates sponsor fee policy limits for a fee-payer transaction. */
+diff --git a/src/tempo/server/Charge.expires.test.ts b/src/tempo/server/Charge.expires.test.ts
+new file mode 100644
+index 00000000..ce536099
+--- /dev/null
++++ b/src/tempo/server/Charge.expires.test.ts
+@@ -0,0 +1,119 @@
++import { Challenge, Credential, Expires } from 'mppx'
++import { Mppx, tempo } from 'mppx/server'
++import { createClient, http } from 'viem'
++import { tempoLocalnet } from 'viem/chains'
++import { afterEach, describe, expect, test, vi } from 'vp/test'
++
++import * as defaults from '../internal/defaults.js'
++
++const recipient = '0x2222222222222222222222222222222222222222'
++const currency = '0x20c0000000000000000000000000000000000001'
++const realm = 'api.example.com'
++const secretKey = 'test-secret-key-test-secret-key-32'
++const client = createClient({
++  chain: { ...tempoLocalnet, id: 42431 },
++  transport: http('http://127.0.0.1'),
++})
++
++function create(parameters: { feePayer?: boolean } = {}) {
++  const sponsored = parameters.feePayer ?? true
++  return Mppx.create({
++    methods: [
++      tempo.charge({
++        ...(sponsored ? { feePayer: 'https://sponsor.example.com' } : {}),
++        chainId: 42431,
++        currency,
++        getClient: () => client,
++        recipient,
++      }),
++    ],
++    realm,
++    secretKey,
++  })
++}
++
++const now = 1_800_000_000_000
++
++afterEach(() => {
++  vi.useRealTimers()
++})
++
++describe('sponsored challenge expiry floor', () => {
++  test('refuses to issue a sponsored challenge expiring in under 15 seconds', async () => {
++    vi.useFakeTimers({ now, toFake: ['Date'] })
++    const mppx = create()
++    const expires = new Date(now + defaults.minRemainingValiditySeconds * 1000 - 1).toISOString()
++    await expect(
++      mppx.charge({ amount: '1', decimals: 6, expires })(new Request('https://example.com')),
++    ).rejects.toThrow('Sponsored charge challenges must expire at least 15 seconds after issuance.')
++    await expect(
++      mppx.challenge.tempo.charge({ amount: '1', decimals: 6, expires }),
++    ).rejects.toThrow('at least 15 seconds')
++  })
++
++  test('issues a sponsored challenge expiring in exactly 15 seconds', async () => {
++    vi.useFakeTimers({ now, toFake: ['Date'] })
++    const challenge = await create().challenge.tempo.charge({
++      amount: '1',
++      decimals: 6,
++      expires: new Date(now + 15_000).toISOString(),
++    })
++    expect((challenge.request.methodDetails as { feePayer?: boolean } | undefined)?.feePayer).toBe(
++      true,
++    )
++  })
++
++  test('issues a sponsored challenge with the default expiry', async () => {
++    const result = await create().charge({ amount: '1', decimals: 6 })(
++      new Request('https://example.com'),
++    )
++    expect(result.status).toBe(402)
++    if (result.status !== 402) throw new Error('expected a challenge')
++    const challenge = Challenge.fromResponse(result.challenge)
++    expect(challenge.request.methodDetails).toMatchObject({ feePayer: true })
++  })
++
++  test('issues an unsponsored challenge expiring in under 15 seconds', async () => {
++    const challenge = await create({ feePayer: false }).challenge.tempo.charge({
++      amount: '1',
++      decimals: 6,
++      expires: Expires.seconds(5),
++    })
++    expect(
++      (challenge.request.methodDetails as { feePayer?: boolean } | undefined)?.feePayer,
++    ).toBeUndefined()
++  })
++
++  test('issues a challenge expiring in under 15 seconds when the route opts out of sponsorship', async () => {
++    const challenge = await create().challenge.tempo.charge({
++      amount: '1',
++      decimals: 6,
++      expires: Expires.seconds(5),
++      feePayer: false,
++    })
++    expect(
++      (challenge.request.methodDetails as { feePayer?: boolean } | undefined)?.feePayer,
++    ).toBeUndefined()
++  })
++
++  test('does not apply the issuance floor to an echoed credential', async () => {
++    const [method] = tempo.charge({
++      chainId: 42431,
++      currency,
++      feePayer: 'https://sponsor.example.com',
++      getClient: () => client,
++      recipient,
++    })
++    const challenge = await create().challenge.tempo.charge({ amount: '1', decimals: 6 })
++    const expires = Expires.seconds(5)
++    const request = await method!.request!({
++      credential: Credential.from({
++        challenge: { ...challenge, expires },
++        payload: { signature: '0x00', type: 'transaction' },
++      }),
++      expires,
++      request: { amount: '1', currency, decimals: 6, recipient },
++    })
++    expect(request).toMatchObject({ feePayer: true })
++  })
++})
+diff --git a/src/tempo/server/Charge.ts b/src/tempo/server/Charge.ts
+index 04416ebe..e9451e61 100644
+--- a/src/tempo/server/Charge.ts
++++ b/src/tempo/server/Charge.ts
+@@ -520,7 +520,7 @@ export function charge<const parameters extends charge.Parameters>(
+       : undefined,
+ 
+     // TODO: dedupe `{charge,session}.request`
+-    async request({ credential, request }) {
++    async request({ credential, expires, request }) {
+       const chainId = await (async () => {
+         if (request.chainId) return request.chainId
+         if (parameters.chainId !== undefined) return parameters.chainId
+@@ -556,6 +556,18 @@ export function charge<const parameters extends charge.Parameters>(
+         return account || remoteFeePayer ? true : undefined
+       })()
+ 
++      // Issued sponsored challenges must leave room for the fee payer's
++      // minimum remaining validity, or every credential for them is rejected.
++      if (
++        !credential &&
++        resolvedFeePayer &&
++        expires !== undefined &&
++        !(Date.parse(expires) - Date.now() >= defaults.minRemainingValiditySeconds * 1000)
++      )
++        throw new Error(
++          `Sponsored charge challenges must expire at least ${defaults.minRemainingValiditySeconds} seconds after issuance.`,
++        )
++
+       return {
+         ...request,
+         machineTokenEnabled: request.machineTokenEnabled || undefined,
+-- 
+2.43.0
+
