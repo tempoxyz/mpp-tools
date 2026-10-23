@@ -309,6 +309,10 @@ class VectorRunnerJsonArtifactTest(unittest.TestCase):
         self.assertEqual(output["status"], "fail")
         failing = [check for check in output["checks"] if check["status"] == "FAILURE"]
         self.assertTrue(any("vector-file-error" in check["id"] for check in failing))
+        crash = next(check for check in failing if "vector-file-error" in check["id"])
+        # Audits only flag a target unhealthy for "runner"/"adapter" checks.
+        self.assertEqual(crash["details"]["vector"], "runner")
+        self.assertEqual(crash["details"]["scenario"], "broken_vector_file_error")
 
     def test_all_version_skipped_selection_fails(self) -> None:
         import vector_runner as vector_runner_module
