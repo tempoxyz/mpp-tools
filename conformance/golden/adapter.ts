@@ -260,11 +260,37 @@ function tempoProofTypedData(params: {
 }
 
 function hasDuplicateChallengeParameter(header: string): boolean {
+	// Walk the header so commas and `key=` text inside quoted-string values
+	// are not mistaken for separate parameters.
 	const seen = new Set<string>()
-	for (const match of header.matchAll(/(?:^|,\s*)(\w+)=/g)) {
-		const key = match[1]
-		if (seen.has(key)) return true
-		seen.add(key)
+	let expectKey = true
+	let i = 0
+	while (i < header.length) {
+		const ch = header[i]
+		if (ch === '"') {
+			i++
+			while (i < header.length && header[i] !== '"') i += header[i] === '\\' ? 2 : 1
+			i++
+			continue
+		}
+		if (ch === ',') {
+			expectKey = true
+			i++
+			continue
+		}
+		if (expectKey) {
+			const match = /^\s*(\w+)=/.exec(header.slice(i))
+			if (match) {
+				const key = match[1]!
+				if (seen.has(key)) return true
+				seen.add(key)
+				expectKey = false
+				i += match[0].length
+				continue
+			}
+			if (!/\s/.test(ch!)) expectKey = false
+		}
+		i++
 	}
 	return false
 }

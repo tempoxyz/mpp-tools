@@ -603,6 +603,23 @@
       }
     },
     {
+      "name": "comma_in_quoted_value_not_duplicate",
+      "description": "A comma followed by key= text inside a quoted value is not a duplicate parameter",
+      "tags": ["happy-path", "edge-case", "quoted-string", "duplicate"],
+      "object": {
+        "description": "fee, id=5 waived",
+        "id": "ch_quoted_comma",
+        "intent": "charge",
+        "method": "tempo",
+        "realm": "api.example.com",
+        "request": {}
+      },
+      "wire": "Payment id=\"ch_quoted_comma\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\", description=\"fee, id=5 waived\"",
+      "tests": {
+        "parse": true
+      }
+    },
+    {
       "name": "error_empty_header",
       "description": "Rejects completely empty header value",
       "tags": ["error", "empty"],
