@@ -32,6 +32,60 @@ class RustSdkConfigurationTest(unittest.TestCase):
                 manifest.read_text(encoding="utf-8"),
             )
 
+    def test_matches_adapter_reqwest_to_checkout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / "conformance" / "adapters" / "rust" / "Cargo.toml"
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text(
+                '[dependencies]\n'
+                'mpp = { git = "https://github.com/tempoxyz/mpp-rs", rev = "abc", features = ["client"] }\n'
+                'reqwest = { version = "0.13", default-features = false }\n',
+                encoding="utf-8",
+            )
+            sdk_path = root / "sdk"
+            sdk_path.mkdir()
+            (sdk_path / "Cargo.toml").write_text(
+                '[package]\nname = "mpp"\n\n[dependencies]\n'
+                'reqwest = { version = "0.14", default-features = false, optional = true }\n\n'
+                '[dev-dependencies]\nreqwest = { version = "0.13" }\n',
+                encoding="utf-8",
+            )
+
+            configure_rust(root / "conformance", sdk_path)
+
+            self.assertIn(
+                'reqwest = { version = "0.14", default-features = false }',
+                manifest.read_text(encoding="utf-8"),
+            )
+
+    def test_resolves_workspace_inherited_reqwest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / "conformance" / "adapters" / "rust" / "Cargo.toml"
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text(
+                '[dependencies]\n'
+                'mpp = { git = "https://github.com/tempoxyz/mpp-rs", rev = "abc", features = ["client"] }\n'
+                'reqwest = { version = "0.13", default-features = false }\n',
+                encoding="utf-8",
+            )
+            sdk_path = root / "sdk"
+            sdk_path.mkdir()
+            (sdk_path / "Cargo.toml").write_text(
+                '[package]\nname = "mpp"\n\n[workspace.dependencies]\n'
+                'reqwest = { version = "0.14", default-features = false }\n\n'
+                '[dependencies]\nreqwest = { workspace = true, optional = true }\n',
+                encoding="utf-8",
+            )
+
+            configure_rust(root / "conformance", sdk_path)
+
+            self.assertIn(
+                'reqwest = { version = "0.14", default-features = false }',
+                manifest.read_text(encoding="utf-8"),
+            )
+
 
 class GoSdkVersionTest(unittest.TestCase):
     def test_reads_declared_checkout_version(self) -> None:

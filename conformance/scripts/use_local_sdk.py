@@ -14,6 +14,7 @@ import json
 import os
 import re
 import subprocess
+import tomllib
 from pathlib import Path
 
 
@@ -49,6 +50,32 @@ def configure_rust(conformance_dir: Path, sdk_path: Path) -> None:
         f"mpp = {{ path = {json_string(sdk_path)}, features = [\"client\"] }}",
         "Rust mpp dependency",
     )
+    reqwest_version = rust_sdk_reqwest_version(sdk_path)
+    if reqwest_version is not None:
+        # The adapter hands its own reqwest::RequestBuilder to the SDK's Fetch
+        # trait, so both must resolve to the same reqwest crate.
+        replace_one(
+            manifest,
+            r"^reqwest\s*=\s*.+$",
+            f"reqwest = {{ version = {json.dumps(reqwest_version)}, default-features = false }}",
+            "Rust reqwest dependency",
+        )
+
+
+def rust_sdk_reqwest_version(sdk_path: Path) -> str | None:
+    """Return the reqwest version requirement the SDK checkout declares."""
+    manifest = sdk_path / "Cargo.toml"
+    if not manifest.exists():
+        return None
+    cargo = tomllib.loads(read_text(manifest))
+    dependency = cargo.get("dependencies", {}).get("reqwest")
+    if isinstance(dependency, dict) and dependency.get("workspace") is True:
+        dependency = cargo.get("workspace", {}).get("dependencies", {}).get("reqwest")
+    if isinstance(dependency, str):
+        return dependency
+    if isinstance(dependency, dict) and isinstance(dependency.get("version"), str):
+        return dependency["version"]
+    return None
 
 
 def configure_ruby(conformance_dir: Path, sdk_path: Path) -> None:
