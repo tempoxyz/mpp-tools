@@ -960,10 +960,12 @@ class VectorRunner:
                 try:
                     self.run_vector_file(adapter, all_vectors[vector_name], tag_filter=tag_filter)
                 except Exception as exc:
+                    # Record under the "runner" tag so audits treat the target as
+                    # unhealthy: scenarios after the crash never produced results.
                     self._record_result(
-                        vector_file=vector_name,
+                        vector_file="runner",
                         test_type=TestType.BUILD,
-                        test_name="vector_file_error",
+                        test_name=f"{vector_name}_vector_file_error",
                         adapter=adapter.name,
                         passed=False,
                         description="Vector file loads and its scenarios run without crashing the runner",
