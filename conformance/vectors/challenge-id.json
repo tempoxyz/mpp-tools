@@ -72,7 +72,7 @@
     },
     {
       "name": "with_opaque",
-      "description": "opaque is part of the HMAC input and changes the challenge ID",
+      "description": "Wire opaque (base64url of a JCS string map) is part of the HMAC input and changes the challenge ID",
       "tags": ["happy-path", "cross-sdk-validated", "optional-fields"],
       "input": {
         "secretKey": "test-vector-secret-minimum-32-byte-secret",
@@ -82,9 +82,9 @@
         "request": {
           "amount": "1000000"
         },
-        "opaque": "trace-123"
+        "opaque": "eyJ0cmFjZSI6IjEyMyJ9"
       },
-      "expected": "1XJ-Ti0DACNe3E1zHvwH6OdnKlhUx6xKxDbhJyexng4"
+      "expected": "5kAjSWiLlrX5yinRSJ9gZPiGWd_AC3WG_jAOcBnH6iY"
     },
     {
       "name": "with_payment_authorization_header",
