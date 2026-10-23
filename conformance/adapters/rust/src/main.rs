@@ -1,9 +1,11 @@
 use hmac::{Hmac, KeyInit, Mac};
+use mpp::client::{Fetch, PaymentProvider};
 use mpp::protocol::core::{
     base64url_decode, base64url_encode, format_authorization, format_receipt,
     format_www_authenticate, parse_authorization, parse_receipt, parse_www_authenticate,
     Base64UrlJson, ChallengeEcho, PaymentChallenge, PaymentCredential, Receipt,
 };
+use mpp::MppError;
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::{json, Value};
 use sha2::Sha256;
@@ -420,6 +422,14 @@ fn handle_adapter_request() {
     let op = request.get("op").and_then(|v| v.as_str()).unwrap_or("");
     let input_value = request.get("input").cloned().unwrap_or(json!({}));
 
+    if op == "http.payment_request" {
+        match run_http_payment_request(&input_value) {
+            Ok(value) => print_adapter_success(value),
+            Err((error_type, message)) => print_adapter_error(&message, error_type),
+        }
+        return;
+    }
+
     let Some(command) = legacy_command_for_operation(op) else {
         print_adapter_error(
             &format!("Unknown operation: {}", op),
@@ -436,6 +446,100 @@ fn handle_adapter_request() {
     };
     let result = run_legacy_command(command, &legacy_input, &[]);
     print_adapter_from_legacy(op, result);
+}
+
+#[derive(Clone)]
+struct ConformancePaymentProvider {
+    payload: Value,
+    source: Option<String>,
+}
+
+impl PaymentProvider for ConformancePaymentProvider {
+    fn supports(&self, method: &str, intent: &str) -> bool {
+        method == "tempo" && intent == "charge"
+    }
+
+    async fn pay(&self, challenge: &PaymentChallenge) -> Result<PaymentCredential, MppError> {
+        Ok(PaymentCredential {
+            challenge: challenge.to_echo(),
+            source: self.source.clone(),
+            payload: self.payload.clone(),
+        })
+    }
+}
+
+/// Run an HTTP request through the SDK's 402 client (`Fetch`).
+/// Returns `(error_type, message)` on failure.
+fn run_http_payment_request(input: &Value) -> Result<Value, (&'static str, String)> {
+    let http_err = |message: String| ("http_error", message);
+    let field = |name: &str| {
+        input
+            .get(name)
+            .and_then(Value::as_str)
+            .ok_or_else(|| http_err(format!("missing {name}")))
+    };
+    let url = field("url")?;
+    let method = field("method")?
+        .parse::<reqwest::Method>()
+        .map_err(|e| http_err(e.to_string()))?;
+    let mode = field("mode")?;
+    let payment = input.get("payment").cloned().unwrap_or(json!({}));
+    let provider = match mode {
+        "plain" => None,
+        "payment" | "invalid_payload" => Some(ConformancePaymentProvider {
+            payload: payment.get("payload").cloned().unwrap_or(json!({})),
+            source: payment
+                .get("source")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+        }),
+        other => {
+            return Err((
+                "unsupported_operation",
+                format!("Unsupported http.payment_request mode: {other}"),
+            ))
+        }
+    };
+
+    let mut request = reqwest::Client::new().request(method, url);
+    if let Some(headers) = input.get("headers").and_then(Value::as_object) {
+        for (name, value) in headers {
+            let value = value
+                .as_str()
+                .ok_or_else(|| http_err(format!("header {name} must be a string")))?;
+            request = request.header(name, value);
+        }
+    }
+    if let Some(body) = input.get("body").and_then(Value::as_str) {
+        request = request.body(body.to_owned());
+    }
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| http_err(e.to_string()))?;
+    runtime.block_on(async move {
+        let response = match provider {
+            Some(provider) => request
+                .send_with_payment(&provider)
+                .await
+                .map_err(|e| http_err(e.to_string()))?,
+            None => request.send().await.map_err(|e| http_err(e.to_string()))?,
+        };
+        let status = response.status().as_u16();
+        let mut headers = serde_json::Map::new();
+        for name in response.headers().keys() {
+            let values: Vec<&str> = response
+                .headers()
+                .get_all(name)
+                .iter()
+                .filter_map(|value| value.to_str().ok())
+                .collect();
+            headers.insert(name.as_str().to_owned(), json!(values.join(", ")));
+        }
+        let body = response.text().await.map_err(|e| http_err(e.to_string()))?;
+        Ok(json!({ "status": status, "headers": headers, "body": body }))
+    })
 }
 
 fn legacy_command_for_operation(op: &str) -> Option<&'static str> {
