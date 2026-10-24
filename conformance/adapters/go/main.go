@@ -111,7 +111,9 @@ func (i conformanceIntent) Name() string {
 
 func (i conformanceIntent) Verify(_ context.Context, _ *mpp.Credential, _ map[string]any) (*mpp.Receipt, error) {
 	if i.errorMessage != "" {
-		return nil, fmt.Errorf("%s", i.errorMessage)
+		// A method rejection is a PaymentError; plain errors are internal
+		// failures (500 internal-payment-error), as in mppx.
+		return nil, mpp.ErrVerificationFailed(i.errorMessage)
 	}
 	return &mpp.Receipt{
 		Status:    "success",
