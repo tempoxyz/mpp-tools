@@ -10,7 +10,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from harness import AdapterConfig, AdapterClient, build_adapter, discover_adapters
+from harness import (
+    AdapterConfig,
+    AdapterClient,
+    build_adapter,
+    discover_adapters,
+    load_json,
+    validate_value,
+)
 
 
 SCRIPT_DIR = Path(__file__).parent
@@ -26,11 +33,16 @@ class RunResult:
     error: str | None = None
 
 
-def load_cases() -> list[dict[str, Any]]:
-    parsed = json.loads(CASE_FILE.read_text())
-    cases = parsed.get("cases")
-    if not isinstance(cases, list):
-        raise ValueError("Invalid server verification cases payload")
+def load_cases(path: Path = CASE_FILE) -> list[dict[str, Any]]:
+    document = load_json(path)
+    validate_value(document, "server-verification-cases.schema.json", str(path))
+    cases = document["cases"]
+    seen: set[str] = set()
+    for case in cases:
+        name = case["name"]
+        if name in seen:
+            raise ValueError(f"{path} contains duplicate server verification case name: {name}")
+        seen.add(name)
     return cases
 
 
