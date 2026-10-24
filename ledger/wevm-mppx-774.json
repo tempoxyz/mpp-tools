@@ -1,0 +1,29 @@
+{
+  "id": "mppx#774",
+  "source": {
+    "repo": "wevm/mppx",
+    "pr": 774,
+    "sha": "b7ab48e38e3dd9131c05e4e2a9f72f49838a21c9"
+  },
+  "labels": [
+    "agricola:all"
+  ],
+  "decisions": [
+    {
+      "target": "python",
+      "by": "brendanjryan",
+      "idempotency_key": "propagate:mppx#774:python",
+      "at": "2026-08-08T18:12:51Z",
+      "decision": "skip",
+      "reason": "The Python SDK has no Tempo MPP relay adapter or relay idempotency-key behavior to update."
+    },
+    {
+      "target": "rust",
+      "by": "brendanjryan",
+      "idempotency_key": "propagate:mppx#774:rust",
+      "at": "2026-08-08T18:12:51Z",
+      "decision": "skip",
+      "reason": "The canonical Tempo relay idempotency-prefix change does not apply because this SDK has no corresponding relay API or behavior."
+    }
+  ]
+}
