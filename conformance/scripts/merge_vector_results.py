@@ -58,6 +58,8 @@ def main() -> int:
         "passed": 0,
         "failed": 0,
         "skipped": 0,
+        "capability_skipped": 0,
+        "capability_skips": [],
         "errors": [],
     }
     errors = merged["errors"]
@@ -96,6 +98,12 @@ def main() -> int:
         merged["passed"] = int(merged["passed"]) + int(result.get("passed", 0))
         merged["failed"] = int(merged["failed"]) + int(result.get("failed", 0))
         merged["skipped"] = int(merged["skipped"]) + int(result.get("skipped", 0))
+        merged["capability_skipped"] = int(merged["capability_skipped"]) + int(
+            result.get("capability_skipped", 0)
+        )
+        capability_skips = merged["capability_skips"]
+        assert isinstance(capability_skips, list)
+        capability_skips.extend(result.get("capability_skips", []))
         merged["num_checks"] = int(merged["num_checks"]) + int(result.get("num_checks", 0))
         errors.extend(result.get("errors", []))
 
