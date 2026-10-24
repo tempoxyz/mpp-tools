@@ -521,7 +521,7 @@ fn run_http_payment_request(input: &Value) -> Result<Value, (&'static str, Strin
     runtime.block_on(async move {
         let response = match provider {
             Some(provider) => request
-                .send_with_payment(&provider)
+                .send_with_payment_policy(&provider, &mpp::client::AcceptPaymentPolicy::Always)
                 .await
                 .map_err(|e| http_err(e.to_string()))?,
             None => request.send().await.map_err(|e| http_err(e.to_string()))?,
