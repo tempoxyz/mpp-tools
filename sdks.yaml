@@ -32,16 +32,3 @@ sdks:
     verify:
       - uv sync --all-extras --dev
       - uv run pytest
-
-  ruby:
-    repo: stripe/mpp-rb
-    automation: notify
-    owners: []
-    changelog: none
-    verify: []
-  java:
-    repo: stripe/mpp-java
-    automation: notify
-    owners: []
-    changelog: none
-    verify: []

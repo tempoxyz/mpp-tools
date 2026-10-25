@@ -22,7 +22,7 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(manifest.sdks["go"].automation, Automation.NOTIFY)
         self.assertEqual(manifest.pr_targets(), ("rust", "python"))
         self.assertEqual(manifest.sdks["rust"].changelog, Changelog.FRAGMENT)
-        self.assertEqual(manifest.sdks["ruby"].automation, Automation.NOTIFY)
+        self.assertEqual(tuple(manifest.sdks), ("go", "rust", "python"))
 
     def test_automation_token_scope_comes_from_pr_targets(self) -> None:
         manifest = load_manifest("sdks.yaml")
