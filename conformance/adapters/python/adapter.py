@@ -184,6 +184,9 @@ def receipt_to_dict(receipt: Receipt) -> dict:
         result["externalId"] = receipt.external_id
     if receipt.subscription_id is not None:
         result["subscriptionId"] = receipt.subscription_id
+    funding_currency = getattr(receipt, "funding_currency", None)
+    if funding_currency is not None:
+        result["fundingCurrency"] = funding_currency
     if receipt.extra is not None:
         result["extra"] = receipt.extra
     for key, value in (receipt.extensions or {}).items():
