@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"os"
 	"os/exec"
@@ -13,9 +14,11 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/tempoxyz/mpp-go/pkg/client"
 	"github.com/tempoxyz/mpp-go/pkg/mpp"
 	"github.com/tempoxyz/mpp-go/pkg/server"
+	"github.com/tempoxyz/mpp-go/pkg/tempo"
 )
 
 type commandResponse struct {
@@ -308,6 +311,10 @@ func handleAdapterRequest() {
 		handleHTTPPaymentRequest(request.Input)
 		return
 	}
+	if request.Op == "tempo.proof.typed_data" {
+		printJSON(runTempoProofTypedData(request.Input))
+		return
+	}
 
 	command, ok := legacyCommandForOperation(request.Op)
 	if !ok {
@@ -321,6 +328,34 @@ func handleAdapterRequest() {
 	}
 	result := runLegacyCommand(command, legacyInput, nil)
 	printAdapterFromLegacy(request.Op, result)
+}
+
+type tempoProofInput struct {
+	Account     string `json:"account"`
+	ChainID     int64  `json:"chainId"`
+	ChallengeID string `json:"challengeId"`
+	Realm       string `json:"realm"`
+}
+
+func runTempoProofTypedData(raw json.RawMessage) adapterResponse {
+	var input tempoProofInput
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return adapterResponse{OK: false, Error: &adapterError{Type: "unknown_error", Message: err.Error()}}
+	}
+	if !common.IsHexAddress(input.Account) {
+		return adapterResponse{OK: false, Error: &adapterError{Type: "unknown_error", Message: fmt.Sprintf("invalid account: %q", input.Account)}}
+	}
+	typed := tempo.ProofTypedData(input.ChainID, common.HexToAddress(input.Account), input.ChallengeID, input.Realm)
+	return adapterResponse{OK: true, Value: map[string]any{
+		"domain": map[string]any{
+			"name":    typed.Domain.Name,
+			"version": typed.Domain.Version,
+			"chainId": (*big.Int)(typed.Domain.ChainId),
+		},
+		"types":       map[string]any{typed.PrimaryType: typed.Types[typed.PrimaryType]},
+		"primaryType": typed.PrimaryType,
+		"message":     typed.Message,
+	}}
 }
 
 func handleHTTPPaymentRequest(raw json.RawMessage) {

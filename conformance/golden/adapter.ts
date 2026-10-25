@@ -28,6 +28,7 @@ import { createHmac } from 'node:crypto'
 
 import { Challenge, Credential, Method, Receipt, z } from 'mppx'
 import * as Client from 'mppx/client'
+import { Proof } from 'mppx/tempo'
 import { Mppx, stripe } from 'mppx/server'
 
 const minimumSecretKeyBytes = 32
@@ -234,31 +235,6 @@ async function verifyStripeExternalIdBinding(input: {
 	}
 }
 
-function tempoProofTypedData(params: {
-	chainId: number
-	challengeId: string
-	realm: string
-}) {
-	return {
-		domain: {
-			name: 'MPP',
-			version: '2',
-			chainId: params.chainId,
-		},
-		types: {
-			Proof: [
-				{ name: 'challengeId', type: 'string' },
-				{ name: 'realm', type: 'string' },
-			],
-		},
-		primaryType: 'Proof',
-		message: {
-			challengeId: params.challengeId,
-			realm: params.realm,
-		},
-	}
-}
-
 function hasDuplicateChallengeParameter(header: string): boolean {
 	// Walk the header so commas and `key=` text inside quoted-string values
 	// are not mistaken for separate parameters. A quoted string only opens
@@ -366,7 +342,7 @@ async function runCommand(command: string, input: string): Promise<Result<unknow
 
 			case 'tempo-proof-typed-data': {
 				const params = JSON.parse(input)
-				return success(tempoProofTypedData(params))
+				return success(Proof.typedData(params))
 			}
 
 			default:

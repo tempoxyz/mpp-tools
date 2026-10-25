@@ -1,14 +1,14 @@
 {
-  "version": "2.0.0",
+  "version": "3.0.0",
   "spec_ref": "Tempo zero-amount proof credential",
-  "description": "EIP-712 typed-data shape for zero-amount Tempo proof credentials. The proof binds challengeId + realm using domain MPP v2.",
+  "description": "EIP-712 typed-data shape for zero-amount Tempo proof credentials. The proof binds account + challengeId + realm using domain MPP v3.",
   "commands": {
     "operation": "tempo.proof.typed_data"
   },
   "scenarios": [
     {
       "name": "zero_amount_proof_shape",
-      "description": "Proof typed data matches mppx: domain MPP v2 and message fields challengeId + realm.",
+      "description": "Proof typed data matches mppx: domain MPP v3 and message fields account + challengeId + realm.",
       "tags": [
         "happy-path",
         "cross-sdk-validated",
@@ -17,6 +17,7 @@
         "zero-amount"
       ],
       "input": {
+        "account": "0x742d35Cc6634c0532925a3b844bC9e7595F8fE00",
         "chainId": 42431,
         "challengeId": "proof-challenge-id",
         "realm": "api.example.com"
@@ -26,11 +27,15 @@
         "value": {
           "domain": {
             "name": "MPP",
-            "version": "2",
+            "version": "3",
             "chainId": 42431
           },
           "types": {
             "Proof": [
+              {
+                "name": "account",
+                "type": "address"
+              },
               {
                 "name": "challengeId",
                 "type": "string"
@@ -43,6 +48,7 @@
           },
           "primaryType": "Proof",
           "message": {
+            "account": "0x742d35Cc6634c0532925a3b844bC9e7595F8fE00",
             "challengeId": "proof-challenge-id",
             "realm": "api.example.com"
           }
