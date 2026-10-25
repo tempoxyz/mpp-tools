@@ -28,6 +28,7 @@
       "name": "success_receipt_extension_fields",
       "description": "Method-defined top-level receipt fields (subscriptionId, originTxHash, fundingCurrency) survive parse, format and roundtrip unchanged",
       "tags": ["happy-path", "extension-fields"],
+      "adapters": ["typescript", "rust", "python", "go"],
       "object": {
         "fundingCurrency": "0x20c0000000000000000000006a37DA5C996874BE",
         "method": "tempo",

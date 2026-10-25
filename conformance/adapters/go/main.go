@@ -215,8 +215,11 @@ func handleFormatAuthorization(input string) {
 }
 
 func handleFormatReceipt(input string) {
+	// UseNumber keeps method-defined integers beyond 2^53 exact on re-encode.
 	var data map[string]any
-	if err := json.Unmarshal([]byte(input), &data); err != nil {
+	decoder := json.NewDecoder(strings.NewReader(input))
+	decoder.UseNumber()
+	if err := decoder.Decode(&data); err != nil {
 		printJSON(commandResponse{Success: false, Error: err.Error(), ErrorType: "format_error"})
 		return
 	}
