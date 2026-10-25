@@ -205,11 +205,19 @@ class FakeRpcResponse:
 
 
 class FakeRpcClient:
-    def __init__(self, receipt):
+    def __init__(self, receipt, chain_id=4217):
         self._receipt = receipt
+        self._chain_id = chain_id
 
     async def post(self, *args, **kwargs):
-        return FakeRpcResponse({"jsonrpc": "2.0", "result": self._receipt, "id": 1})
+        method = kwargs["json"]["method"]
+        if method == "eth_chainId":
+            result = hex(self._chain_id)
+        elif method == "eth_getTransactionReceipt":
+            result = self._receipt
+        else:
+            raise ValueError(f"Unexpected fake RPC method: {method}")
+        return FakeRpcResponse({"jsonrpc": "2.0", "result": result, "id": 1})
 
 
 def adapter_success(value):
@@ -308,7 +316,9 @@ async def verify_tempo_receipt(input_value: dict):
     )
 
     intent = ChargeIntent(rpc_url="https://rpc.test")
-    intent._http_client = FakeRpcClient(input_value["receipt"])
+    intent._http_client = FakeRpcClient(
+        input_value["receipt"], input_value.get("rpcChainId", 4217)
+    )
 
     try:
         receipt = await intent.verify(credential, challenge_data["request"])

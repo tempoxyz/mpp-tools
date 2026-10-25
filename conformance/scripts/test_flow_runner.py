@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import contextlib
 import io
 import json
@@ -7,7 +8,14 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-from flow_runner import compare_results, main, perform_request, run_client_http_flow_case
+from flow_runner import (
+    NONCE_BOUND_ID,
+    compare_results,
+    has_issuance_nonce,
+    main,
+    perform_request,
+    run_client_http_flow_case,
+)
 
 
 class PerformRequestTests(unittest.TestCase):
@@ -127,6 +135,36 @@ class CompareResultsCapabilitySkipTests(unittest.TestCase):
 
         self.assertEqual(len(results), 1)
         self.assertTrue(results[0].passed)
+
+
+def opaque(meta: dict[str, str]) -> str:
+    return base64.urlsafe_b64encode(json.dumps(meta).encode()).decode().rstrip("=")
+
+
+class IssuanceNonceTests(unittest.TestCase):
+    def test_detects_reserved_nonce_in_opaque(self) -> None:
+        self.assertTrue(has_issuance_nonce({"opaque": opaque({"_mppx_nonce": "0xabc", "order": "1"})}))
+
+    def test_ignores_other_or_missing_opaque(self) -> None:
+        self.assertFalse(has_issuance_nonce({"opaque": opaque({"order": "1"})}))
+        self.assertFalse(has_issuance_nonce({"opaque": "not base64url json!"}))
+        self.assertFalse(has_issuance_nonce({}))
+
+    def test_nonce_bound_id_is_not_compared(self) -> None:
+        golden = [{"name": "success_charge", "challenge": {"id": "golden-id", "method": "tempo"}}]
+        actual = [{"name": "success_charge", "challenge": {"id": NONCE_BOUND_ID, "method": "tempo"}}]
+
+        results = compare_results(golden, actual, "typescript")
+
+        self.assertTrue(results[0].passed)
+
+    def test_rest_of_a_nonce_bound_challenge_is_still_compared(self) -> None:
+        golden = [{"name": "success_charge", "challenge": {"id": "golden-id", "method": "tempo"}}]
+        actual = [{"name": "success_charge", "challenge": {"id": NONCE_BOUND_ID, "method": "stripe"}}]
+
+        results = compare_results(golden, actual, "typescript")
+
+        self.assertFalse(results[0].passed)
 
 
 class FlowRunnerOutputTests(unittest.TestCase):

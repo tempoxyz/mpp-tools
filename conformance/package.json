@@ -20,11 +20,11 @@
     "mppx": "0.12.0"
   },
   "devDependencies": {
-    "@types/node": "^26.2.0",
-    "tsx": "^4.23.12",
+    "@types/node": "^26.6.3",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.18.0"
   }
 }

@@ -8,6 +8,7 @@ import io
 import json
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from harness import AdapterConfig
@@ -253,6 +254,71 @@ class VectorRunnerHelperTest(unittest.TestCase):
         self.assertIn("result mismatch", error or "")
 
 
+class VectorRunnerCapabilitySkipTest(unittest.TestCase):
+    VECTOR = {
+        "version": "2.0.0",
+        "description": "Operation fixture",
+        "spec_ref": "test",
+        "commands": {"operation": "tempo.fee_payer.cosign"},
+        "scenarios": [
+            {"name": "one", "description": "d", "tags": ["a"], "input": {}, "expected": {}},
+            {"name": "two", "description": "d", "tags": ["b"], "input": {}, "expected": {}},
+        ],
+    }
+
+    def run_skipping_file(self, output_format: str, tag_filter: str | None = None) -> tuple[VectorRunner, str]:
+        runner = VectorRunner(output_format=output_format)
+        adapter = AdapterConfig(name="python", command=["python"], capabilities=[])
+        with tempfile.TemporaryDirectory() as tmp:
+            vector_path = Path(tmp) / "cosign.json"
+            vector_path.write_text(json.dumps(self.VECTOR), encoding="utf-8")
+            stdout = io.StringIO()
+            with mock.patch("vector_runner.load_vector", return_value=self.VECTOR), contextlib.redirect_stdout(stdout):
+                runner.run_vector_file(adapter, vector_path, tag_filter=tag_filter)
+        return runner, stdout.getvalue()
+
+    def test_unadvertised_operation_is_recorded(self) -> None:
+        runner, _ = self.run_skipping_file("json")
+        self.assertEqual(
+            runner.capability_skips,
+            [{"adapter": "python", "vector": "cosign", "operation": "tempo.fee_payer.cosign", "scenarios": 2}],
+        )
+        self.assertEqual(runner.capability_skipped, 2)
+
+    def test_unadvertised_operation_is_logged_without_verbose(self) -> None:
+        _, output = self.run_skipping_file("text")
+        self.assertIn("cosign.json SKIPPED (python lacks tempo.fee_payer.cosign, 2 scenario(s))", output)
+
+    def test_tag_filter_limits_counted_scenarios(self) -> None:
+        runner, _ = self.run_skipping_file("json", tag_filter="a")
+        self.assertEqual(runner.capability_skipped, 1)
+
+    def test_version_excluded_scenarios_are_not_capability_skips(self) -> None:
+        vector = dict(self.VECTOR)
+        vector["scenarios"] = [
+            dict(self.VECTOR["scenarios"][0], sdkVersions={"python": ">1.0.0"}),
+            self.VECTOR["scenarios"][1],
+        ]
+        runner = VectorRunner(output_format="json", sdk_version_resolver=lambda _: "0.9.1")
+        adapter = AdapterConfig(name="python", command=["python"], capabilities=[])
+        with tempfile.TemporaryDirectory() as tmp:
+            vector_path = Path(tmp) / "cosign.json"
+            vector_path.write_text(json.dumps(vector), encoding="utf-8")
+            with mock.patch("vector_runner.load_vector", return_value=vector), contextlib.redirect_stdout(io.StringIO()):
+                runner.run_vector_file(adapter, vector_path)
+        self.assertEqual(runner.capability_skipped, 1)
+        self.assertEqual(runner.version_skips, 1)
+
+    def test_json_artifact_reports_capability_skips(self) -> None:
+        runner, _ = self.run_skipping_file("json")
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            runner._output_json(0, 0, 0)
+        output = json.loads(stdout.getvalue())
+        self.assertEqual(output["capability_skipped"], 2)
+        self.assertEqual(output["capability_skips"][0]["operation"], "tempo.fee_payer.cosign")
+
+
 class VectorRunnerJsonArtifactTest(unittest.TestCase):
     """The json output format must stay machine-readable on stdout."""
 
@@ -309,6 +375,10 @@ class VectorRunnerJsonArtifactTest(unittest.TestCase):
         self.assertEqual(output["status"], "fail")
         failing = [check for check in output["checks"] if check["status"] == "FAILURE"]
         self.assertTrue(any("vector-file-error" in check["id"] for check in failing))
+        crash = next(check for check in failing if "vector-file-error" in check["id"])
+        # Audits only flag a target unhealthy for "runner"/"adapter" checks.
+        self.assertEqual(crash["details"]["vector"], "runner")
+        self.assertEqual(crash["details"]["scenario"], "broken_vector_file_error")
 
     def test_all_version_skipped_selection_fails(self) -> None:
         import vector_runner as vector_runner_module

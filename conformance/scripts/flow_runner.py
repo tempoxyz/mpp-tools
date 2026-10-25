@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import json
 import os
 import subprocess
@@ -220,9 +222,28 @@ def skipped_flow(name: str, capability: str) -> dict[str, Any]:
     }
 
 
-def challenge_result(challenge: dict[str, Any]) -> dict[str, Any]:
+# Opaque keys an SDK reserves for fresh per-issuance randomness. The nonce is
+# bound into the challenge HMAC, so every issued id is unique by design and
+# cannot match a recorded golden. The id derivation is checked by the
+# challenge-id vectors, and success flows show the server accepts its own ids.
+ISSUANCE_NONCE_KEYS = frozenset({"_mppx_nonce"})
+NONCE_BOUND_ID = "<nonce-bound>"
+
+
+def has_issuance_nonce(challenge: dict[str, Any]) -> bool:
+    opaque = challenge.get("opaque")
+    if not isinstance(opaque, str):
+        return False
+    try:
+        meta = json.loads(base64.urlsafe_b64decode(opaque + "=" * (-len(opaque) % 4)))
+    except (binascii.Error, ValueError):
+        return False
+    return isinstance(meta, dict) and not ISSUANCE_NONCE_KEYS.isdisjoint(meta)
+
+
+def challenge_result(challenge: dict[str, Any], *, nonce_bound: bool = False) -> dict[str, Any]:
     return {
-        "id": challenge.get("id"),
+        "id": NONCE_BOUND_ID if nonce_bound else challenge.get("id"),
         "method": challenge.get("method"),
         "intent": challenge.get("intent"),
         "realm": challenge.get("realm"),
@@ -534,7 +555,11 @@ def run_flow_case(
     retry_auth = None if flow_case.get("skip_authorization") else formatted.get("value", {}).get("header")
     if verbose:
         print(f"[{client.adapter.name}] {name}: retry request", file=sys.stderr)
-    challenge_payload = challenge_result(challenge)
+    # A deliberately replaced id is fixed, so it is still compared.
+    challenge_payload = challenge_result(
+        challenge,
+        nonce_bound=has_issuance_nonce(challenge) and not flow_case.get("invalid_challenge_id"),
+    )
     credential_payload = credential_result(payload)
 
     if flow_case.get("concurrent_replay"):
@@ -707,7 +732,11 @@ def compare_results(
             ))
             unmatched.discard(name)
             continue
-        diff = compute_diff(normalize_result(golden), normalize_result(entry))
+        expected, actual = normalize_result(golden), normalize_result(entry)
+        if (actual.get("challenge") or {}).get("id") == NONCE_BOUND_ID:
+            for side in (expected, actual):
+                (side.get("challenge") or {}).pop("id", None)
+        diff = compute_diff(expected, actual)
         results.append(RunResult(adapter=adapter, name=str(name), passed=diff == "", error=diff or None))
         unmatched.discard(name)
     for name in sorted(unmatched):

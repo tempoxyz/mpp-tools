@@ -27,7 +27,7 @@ runs:
         python-version: "3.12"
 
     - name: Install uv
-      uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@55fe3b63d9612623cc51e6c62d9d62fbcb175fb0 # 2026-09-29T01-25-15Z-55fe3b63
+      uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
       with:
         version: "0.12.11"
         python-version: "3.12"
@@ -40,17 +40,17 @@ runs:
       if: inputs.setup-node == 'true' || inputs.adapter == 'typescript' || inputs.adapter == 'all'
       uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
       with:
-        node-version: "24.5"
+        node-version: "24.22.1"
         cache: npm
         cache-dependency-path: ${{ inputs.conformance-directory }}/package-lock.json
 
     - name: Setup Rust
       if: inputs.adapter == 'rust' || inputs.adapter == 'all'
-      uses: tempoxyz/gh-actions/vendor/dtolnay/rust-toolchain@55fe3b63d9612623cc51e6c62d9d62fbcb175fb0 # 2026-09-29T01-25-15Z-55fe3b63
+      uses: tempoxyz/gh-actions/vendor/dtolnay/rust-toolchain@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
 
     - name: Cache Rust dependencies
       if: inputs.adapter == 'rust' || inputs.adapter == 'all'
-      uses: tempoxyz/gh-actions/vendor/Swatinem/rust-cache@55fe3b63d9612623cc51e6c62d9d62fbcb175fb0 # 2026-09-29T01-25-15Z-55fe3b63
+      uses: tempoxyz/gh-actions/vendor/Swatinem/rust-cache@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
       with:
         workspaces: ${{ inputs.conformance-directory }}/adapters/rust -> target
 
@@ -58,7 +58,7 @@ runs:
       if: inputs.adapter == 'go' || inputs.adapter == 'all'
       uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
       with:
-        go-version: "1.26.0"
+        go-version: "1.26.10"
         check-latest: true
         cache-dependency-path: ${{ inputs.conformance-directory }}/adapters/go/go.sum
 
@@ -67,16 +67,42 @@ runs:
       uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
       with:
         distribution: temurin
-        java-version: "17"
+        java-version: "17.0.21+9"
+        check-latest: true
         cache: gradle
         cache-dependency-path: |
           ${{ inputs.conformance-directory }}/adapters/java/*.gradle
           ${{ inputs.conformance-directory }}/adapters/java/gradle.lockfile
           ${{ inputs.conformance-directory }}/adapters/java/gradle/wrapper/gradle-wrapper.properties
 
+    - name: Trust Aegis CA for Gradle
+      if: (inputs.adapter == 'java' || inputs.adapter == 'all') && runner.os == 'Linux'
+      shell: bash
+      run: |
+        # Secure Runner's Aegis intercepts repo.maven.apache.org with its own CA,
+        # which the JDK from setup-java does not trust, so Gradle cannot resolve
+        # the locked dependencies. Trust it in a copy of the JDK store, for
+        # Gradle builds only.
+        ca=/etc/aegis/ca/ca.pem
+        if ! sudo -n test -f "$ca"; then
+          echo "No Aegis CA at $ca; leaving the Java trust store unchanged."
+          exit 0
+        fi
+        store="$RUNNER_TEMP/aegis-java-cacerts"
+        sudo -n cat "$ca" > "$RUNNER_TEMP/aegis-ca.pem"
+        cp "$JAVA_HOME/lib/security/cacerts" "$store"
+        chmod 0644 "$store"
+        "$JAVA_HOME/bin/keytool" -importcert -noprompt -alias aegis \
+          -file "$RUNNER_TEMP/aegis-ca.pem" -keystore "$store" -storepass changeit
+        mkdir -p "$HOME/.gradle"
+        {
+          echo "systemProp.javax.net.ssl.trustStore=$store"
+          echo "systemProp.javax.net.ssl.trustStorePassword=changeit"
+        } >> "$HOME/.gradle/gradle.properties"
+
     - name: Setup Ruby
       if: inputs.adapter == 'ruby' || inputs.adapter == 'all'
-      uses: tempoxyz/gh-actions/vendor/ruby/setup-ruby@55fe3b63d9612623cc51e6c62d9d62fbcb175fb0 # 2026-09-29T01-25-15Z-55fe3b63
+      uses: tempoxyz/gh-actions/vendor/ruby/setup-ruby@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
       with:
         ruby-version: "3.3"
         bundler-cache: ${{ inputs.ruby-bundler-cache }}

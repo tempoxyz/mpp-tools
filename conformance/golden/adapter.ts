@@ -165,11 +165,15 @@ async function verifyStripeExternalIdBinding(input: {
 	| { ok: false; errorType: 'invalid_challenge' | 'verification_failed' }
 > {
 	const secretKey = 'conformance-stripe-secret-32-bytes-min'
+	// mppx >= 0.14.2 only verifies a standalone credential when the server has
+	// a realm configured that matches the challenge.
+	const realm = 'conformance.local'
 	const methodDetails =
 		typeof input.request.methodDetails === 'object' && input.request.methodDetails !== null
 			? (input.request.methodDetails as Record<string, unknown>)
 			: {}
 	const mppx = Mppx.create({
+		realm,
 		secretKey,
 		methods: [
 			stripe.charge({
@@ -206,7 +210,7 @@ async function verifyStripeExternalIdBinding(input: {
 	})
 	const challenge = Challenge.from({
 		secretKey,
-		realm: 'conformance.local',
+		realm,
 		method: 'stripe',
 		intent: 'charge',
 		request: input.request,
@@ -256,11 +260,44 @@ function tempoProofTypedData(params: {
 }
 
 function hasDuplicateChallengeParameter(header: string): boolean {
+	// Walk the header so commas and `key=` text inside quoted-string values
+	// are not mistaken for separate parameters. A quoted string only opens
+	// right after a matched `key=`; any other `"` is a plain character, so a
+	// stray quote cannot hide later parameters. Each character is scanned a
+	// bounded number of times, keeping the walk linear on adversarial input.
 	const seen = new Set<string>()
-	for (const match of header.matchAll(/(?:^|,\s*)(\w+)=/g)) {
-		const key = match[1]
-		if (seen.has(key)) return true
-		seen.add(key)
+	const keyPattern = /(\w+)=/y
+	let expectKey = true
+	let i = 0
+	while (i < header.length) {
+		const ch = header[i]!
+		if (ch === ',') {
+			expectKey = true
+			i++
+			continue
+		}
+		if (expectKey) {
+			if (/\s/.test(ch)) {
+				i++
+				continue
+			}
+			expectKey = false
+			keyPattern.lastIndex = i
+			const match = keyPattern.exec(header)
+			if (match) {
+				const key = match[1]!
+				if (seen.has(key)) return true
+				seen.add(key)
+				i = keyPattern.lastIndex
+				if (header[i] === '"') {
+					i++
+					while (i < header.length && header[i] !== '"') i += header[i] === '\\' ? 2 : 1
+					i++
+				}
+				continue
+			}
+		}
+		i++
 	}
 	return false
 }
