@@ -76,13 +76,14 @@
     "Receipt": {
       "type": "object",
       "required": ["status", "timestamp", "reference"],
-      "additionalProperties": false,
+      "additionalProperties": true,
       "properties": {
         "status": { "type": "string", "minLength": 1 },
         "method": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" },
         "reference": { "type": "string", "minLength": 1 },
         "externalId": { "type": "string" },
+        "subscriptionId": { "type": "string", "minLength": 1 },
         "extra": { "$ref": "#/$defs/JsonObject" }
       }
     },
