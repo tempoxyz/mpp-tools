@@ -11,7 +11,7 @@ rules:
     ignore:
       # These checkout credentials are intentionally retained for the later
       # state-branch and downstream publication pushes in the same jobs.
-      - agricola-audit.yml:295
+      - agricola-audit.yml:289
       - agricola.yml:47
       - agricola.yml:443
       - agricola.yml:530
