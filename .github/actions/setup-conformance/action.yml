@@ -1,3 +1,4 @@
+f91fffa7f20fa7e8d7e1a4d795031205f559822e
 name: Setup conformance adapter
 description: Install shared toolchains needed by conformance adapter jobs.
 
@@ -74,6 +75,24 @@ runs:
           ${{ inputs.conformance-directory }}/adapters/java/*.gradle
           ${{ inputs.conformance-directory }}/adapters/java/gradle.lockfile
           ${{ inputs.conformance-directory }}/adapters/java/gradle/wrapper/gradle-wrapper.properties
+
+    # The secure runner's Aegis proxy re-signs TLS with its own CA. Node, curl
+    # and the other toolchains read /etc/aegis/bundle.pem; the JDK only trusts
+    # its own cacerts, so Gradle cannot reach Maven Central without this.
+    - name: Trust the runner TLS proxy CA in Java
+      if: inputs.adapter == 'java' || inputs.adapter == 'all'
+      shell: bash
+      run: |
+        bundle=/etc/aegis/bundle.pem
+        if [[ ! -f "$bundle" ]]; then
+          exit 0
+        fi
+        certs="$(mktemp -d)"
+        awk -v dir="$certs" '/BEGIN CERTIFICATE/ { n++ } n { print > (dir "/cert-" n ".pem") }' "$bundle"
+        for cert in "$certs"/cert-*.pem; do
+          "$JAVA_HOME/bin/keytool" -importcert -noprompt -cacerts -storepass changeit \
+            -alias "aegis-$(basename "$cert" .pem)" -file "$cert" > /dev/null
+        done
 
     - name: Setup Ruby
       if: inputs.adapter == 'ruby' || inputs.adapter == 'all'
