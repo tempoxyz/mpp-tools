@@ -647,6 +647,10 @@ class CommentTests(unittest.TestCase):
             )
             assert queued.reply is not None
             self.assertIn("Queued fix for `go`", queued.reply.body)
+            assert queued.issue_update is not None
+            self.assertIn("| `go` | pr | Queued |", queued.issue_update.body)
+            self.assertNotIn("not needed right now", queued.issue_update.body)
+            self.assertNotIn("not needed right now", queued.propagations[0].plan)
             changed, _, updates = record_propagations(
                 ledger,
                 (
@@ -704,6 +708,55 @@ class CommentTests(unittest.TestCase):
                 tuple(decision.decision for decision in entry.decisions),
                 ("skip", "propagate"),
             )
+
+    def test_bare_fix_keeps_an_earlier_skip(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeGitHub()
+            ledger = DecisionLedger(directory)
+            handle_comment(
+                client,
+                manifest(),
+                ledger,
+                self.event('/ag skip go reason="not needed right now"'),
+            )
+
+            queued = handle_comment(
+                client,
+                manifest(),
+                ledger,
+                self.event("/ag fix", comment_id=56),
+            )
+
+            self.assertEqual(
+                tuple(request.target for request in queued.propagations), ("rust",)
+            )
+            assert queued.reply is not None
+            self.assertIn("`go` was skipped", queued.reply.body)
+
+    def test_replayed_fix_after_skipped_retry_is_not_queued_again(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeGitHub()
+            ledger = DecisionLedger(directory)
+            first = handle_comment(client, manifest(), ledger, self.event("/ag fix go"))
+            record_propagations(
+                ledger,
+                (PropagationSkip(request=first.propagations[0], reason="no relay"),),
+            )
+            retried = handle_comment(
+                client, manifest(), ledger, self.event("/ag fix go", comment_id=56)
+            )
+            record_propagations(
+                ledger,
+                (PropagationSkip(request=retried.propagations[0], reason="no relay"),),
+            )
+
+            replayed = handle_comment(
+                client, manifest(), ledger, self.event("/ag fix go", comment_id=56)
+            )
+
+            self.assertEqual(replayed.propagations, ())
+            assert replayed.reply is not None
+            self.assertIn("Fix for `go` is already recorded.", replayed.reply.body)
 
     def test_duplicate_propagation_commands_queue_target_once(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

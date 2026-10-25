@@ -244,6 +244,11 @@ def handle_comment(
                 if decision.pr is not None
             }
             used_keys = {decision.idempotency_key for decision in entry.decisions}
+            skipped_targets = {
+                decision.target
+                for decision in entry.decisions
+                if decision.decision is DecisionKind.SKIP
+            }
             for target in targets:
                 if target in scheduled_targets:
                     replies.append(f"Fix for `{target}` is already queued.")
@@ -286,6 +291,13 @@ def handle_comment(
                         f"Queued revision of `{target}` using PR feedback and CI failures."
                     )
                     continue
+                if command.all_targets and target in skipped_targets:
+                    # Only a target named explicitly overrides an earlier skip;
+                    # a bare `/ag fix` keeps treating the skip as decided.
+                    replies.append(
+                        f"`{target}` was skipped; name it to override the skip."
+                    )
+                    continue
                 requested = _requests_for_targets(
                     client,
                     change,
@@ -299,19 +311,18 @@ def handle_comment(
                     issue_body,
                     propagated,
                 )
+                # A skip recorded by a propagation run reuses the default key;
+                # overriding it needs a fresh one scoped to this comment line.
+                fix_key = f"fix:{change.source_id}:{target}:{comment_id}:{command.line}"
+                if fix_key in used_keys:
+                    replies.append(f"Fix for `{target}` is already recorded.")
+                    continue
                 requested = tuple(
                     request.model_copy(
                         update={
                             "instruction": command.instruction,
-                            # A skip recorded by a propagation run reuses the
-                            # default key; overriding it needs a fresh one.
                             **(
-                                {
-                                    "idempotency_key": (
-                                        f"fix:{change.source_id}:{target}:"
-                                        f"{comment_id}:{command.line}"
-                                    )
-                                }
+                                {"idempotency_key": fix_key}
                                 if request.idempotency_key in used_keys
                                 else {}
                             ),
@@ -375,7 +386,19 @@ def handle_comment(
         events = client.label_events(change.repo, change.number)
         labels = resolve_labels(events, change.merged_at, manifest)
         entry = ledger.read(change.repo, change.number)
-        decisions = () if entry is None else entry.decisions
+        # A target queued by this comment supersedes its earlier skip.
+        decisions = (
+            ()
+            if entry is None
+            else tuple(
+                decision
+                for decision in entry.decisions
+                if not (
+                    decision.target in queued_targets
+                    and decision.decision is DecisionKind.SKIP
+                )
+            )
+        )
         updated_plan = build_tracking_issue(
             change,
             labels,
