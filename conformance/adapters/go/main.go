@@ -228,14 +228,24 @@ func handleFormatReceipt(input string) {
 	}
 
 	receipt := &mpp.Receipt{
-		Status:     stringField(data, "status"),
-		Timestamp:  timestamp.UTC(),
-		Reference:  stringField(data, "reference"),
-		Method:     stringField(data, "method"),
-		ExternalID: stringField(data, "externalId"),
+		Status:         stringField(data, "status"),
+		Timestamp:      timestamp.UTC(),
+		Reference:      stringField(data, "reference"),
+		Method:         stringField(data, "method"),
+		ExternalID:     stringField(data, "externalId"),
+		SubscriptionID: stringField(data, "subscriptionId"),
 	}
 	if extra, ok := data["extra"].(map[string]any); ok {
 		receipt.Extra = extra
+	}
+	for key, value := range data {
+		if _, reserved := receiptBaseFields[key]; reserved {
+			continue
+		}
+		if receipt.Extensions == nil {
+			receipt.Extensions = make(map[string]any)
+		}
+		receipt.Extensions[key] = value
 	}
 
 	formatted, err := formatConformanceReceipt(receipt)
@@ -598,10 +608,36 @@ func receiptToMap(receipt *mpp.Receipt) map[string]any {
 	if receipt.ExternalID != "" {
 		result["externalId"] = receipt.ExternalID
 	}
+	if receipt.SubscriptionID != "" {
+		result["subscriptionId"] = receipt.SubscriptionID
+	}
 	if len(receipt.Extra) > 0 {
 		result["extra"] = receipt.Extra
 	}
+	addReceiptExtensions(result, receipt.Extensions)
 	return result
+}
+
+// receiptBaseFields are the top-level receipt keys with named mpp.Receipt
+// fields; any other key is a method-defined extension (mpp.Receipt.Extensions).
+var receiptBaseFields = map[string]struct{}{
+	"status":         {},
+	"timestamp":      {},
+	"reference":      {},
+	"method":         {},
+	"externalId":     {},
+	"subscriptionId": {},
+	"extra":          {},
+}
+
+// addReceiptExtensions writes method-defined fields at the top level, as on
+// the wire. Base fields always win.
+func addReceiptExtensions(target map[string]any, extensions map[string]any) {
+	for key, value := range extensions {
+		if _, reserved := receiptBaseFields[key]; !reserved {
+			target[key] = value
+		}
+	}
 }
 
 // parseConformanceReceipt is stricter than mpp.ParsePaymentReceipt: it requires
@@ -639,12 +675,20 @@ func parseConformanceReceipt(header string) (*mpp.Receipt, error) {
 		return nil, fmt.Errorf("mpp: receipt missing reference")
 	}
 
+	// The SDK parser keeps subscriptionId and method-defined top-level fields.
+	parsed, err := mpp.ParsePaymentReceipt(header)
+	if err != nil {
+		return nil, err
+	}
+
 	receipt := &mpp.Receipt{
-		Status:     status,
-		Method:     method,
-		Timestamp:  timestamp.UTC(),
-		Reference:  reference,
-		ExternalID: stringField(decoded, "externalId"),
+		Status:         status,
+		Method:         method,
+		Timestamp:      timestamp.UTC(),
+		Reference:      reference,
+		ExternalID:     stringField(decoded, "externalId"),
+		SubscriptionID: parsed.SubscriptionID,
+		Extensions:     parsed.Extensions,
 	}
 	if extra, ok := decoded["extra"].(map[string]any); ok {
 		receipt.Extra = extra
@@ -700,9 +744,13 @@ func formatConformanceReceipt(receipt *mpp.Receipt) (string, error) {
 	if receipt.ExternalID != "" {
 		payload["externalId"] = receipt.ExternalID
 	}
+	if receipt.SubscriptionID != "" {
+		payload["subscriptionId"] = receipt.SubscriptionID
+	}
 	if len(receipt.Extra) > 0 {
 		payload["extra"] = receipt.Extra
 	}
+	addReceiptExtensions(payload, receipt.Extensions)
 
 	encoded, err := json.Marshal(payload)
 	if err != nil {

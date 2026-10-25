@@ -25,6 +25,26 @@
       }
     },
     {
+      "name": "success_receipt_extension_fields",
+      "description": "Method-defined top-level receipt fields (subscriptionId, originTxHash, fundingCurrency) survive parse, format and roundtrip unchanged",
+      "tags": ["happy-path", "extension-fields"],
+      "object": {
+        "fundingCurrency": "0x20c0000000000000000000006a37DA5C996874BE",
+        "method": "tempo",
+        "originTxHash": "0x9bcff372aee89b648c922b850573b22387c31d693079f5e37cd255814e2d615a",
+        "reference": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
+        "status": "success",
+        "subscriptionId": "sub_123",
+        "timestamp": "2026-01-29T12:00:30Z"
+      },
+      "wire": "eyJmdW5kaW5nQ3VycmVuY3kiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDZhMzdEQTVDOTk2ODc0QkUiLCJtZXRob2QiOiJ0ZW1wbyIsIm9yaWdpblR4SGFzaCI6IjB4OWJjZmYzNzJhZWU4OWI2NDhjOTIyYjg1MDU3M2IyMjM4N2MzMWQ2OTMwNzlmNWUzN2NkMjU1ODE0ZTJkNjE1YSIsInJlZmVyZW5jZSI6IjB4YWJjZGVmMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3ODkwYWJjZGVmMTIzNDU2Nzg5MGFiIiwic3RhdHVzIjoic3VjY2VzcyIsInN1YnNjcmlwdGlvbklkIjoic3ViXzEyMyIsInRpbWVzdGFtcCI6IjIwMjYtMDEtMjlUMTI6MDA6MzBaIn0",
+      "tests": {
+        "parse": true,
+        "format": true,
+        "roundtrip": true
+      }
+    },
+    {
       "name": "error_invalid_base64url",
       "description": "Rejects receipt with invalid base64url encoding",
       "tags": ["error", "invalid-encoding"],

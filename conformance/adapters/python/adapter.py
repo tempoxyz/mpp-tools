@@ -154,6 +154,19 @@ def credential_to_dict(credential: Credential) -> dict:
     return result
 
 
+# Top-level receipt keys with named Receipt fields; any other key is a
+# method-defined extension the SDK keeps in Receipt.extensions.
+RECEIPT_BASE_FIELDS = {
+    "status",
+    "timestamp",
+    "reference",
+    "method",
+    "externalId",
+    "subscriptionId",
+    "extra",
+}
+
+
 def receipt_to_dict(receipt: Receipt) -> dict:
     """Convert a Receipt to a JSON-serializable dict."""
     result = {
@@ -165,8 +178,12 @@ def receipt_to_dict(receipt: Receipt) -> dict:
         result["method"] = receipt.method
     if receipt.external_id is not None:
         result["externalId"] = receipt.external_id
+    if receipt.subscription_id is not None:
+        result["subscriptionId"] = receipt.subscription_id
     if receipt.extra is not None:
         result["extra"] = receipt.extra
+    for key, value in (receipt.extensions or {}).items():
+        result.setdefault(key, value)
     return result
 
 
@@ -432,7 +449,14 @@ def main():
                 reference=data["reference"],
                 method=data.get("method", ""),
                 external_id=data.get("externalId"),
+                subscription_id=data.get("subscriptionId"),
                 extra=data.get("extra"),
+                extensions={
+                    key: value
+                    for key, value in data.items()
+                    if key not in RECEIPT_BASE_FIELDS
+                }
+                or None,
             )
             result = format_payment_receipt(receipt)
             print(json.dumps(success(result)))
