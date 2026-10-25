@@ -78,21 +78,25 @@ def generate_conformance_challenge_id(*, secret_key: str, realm: str, method: st
     return base64.urlsafe_b64encode(signature).decode("ascii").rstrip("=")
 
 
-def tempo_proof_typed_data(*, chain_id: int, challenge_id: str, realm: str):
+def tempo_proof_typed_data(
+    *, account: str, chain_id: int, challenge_id: str, realm: str
+):
     return {
         "domain": {
             "name": "MPP",
-            "version": "2",
+            "version": "3",
             "chainId": chain_id,
         },
         "types": {
             "Proof": [
+                {"name": "account", "type": "address"},
                 {"name": "challengeId", "type": "string"},
                 {"name": "realm", "type": "string"},
             ],
         },
         "primaryType": "Proof",
         "message": {
+            "account": account,
             "challengeId": challenge_id,
             "realm": realm,
         },
@@ -462,6 +466,7 @@ def main():
         elif command == "tempo-proof-typed-data":
             params = json.loads(input_data)
             result = tempo_proof_typed_data(
+                account=params["account"],
                 chain_id=params["chainId"],
                 challenge_id=params["challengeId"],
                 realm=params["realm"],

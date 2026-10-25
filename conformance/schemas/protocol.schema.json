@@ -178,9 +178,10 @@
     },
     "TempoProofInput": {
       "type": "object",
-      "required": ["chainId", "challengeId", "realm"],
+      "required": ["account", "chainId", "challengeId", "realm"],
       "additionalProperties": false,
       "properties": {
+        "account": { "$ref": "#/$defs/Address" },
         "chainId": { "type": "integer", "minimum": 0 },
         "challengeId": { "type": "string", "minLength": 1 },
         "realm": { "type": "string" }
@@ -205,9 +206,10 @@
         "primaryType": { "type": "string" },
         "message": {
           "type": "object",
-          "required": ["challengeId", "realm"],
+          "required": ["account", "challengeId", "realm"],
           "additionalProperties": false,
           "properties": {
+            "account": { "$ref": "#/$defs/Address" },
             "challengeId": { "type": "string", "minLength": 1 },
             "realm": { "type": "string" }
           }
@@ -327,6 +329,10 @@
           }
         }
       ]
+    },
+    "Address": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{40}$"
     },
     "HexValue": {
       "type": "string",

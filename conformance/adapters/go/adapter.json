@@ -25,6 +25,7 @@
     "base64url.decode",
     "challenge.id",
     "http.payment_request",
-    "server.verify"
+    "server.verify",
+    "tempo.proof.typed_data"
   ]
 }

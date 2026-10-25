@@ -363,22 +363,25 @@ fn handle_tempo_proof_typed_data(input: &str) {
     match serde_json::from_str::<serde_json::Value>(input) {
         Ok(params) => {
             let chain_id = params.get("chainId").and_then(|v| v.as_u64()).unwrap_or(0);
+            let account = str_field(&params, "account");
             let challenge_id = str_field(&params, "challengeId");
             let realm = str_field(&params, "realm");
             print_success(json!({
                 "domain": {
                     "name": "MPP",
-                    "version": "2",
+                    "version": "3",
                     "chainId": chain_id,
                 },
                 "types": {
                     "Proof": [
+                        { "name": "account", "type": "address" },
                         { "name": "challengeId", "type": "string" },
                         { "name": "realm", "type": "string" },
                     ],
                 },
                 "primaryType": "Proof",
                 "message": {
+                    "account": account,
                     "challengeId": challenge_id,
                     "realm": realm,
                 },
