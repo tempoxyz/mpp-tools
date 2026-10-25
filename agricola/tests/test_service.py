@@ -624,6 +624,87 @@ class CommentTests(unittest.TestCase):
                 ("propagate", "skip"),
             )
 
+    def test_fix_overrides_an_earlier_skip(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeGitHub()
+            ledger = DecisionLedger(directory)
+            handle_comment(
+                client,
+                manifest(),
+                ledger,
+                self.event('/ag skip go reason="not needed right now"'),
+            )
+
+            queued = handle_comment(
+                client,
+                manifest(),
+                ledger,
+                self.event("/ag fix go", comment_id=56),
+            )
+
+            self.assertEqual(
+                tuple(request.target for request in queued.propagations), ("go",)
+            )
+            assert queued.reply is not None
+            self.assertIn("Queued fix for `go`", queued.reply.body)
+            changed, _, updates = record_propagations(
+                ledger,
+                (
+                    PropagationResult(
+                        request=queued.propagations[0],
+                        pr="tempoxyz/mpp-go#88",
+                        url="https://github.com/tempoxyz/mpp-go/pull/88",
+                    ),
+                ),
+            )
+            self.assertTrue(changed)
+            self.assertIn("| `go` | pr | Recorded |", updates[0].body)
+
+    def test_fix_overrides_a_skipped_propagation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeGitHub()
+            ledger = DecisionLedger(directory)
+            first = handle_comment(client, manifest(), ledger, self.event("/ag fix go"))
+            record_propagations(
+                ledger,
+                (
+                    PropagationSkip(
+                        request=first.propagations[0],
+                        reason="relay API is not implemented",
+                    ),
+                ),
+            )
+
+            retried = handle_comment(
+                client,
+                manifest(),
+                ledger,
+                self.event("/ag fix go", comment_id=56),
+            )
+
+            self.assertEqual(len(retried.propagations), 1)
+            request = retried.propagations[0]
+            self.assertNotEqual(
+                request.idempotency_key, first.propagations[0].idempotency_key
+            )
+            changed, _, _ = record_propagations(
+                ledger,
+                (
+                    PropagationResult(
+                        request=request,
+                        pr="tempoxyz/mpp-go#88",
+                        url="https://github.com/tempoxyz/mpp-go/pull/88",
+                    ),
+                ),
+            )
+            self.assertTrue(changed)
+            entry = ledger.read("wevm/mppx", 412)
+            assert entry is not None
+            self.assertEqual(
+                tuple(decision.decision for decision in entry.decisions),
+                ("skip", "propagate"),
+            )
+
     def test_duplicate_propagation_commands_queue_target_once(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             result = handle_comment(

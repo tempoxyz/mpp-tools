@@ -232,12 +232,18 @@ def handle_comment(
             targets = manifest.pr_targets() if command.all_targets else command.targets
             entry = ledger.read(change.repo, change.number)
             assert entry is not None
-            recorded_targets = {decision.target for decision in entry.decisions}
+            propagated = tuple(
+                decision
+                for decision in entry.decisions
+                if decision.decision is DecisionKind.PROPAGATE
+            )
+            recorded_targets = {decision.target for decision in propagated}
             recorded_prs = {
                 decision.target: decision.pr
-                for decision in entry.decisions
+                for decision in propagated
                 if decision.pr is not None
             }
+            used_keys = {decision.idempotency_key for decision in entry.decisions}
             for target in targets:
                 if target in scheduled_targets:
                     replies.append(f"Fix for `{target}` is already queued.")
@@ -291,11 +297,26 @@ def handle_comment(
                         "html_url": str(issue.get("html_url") or "https://github.com"),
                     },
                     issue_body,
-                    entry.decisions,
+                    propagated,
                 )
                 requested = tuple(
                     request.model_copy(
-                        update={"instruction": command.instruction}, deep=True
+                        update={
+                            "instruction": command.instruction,
+                            # A skip recorded by a propagation run reuses the
+                            # default key; overriding it needs a fresh one.
+                            **(
+                                {
+                                    "idempotency_key": (
+                                        f"fix:{change.source_id}:{target}:"
+                                        f"{comment_id}:{command.line}"
+                                    )
+                                }
+                                if request.idempotency_key in used_keys
+                                else {}
+                            ),
+                        },
+                        deep=True,
                     )
                     for request in requested
                 )
