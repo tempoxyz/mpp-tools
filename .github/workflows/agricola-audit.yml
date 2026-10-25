@@ -182,7 +182,6 @@ jobs:
         uses: ./.github/actions/setup-conformance # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
         with:
           adapter: ${{ matrix.target }}
-          ruby-bundler-cache: "false"
 
       - name: Install audit and conformance runner
         uses: ./.github/actions/setup-agricola # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
@@ -192,11 +191,6 @@ jobs:
       - name: Install conformance runner
         run: |
           uv sync --locked --project conformance --python 3.12
-
-      - name: Build Java SDK checkout
-        if: matrix.target == 'java'
-        working-directory: .audit/sdk
-        run: ./gradlew --no-daemon jar
 
       - name: Point adapter at SDK checkout
         run: |
