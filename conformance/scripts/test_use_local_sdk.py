@@ -13,13 +13,13 @@ from use_local_sdk import configure_go, configure_rust, go_sdk_version
 
 
 class RustSdkConfigurationTest(unittest.TestCase):
-    def test_preserves_client_feature_for_local_checkout(self) -> None:
+    def test_preserves_mpp_features_for_local_checkout(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             manifest = root / "conformance" / "adapters" / "rust" / "Cargo.toml"
             manifest.parent.mkdir(parents=True)
             manifest.write_text(
-                '[dependencies]\nmpp = { git = "https://github.com/tempoxyz/mpp-rs", rev = "abc", features = ["client"] }\n',
+                '[dependencies]\nmpp = { git = "https://github.com/tempoxyz/mpp-rs", rev = "abc", features = ["client", "server", "tempo"] }\n',
                 encoding="utf-8",
             )
             sdk_path = root / "sdk"
@@ -28,7 +28,7 @@ class RustSdkConfigurationTest(unittest.TestCase):
             configure_rust(root / "conformance", sdk_path)
 
             self.assertIn(
-                f'mpp = {{ path = "{sdk_path}", features = ["client"] }}',
+                f'mpp = {{ path = "{sdk_path}", features = ["client", "server", "tempo"] }}',
                 manifest.read_text(encoding="utf-8"),
             )
 
