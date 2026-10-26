@@ -203,7 +203,7 @@ func handleFormatWWWAuthenticate(input string) {
 		return
 	}
 
-	header, err := challenge.ToAuthenticateStrict(challenge.Realm)
+	header, err := mpp.FormatChallenge(&challenge)
 	if err != nil {
 		printJSON(commandResponse{Success: false, Error: err.Error(), ErrorType: "format_error"})
 		return
@@ -218,7 +218,12 @@ func handleFormatAuthorization(input string) {
 		return
 	}
 
-	printJSON(commandResponse{Success: true, Result: credential.ToAuthorization()})
+	header, err := mpp.FormatCredential(&credential)
+	if err != nil {
+		printJSON(commandResponse{Success: false, Error: err.Error(), ErrorType: "format_error"})
+		return
+	}
+	printJSON(commandResponse{Success: true, Result: header})
 }
 
 func handleFormatReceipt(input string) {
@@ -245,9 +250,6 @@ func handleFormatReceipt(input string) {
 		ExternalID:     stringField(data, "externalId"),
 		SubscriptionID: stringField(data, "subscriptionId"),
 	}
-	if extra, ok := data["extra"].(map[string]any); ok {
-		receipt.Extra = extra
-	}
 	for key, value := range data {
 		if _, reserved := receiptBaseFields[key]; reserved {
 			continue
@@ -256,6 +258,9 @@ func handleFormatReceipt(input string) {
 			receipt.Extensions = make(map[string]any)
 		}
 		receipt.Extensions[key] = value
+	}
+	if extra, ok := data["extra"].(map[string]any); ok {
+		setReceiptExtra(receipt, extra)
 	}
 
 	formatted, err := formatConformanceReceipt(receipt)
@@ -540,8 +545,14 @@ func handleServerVerify(raw json.RawMessage) {
 		return
 	}
 
+	authorization, err := mpp.FormatCredential(credential)
+	if err != nil {
+		printJSON(adapterResponse{OK: false, Error: &adapterError{Type: "verification_error", Message: err.Error()}})
+		return
+	}
+
 	result, err := server.VerifyOrChallenge(context.Background(), server.VerifyParams{
-		Authorization: credential.ToAuthorization(),
+		Authorization: authorization,
 		Intent: conformanceIntent{
 			name:         input.Intent,
 			method:       input.Method,
@@ -657,8 +668,8 @@ func receiptToMap(receipt *mpp.Receipt) map[string]any {
 	if receipt.SubscriptionID != "" {
 		result["subscriptionId"] = receipt.SubscriptionID
 	}
-	if len(receipt.Extra) > 0 {
-		result["extra"] = receipt.Extra
+	if extra := receiptExtra(receipt); len(extra) > 0 {
+		result["extra"] = extra
 	}
 	addReceiptExtensions(result, receipt.Extensions)
 	return result
@@ -676,6 +687,21 @@ var receiptBaseFields = map[string]struct{}{
 	"extra":          {},
 }
 
+// receiptExtra returns the nested "extra" object the adapter keeps in
+// Extensions["extra"]. The SDK's deprecated Receipt.Extra field is not used;
+// "extra" stays reserved, so addReceiptExtensions never writes it.
+func receiptExtra(receipt *mpp.Receipt) map[string]any {
+	extra, _ := receipt.Extensions["extra"].(map[string]any)
+	return extra
+}
+
+func setReceiptExtra(receipt *mpp.Receipt, extra map[string]any) {
+	if receipt.Extensions == nil {
+		receipt.Extensions = make(map[string]any)
+	}
+	receipt.Extensions["extra"] = extra
+}
+
 // addReceiptExtensions writes method-defined fields at the top level, as on
 // the wire. Base fields always win.
 func addReceiptExtensions(target map[string]any, extensions map[string]any) {
@@ -686,7 +712,7 @@ func addReceiptExtensions(target map[string]any, extensions map[string]any) {
 	}
 }
 
-// parseConformanceReceipt is stricter than mpp.ParsePaymentReceipt: it requires
+// parseConformanceReceipt is stricter than mpp.ParseReceipt: it requires
 // method and timestamp fields that the library treats as optional.
 func parseConformanceReceipt(header string) (*mpp.Receipt, error) {
 	decoded, err := mpp.B64Decode(strings.TrimSpace(header))
@@ -722,7 +748,7 @@ func parseConformanceReceipt(header string) (*mpp.Receipt, error) {
 	}
 
 	// The SDK parser keeps subscriptionId and method-defined top-level fields.
-	parsed, err := mpp.ParsePaymentReceipt(header)
+	parsed, err := mpp.ParseReceipt(header)
 	if err != nil {
 		return nil, err
 	}
@@ -737,14 +763,14 @@ func parseConformanceReceipt(header string) (*mpp.Receipt, error) {
 		Extensions:     parsed.Extensions,
 	}
 	if extra, ok := decoded["extra"].(map[string]any); ok {
-		receipt.Extra = extra
+		setReceiptExtra(receipt, extra)
 	}
 
 	return receipt, nil
 }
 
 // generateConformanceChallengeID computes the challenge ID with the SDK's
-// mpp.GenerateChallengeID. opaque arrives as its wire form: base64url of a
+// mpp.GenerateChallengeIDWithError. opaque arrives as its wire form: base64url of a
 // JSON string map.
 func generateConformanceChallengeID(secretKey, realm, method, intent string, request map[string]any, expires, digest, header, opaque string) (string, error) {
 	if len([]byte(secretKey)) < minimumSecretKeyBytes {
@@ -767,7 +793,7 @@ func generateConformanceChallengeID(secretKey, realm, method, intent string, req
 		}
 	}
 
-	return mpp.GenerateChallengeID(mpp.GenerateChallengeIDInput{
+	return mpp.GenerateChallengeIDWithError(mpp.GenerateChallengeIDInput{
 		SecretKey: secretKey,
 		Realm:     realm,
 		Method:    method,
@@ -777,7 +803,7 @@ func generateConformanceChallengeID(secretKey, realm, method, intent string, req
 		Digest:    digest,
 		Opaque:    opaqueMap,
 		Header:    header,
-	}), nil
+	})
 }
 
 func formatConformanceReceipt(receipt *mpp.Receipt) (string, error) {
@@ -793,8 +819,8 @@ func formatConformanceReceipt(receipt *mpp.Receipt) (string, error) {
 	if receipt.SubscriptionID != "" {
 		payload["subscriptionId"] = receipt.SubscriptionID
 	}
-	if len(receipt.Extra) > 0 {
-		payload["extra"] = receipt.Extra
+	if extra := receiptExtra(receipt); len(extra) > 0 {
+		payload["extra"] = extra
 	}
 	addReceiptExtensions(payload, receipt.Extensions)
 

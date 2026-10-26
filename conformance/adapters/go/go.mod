@@ -4,7 +4,7 @@ go 1.26.10
 
 require (
 	github.com/ethereum/go-ethereum v1.17.5
-	github.com/tempoxyz/mpp-go v0.2.1-0.20260921155548-d3948998a76e
+	github.com/tempoxyz/mpp-go v0.5.2-0.20261026193420-2dcf39ae8f57
 )
 
 require (
@@ -22,6 +22,6 @@ require (
 	github.com/supranational/blst v0.3.16 // indirect
 	github.com/tempoxyz/tempo-go v0.5.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
-	golang.org/x/sync v0.21.0 // indirect
-	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 )

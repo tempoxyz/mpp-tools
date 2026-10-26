@@ -21,7 +21,12 @@ func TestRunHTTPPaymentRequest(t *testing.T) {
 		body, _ := io.ReadAll(r.Body)
 		bodies = append(bodies, string(body))
 		if r.Header.Get("Authorization") == "" {
-			w.Header().Set("WWW-Authenticate", challenge.ToAuthenticate(challenge.Realm))
+			header, err := mpp.FormatChallenge(challenge)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("WWW-Authenticate", header)
 			w.WriteHeader(http.StatusPaymentRequired)
 			return
 		}
@@ -41,7 +46,10 @@ func TestRunHTTPPaymentRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	challenge = mpp.NewChallenge("secret", serverURL.Host, "tempo", "charge", map[string]any{"amount": "100"})
+	challenge, err = mpp.NewChallengeWithError("secret", serverURL.Host, "tempo", "charge", map[string]any{"amount": "100"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	body := `{"prompt":"hello"}`
 	response := runHTTPPaymentRequest(marshalRequest(t, httpPaymentRequest{
 		URL:     server.URL,
