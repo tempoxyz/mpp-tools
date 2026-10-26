@@ -9,7 +9,8 @@ use mpp::MppError;
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::{json, Value};
 use sha2::Sha256;
-use std::io::{self, Read, Write};
+use std::io::{self, BufRead, BufReader, Read, Write};
+use std::net::TcpListener;
 use std::process::{Command, Stdio};
 
 fn main() {
@@ -433,6 +434,14 @@ fn handle_adapter_request() {
         return;
     }
 
+    if op == "tempo.receipt.verify" {
+        match run_tempo_receipt_verify(&input_value) {
+            Ok(value) => print_adapter_success(value),
+            Err((error_type, message)) => print_adapter_error(&message, error_type),
+        }
+        return;
+    }
+
     let Some(command) = legacy_command_for_operation(op) else {
         print_adapter_error(
             &format!("Unknown operation: {}", op),
@@ -543,6 +552,162 @@ fn run_http_payment_request(input: &Value) -> Result<Value, (&'static str, Strin
         let body = response.text().await.map_err(|e| http_err(e.to_string()))?;
         Ok(json!({ "status": status, "headers": headers, "body": body }))
     })
+}
+
+/// Serve JSON-RPC from a local HTTP server: `eth_chainId` is Tempo mainnet
+/// (4217) and `eth_getTransactionReceipt` returns `receipt`.
+fn serve_fake_tempo_rpc(receipt: Value) -> io::Result<String> {
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let url = format!("http://{}", listener.local_addr()?);
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(stream) = stream else { continue };
+            let _ = answer_fake_rpc(stream, &receipt);
+        }
+    });
+    Ok(url)
+}
+
+fn answer_fake_rpc(stream: std::net::TcpStream, receipt: &Value) -> io::Result<()> {
+    let mut reader = BufReader::new(stream.try_clone()?);
+    let mut content_length = 0;
+    loop {
+        let mut line = String::new();
+        if reader.read_line(&mut line)? == 0 || line == "\r\n" {
+            break;
+        }
+        if let Some((name, value)) = line.split_once(':') {
+            if name.eq_ignore_ascii_case("content-length") {
+                content_length = value.trim().parse().unwrap_or(0);
+            }
+        }
+    }
+    let mut body = vec![0; content_length];
+    reader.read_exact(&mut body)?;
+    let call: Value = serde_json::from_slice(&body).unwrap_or(json!({}));
+    let id = call.get("id").cloned().unwrap_or(Value::Null);
+    let response = match call.get("method").and_then(Value::as_str) {
+        Some("eth_chainId") => json!({ "jsonrpc": "2.0", "id": id, "result": "0x1079" }),
+        Some("eth_getTransactionReceipt") => {
+            json!({ "jsonrpc": "2.0", "id": id, "result": receipt })
+        }
+        other => json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "error": { "code": -32601, "message": format!("unexpected method {}", other.unwrap_or("")) },
+        }),
+    };
+    let body = serde_json::to_vec(&response)?;
+    let mut stream = stream;
+    write!(
+        stream,
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
+    )?;
+    stream.write_all(&body)?;
+    stream.flush()
+}
+
+/// The vectors' receipt fixtures carry only `transactionHash`, `status` and
+/// `logs`; a Tempo RPC receipt also has block, gas and fee-payer fields that
+/// alloy requires. Add placeholder values for any that are missing, with the
+/// payer (the did:pkh source address) as `from` and `feePayer`, and the
+/// per-log block and transaction fields to each log.
+fn rpc_receipt_envelope(receipt: Value, source: Option<&str>) -> Value {
+    const ZERO_ADDRESS: &str = "0x0000000000000000000000000000000000000000";
+    let payer = source
+        .and_then(|source| source.rsplit(':').next())
+        .filter(|address| address.starts_with("0x") && address.len() == 42)
+        .unwrap_or(ZERO_ADDRESS);
+    let mut envelope = json!({
+        "type": "0x76",
+        "blockHash": format!("0x{}", "0".repeat(64)),
+        "blockNumber": "0x1",
+        "transactionIndex": "0x0",
+        "from": payer,
+        "to": null,
+        "contractAddress": null,
+        "gasUsed": "0x0",
+        "cumulativeGasUsed": "0x0",
+        "effectiveGasPrice": "0x0",
+        "logsBloom": format!("0x{}", "0".repeat(512)),
+        "feePayer": payer,
+    });
+    if let (Value::Object(defaults), Value::Object(fixture)) = (&mut envelope, receipt) {
+        defaults.extend(fixture);
+    }
+    let transaction_hash = envelope
+        .get("transactionHash")
+        .cloned()
+        .unwrap_or(Value::Null);
+    if let Some(logs) = envelope.get_mut("logs").and_then(Value::as_array_mut) {
+        for (index, log) in logs.iter_mut().enumerate() {
+            let Value::Object(fixture) = log.take() else {
+                continue;
+            };
+            let mut rpc_log = json!({
+                "blockHash": format!("0x{}", "0".repeat(64)),
+                "blockNumber": "0x1",
+                "transactionHash": transaction_hash,
+                "transactionIndex": "0x0",
+                "logIndex": format!("{:#x}", index),
+                "removed": false,
+            });
+            if let Value::Object(defaults) = &mut rpc_log {
+                defaults.extend(fixture);
+            }
+            *log = rpc_log;
+        }
+    }
+    envelope
+}
+
+/// Verify a hash credential with the SDK's server-side Tempo charge method
+/// against a receipt fixture served by a fake JSON-RPC.
+fn run_tempo_receipt_verify(input: &Value) -> Result<Value, (&'static str, String)> {
+    use mpp::protocol::traits::ChargeMethod as _;
+
+    let unknown = |message: String| ("unknown_error", message);
+    let credential_value = input.get("credential").cloned().unwrap_or(json!({}));
+    let challenge_value = credential_value
+        .get("challenge")
+        .cloned()
+        .unwrap_or(json!({}));
+    let challenge: ChallengeEcho = challenge_from_json(&challenge_value).map_err(unknown)?;
+    let request: mpp::ChargeRequest =
+        serde_json::from_value(challenge_value.get("request").cloned().unwrap_or(json!({})))
+            .map_err(|e| unknown(e.to_string()))?;
+    let credential = PaymentCredential {
+        challenge,
+        payload: credential_value
+            .get("payload")
+            .cloned()
+            .unwrap_or(json!({})),
+        source: opt_str_field(&credential_value, "source"),
+    };
+
+    let receipt = rpc_receipt_envelope(
+        input.get("receipt").cloned().unwrap_or(json!({})),
+        credential.source.as_deref(),
+    );
+    let rpc_url = serve_fake_tempo_rpc(receipt).map_err(|e| unknown(e.to_string()))?;
+    let provider = mpp::server::tempo_provider(&rpc_url).map_err(|e| unknown(e.to_string()))?;
+    let method = mpp::server::TempoChargeMethod::new(provider)
+        .with_store(std::sync::Arc::new(mpp::MemoryStore::new()));
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| unknown(e.to_string()))?;
+    let receipt = runtime
+        .block_on(method.verify(&credential, &request))
+        .map_err(|e| match e.code {
+            // A receipt the fake RPC could not deliver is an adapter fault,
+            // not a verification result.
+            Some(mpp::ErrorCode::NetworkError) => ("unknown_error", e.to_string()),
+            _ => ("verification_error", e.to_string()),
+        })?;
+    Ok(json!({ "status": receipt.status, "reference": receipt.reference }))
 }
 
 fn legacy_command_for_operation(op: &str) -> Option<&'static str> {
