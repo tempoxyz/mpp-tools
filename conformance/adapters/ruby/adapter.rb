@@ -4,6 +4,7 @@
 require "base64"
 require "json"
 require "openssl"
+require "socket"
 require "rlp"
 require "time"
 
@@ -166,7 +167,8 @@ OP_TO_COMMAND = {
   "base64url.decode" => "base64url-decode",
   "challenge.id" => "generate-challenge-id",
   "tempo.fee_payer.cosign" => "cosign-tempo-fee-payer",
-  "stripe.external_id_binding" => "verify-stripe-external-id-binding"
+  "stripe.external_id_binding" => "verify-stripe-external-id-binding",
+  "tempo.receipt.verify" => "verify-tempo-receipt"
 }.freeze
 
 def command_input_for_request(op, input)
@@ -336,6 +338,114 @@ rescue Mpp::VerificationError, Mpp::PaymentError, StandardError
   {ok: false, errorType: "verification_failed"}
 end
 
+# Serves eth_chainId and, for its own transactionHash only, the receipt
+# fixture; eth_getTransactionByHash returns null, as the fixture has no
+# transaction body. Any other call is recorded in unexpected_call so a broken
+# setup is not mistaken for a rejected credential.
+class ConformanceTempoRpcServer
+  attr_reader :unexpected_call
+
+  def initialize(receipt, chain_id)
+    @receipt = receipt
+    @chain_id = chain_id
+    @unexpected_call = nil
+    @server = TCPServer.new("127.0.0.1", 0)
+    @thread = Thread.new { serve }
+  end
+
+  def url
+    "http://127.0.0.1:#{@server.addr[1]}"
+  end
+
+  def close
+    @thread.kill
+    @server.close
+  end
+
+  private
+
+  def serve
+    loop do
+      socket = @server.accept
+      begin
+        handle(socket)
+      ensure
+        socket.close
+      end
+    end
+  end
+
+  def handle(socket)
+    content_length = 0
+    socket.gets
+    while (line = socket.gets) && line != "\r\n"
+      name, value = line.split(":", 2)
+      content_length = Integer(value.strip) if name.casecmp?("content-length")
+    end
+    raw = socket.read(content_length)
+    body = JSON.generate(answer(raw))
+    socket.write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n" \
+      "Content-Length: #{body.bytesize}\r\nConnection: close\r\n\r\n#{body}")
+  end
+
+  def answer(raw)
+    request = begin
+      JSON.parse(raw.to_s)
+    rescue JSON::ParserError
+      nil
+    end
+    unless request.is_a?(Hash)
+      @unexpected_call ||= "undecodable JSON-RPC request: #{raw}"
+      return {jsonrpc: "2.0", id: nil, error: {code: -32700, message: "parse error"}}
+    end
+
+    response = {jsonrpc: "2.0", id: request["id"]}
+    case request["method"]
+    when "eth_chainId"
+      response.merge(result: "0x#{@chain_id.to_s(16)}")
+    when "eth_getTransactionReceipt"
+      requested = Array(request["params"]).first
+      if requested.is_a?(String) && requested.casecmp?(@receipt["transactionHash"].to_s)
+        response.merge(result: @receipt)
+      else
+        response.merge(error: {code: -32000, message: "receipt not found for transaction hash"})
+      end
+    when "eth_getTransactionByHash"
+      response.merge(result: nil)
+    else
+      @unexpected_call ||= "unexpected JSON-RPC method #{request["method"]}"
+      response.merge(error: {code: -32601, message: "unexpected method #{request["method"]}"})
+    end
+  end
+end
+
+def verify_tempo_receipt(input)
+  credential_data = input.fetch("credential")
+  challenge_data = credential_data.fetch("challenge")
+  credential = Mpp::Credential.new(
+    challenge: echo_from_challenge_h(challenge_data),
+    payload: credential_data.fetch("payload"),
+    source: credential_data["source"]
+  )
+  rpc = ConformanceTempoRpcServer.new(input.fetch("receipt"), input.fetch("rpcChainId", 4217))
+  begin
+    intent = Mpp::Methods::Tempo::ChargeIntent.new(rpc_url: rpc.url)
+    receipt = intent.verify(credential, challenge_data.fetch("request", {}))
+  rescue StandardError => e
+    failure = e
+  ensure
+    rpc.close
+  end
+  # A call the fake RPC could not serve means the setup is broken, so the
+  # outcome, even a rejection, says nothing about the SDK.
+  return error("fake RPC received #{rpc.unexpected_call}", "unknown_error") if rpc.unexpected_call
+  raise failure if failure
+
+  success({status: receipt.status, reference: receipt.reference})
+rescue Mpp::VerificationError => e
+  error(e.message, "verification_error")
+end
+
 def run_adapter_request(request)
   op = request.fetch("op")
   input = request.fetch("input")
@@ -411,6 +521,8 @@ def run_command(command, input)
     cosign_tempo_fee_payer(JSON.parse(input))
   when "verify-stripe-external-id-binding"
     success(verify_stripe_external_id_binding(JSON.parse(input)))
+  when "verify-tempo-receipt"
+    verify_tempo_receipt(JSON.parse(input))
   else
     error("Unknown command: #{command}")
   end

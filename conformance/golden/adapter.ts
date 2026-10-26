@@ -25,11 +25,15 @@
  */
 
 import { createHmac } from 'node:crypto'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 
 import { Challenge, Credential, Method, Receipt, z } from 'mppx'
 import * as Client from 'mppx/client'
 import { Proof } from 'mppx/tempo'
-import { Mppx, stripe } from 'mppx/server'
+import { Mppx, Store, stripe, tempo } from 'mppx/server'
+import { createClient, http } from 'viem'
+import { tempo as tempoChain } from 'viem/chains'
 
 const minimumSecretKeyBytes = 32
 
@@ -232,6 +236,99 @@ async function verifyStripeExternalIdBinding(input: {
 		if (err instanceof Error && err.name === 'InvalidChallengeError')
 			return { ok: false, errorType: 'invalid_challenge' }
 		return { ok: false, errorType: 'verification_failed' }
+	}
+}
+
+type TempoReceiptVerifyInput = {
+	credential: {
+		challenge: {
+			id: string
+			realm: string
+			method: string
+			intent: string
+			request: Record<string, unknown>
+			expires?: string
+			digest?: string
+			opaque?: string
+		}
+		payload: Record<string, unknown>
+		source?: string
+	}
+	receipt: Record<string, unknown>
+}
+
+// Verifies a hash credential with mppx's server-side Tempo charge, reading
+// the transaction receipt from an in-process JSON-RPC server that serves the
+// vector's receipt fixture on Tempo mainnet (chain id 4217).
+async function verifyTempoReceipt(input: TempoReceiptVerifyInput): Promise<AdapterResponse> {
+	// Nodes always return each log's position in the block. mppx pairs a TIP-20
+	// Transfer with its TransferWithMemo by adjacent logIndex, so number logs
+	// the fixture leaves unnumbered in receipt order, as a node would.
+	const logs = Array.isArray(input.receipt.logs) ? (input.receipt.logs as Record<string, unknown>[]) : undefined
+	const receipt = logs
+		? {
+			...input.receipt,
+			logs: logs.map((log, index) => ({ logIndex: `0x${index.toString(16)}`, ...log })),
+		}
+		: input.receipt
+	// The fixture answers only for its own transaction hash, and has no
+	// transaction body for the optional eth_getTransactionByHash lookup. Any
+	// call the fake node cannot serve is recorded so a broken setup is not
+	// mistaken for a rejected credential.
+	const receiptHash = String(input.receipt.transactionHash ?? '').toLowerCase()
+	let unexpectedCall: string | undefined
+	const rpc = createServer((req, res) => {
+		let body = ''
+		req.on('data', (chunk) => (body += chunk))
+		req.on('end', () => {
+			let call: { id?: unknown; method?: unknown; params?: unknown }
+			try {
+				call = JSON.parse(body)
+				if (call === null || typeof call !== 'object' || Array.isArray(call)) throw new Error('not a JSON-RPC object')
+			} catch {
+				unexpectedCall ??= `undecodable JSON-RPC request: ${body}`
+				res.statusCode = 400
+				res.setHeader('Content-Type', 'application/json')
+				res.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }))
+				return
+			}
+			const response: Record<string, unknown> = { jsonrpc: '2.0', id: call.id ?? null }
+			if (call.method === 'eth_chainId') response.result = '0x1079'
+			else if (call.method === 'eth_getTransactionReceipt') {
+				const hash = Array.isArray(call.params) ? call.params[0] : undefined
+				if (typeof hash === 'string' && hash.toLowerCase() === receiptHash) response.result = receipt
+				else response.error = { code: -32000, message: 'receipt not found for transaction hash' }
+			} else if (call.method === 'eth_getTransactionByHash') response.result = null
+			else {
+				unexpectedCall ??= `unexpected JSON-RPC method ${String(call.method)}`
+				response.error = { code: -32601, message: `unexpected method ${String(call.method)}` }
+			}
+			res.setHeader('Content-Type', 'application/json')
+			res.end(JSON.stringify(response))
+		})
+	})
+	await new Promise<void>((resolve) => rpc.listen(0, '127.0.0.1', resolve))
+	try {
+		const { port } = rpc.address() as AddressInfo
+		const method = tempo.charge({
+			getClient: () =>
+				createClient({ chain: tempoChain, transport: http(`http://127.0.0.1:${port}`, { retryCount: 0 }) }),
+			store: Store.memory(),
+		})
+		const { challenge: challengeData, payload, source } = input.credential
+		const challenge = Challenge.from(challengeData)
+		const credential = Credential.from({ challenge, payload, ...(source === undefined ? {} : { source }) })
+		let result: AdapterResponse
+		try {
+			const receipt = await method.verify({ credential, request: challengeData.request } as never)
+			result = adapterSuccess({ status: receipt.status, reference: receipt.reference })
+		} catch (err) {
+			result = adapterError(err instanceof Error ? err.message : String(err), 'verification_error')
+		}
+		if (unexpectedCall) return adapterError(`fake RPC received ${unexpectedCall}`, 'unknown_error')
+		return result
+	} finally {
+		await new Promise<void>((resolve) => rpc.close(() => resolve()))
 	}
 }
 
@@ -494,6 +591,7 @@ async function runHttpPaymentRequest(input: HttpPaymentRequest): Promise<Adapter
 
 async function runAdapterRequest(request: { op: string; input: unknown }): Promise<AdapterResponse> {
 	if (request.op === 'http.payment_request') return runHttpPaymentRequest(request.input as HttpPaymentRequest)
+	if (request.op === 'tempo.receipt.verify') return verifyTempoReceipt(request.input as TempoReceiptVerifyInput)
 	const command = OP_TO_COMMAND[request.op]
 	if (!command) return adapterError(`Unknown operation: ${request.op}`, 'unsupported_operation')
 	const result = await runCommand(command, commandInputForRequest(request.op, request.input))

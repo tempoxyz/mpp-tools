@@ -44,10 +44,16 @@ def json_string(value: Path | str) -> str:
 
 def configure_rust(conformance_dir: Path, sdk_path: Path) -> None:
     manifest = conformance_dir / "adapters" / "rust" / "Cargo.toml"
+    # Keep the adapter's mpp features: tempo.receipt.verify needs the
+    # server-side Tempo verifier (server and tempo), not only client.
+    features_match = re.search(
+        r"^mpp\s*=.*features\s*=\s*(\[[^\]]*\])", manifest.read_text(encoding="utf-8"), re.MULTILINE
+    )
+    features = features_match.group(1) if features_match else '["client"]'
     replace_one(
         manifest,
         r"^mpp\s*=\s*.+$",
-        f"mpp = {{ path = {json_string(sdk_path)}, features = [\"client\"] }}",
+        f"mpp = {{ path = {json_string(sdk_path)}, features = {features} }}",
         "Rust mpp dependency",
     )
     reqwest_version = rust_sdk_reqwest_version(sdk_path)
