@@ -8,6 +8,7 @@ import hashlib
 import hmac
 import subprocess
 import asyncio
+from importlib.metadata import version as _package_version
 
 from mpp import (
     Challenge,
@@ -22,9 +23,17 @@ from mpp import (
     parse_payment_receipt,
     format_payment_receipt,
 )
-from mpp.client import Client
 
 MINIMUM_SECRET_KEY_BYTES = 32
+
+
+def _engine_api() -> bool:
+    """pympp >= 0.16 replaced Client and intent verification with the Mpp engine."""
+    major, minor = (int(part) for part in _package_version("pympp").split(".")[:2])
+    return (major, minor) >= (0, 16)
+
+
+ENGINE_API = _engine_api()
 
 
 def base64url_encode(data: str) -> str:
@@ -267,6 +276,25 @@ class ConformancePaymentMethod:
         )
 
 
+def _engine_client_method(method: "ConformancePaymentMethod"):
+    """Wrap the fixed-payload method as a pympp >= 0.16 ClientMethod."""
+    from pydantic import BaseModel, ConfigDict
+
+    from mpp.client import ClientMethod, Method
+
+    class _Open(BaseModel):
+        model_config = ConfigDict(extra="allow")
+
+    async def create_credential(params) -> str:
+        credential = await method.create_credential(params.challenge)
+        return format_authorization(credential)
+
+    return ClientMethod(
+        method=Method(name="tempo", intent="charge", request_model=_Open, payload_model=_Open),
+        create_credential=create_credential,
+    )
+
+
 async def run_http_payment_request(input_value: dict):
     mode = input_value.get("mode")
     if mode == "plain":
@@ -282,14 +310,22 @@ async def run_http_payment_request(input_value: dict):
     else:
         raise ValueError(f"Unsupported http.payment_request mode: {mode}")
 
-    async with Client(methods=methods) as client:
-        response = await client.request(
-            input_value["method"],
-            input_value["url"],
-            headers=input_value.get("headers") or {},
-            content=input_value.get("body"),
-            follow_redirects=True,
-        )
+    request = {
+        "headers": input_value.get("headers") or {},
+        "content": input_value.get("body"),
+        "follow_redirects": True,
+    }
+    if ENGINE_API:
+        from mpp.client import Mpp
+
+        engine = Mpp(methods=[_engine_client_method(method) for method in methods])
+        async with engine, engine.client() as client:
+            response = await client.request(input_value["method"], input_value["url"], **request)
+    else:
+        from mpp.client import Client
+
+        async with Client(methods=methods) as client:
+            response = await client.request(input_value["method"], input_value["url"], **request)
 
     return {
         "status": response.status_code,
@@ -318,7 +354,10 @@ def response_value_for_operation(op: str, result):
 
 async def verify_tempo_receipt(input_value: dict):
     from mpp.methods.tempo.intents import ChargeIntent
-    from mpp.server.intent import VerificationError
+    if ENGINE_API:
+        from mpp.errors import VerificationError
+    else:
+        from mpp.server.intent import VerificationError
 
     credential_data = input_value["credential"]
     challenge_data = credential_data["challenge"]
