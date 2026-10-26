@@ -44,7 +44,7 @@ GEM
     keccak (1.3.3)
     konstructor (1.0.2)
     mini_portile2 (2.8.9)
-    mpp-rb (0.1.6)
+    mpp-rb (0.1.9)
       base64 (~> 0.3)
       keccak (~> 1.3)
       sorbet-runtime
@@ -56,7 +56,7 @@ GEM
     scrypt (3.1.0)
       ffi-compiler (>= 1.0, < 2.0)
       rake (~> 13)
-    sorbet-runtime (0.6.13508)
+    sorbet-runtime (0.6.13573)
 
 PLATFORMS
   aarch64-linux
@@ -67,7 +67,7 @@ PLATFORMS
 DEPENDENCIES
   bigdecimal
   eth (~> 0.5)
-  mpp-rb (= 0.1.6)
+  mpp-rb (= 0.1.9)
   rbsecp256k1!
   rlp (~> 0.7)
   rubyzip (>= 3.4.0, < 4)
@@ -91,7 +91,7 @@ CHECKSUMS
   keccak (1.3.3) sha256=970dcb1e78b8c3129ba2baff8a5baa5cebf391136db1f4018e8ccc9130794557
   konstructor (1.0.2) sha256=fd6ac9eb1dadc1e520e06042aa2ef0122d6a070e06cde86db5a54c0c7bfe2e31
   mini_portile2 (2.8.9) sha256=0cd7c7f824e010c072e33f68bc02d85a00aeb6fce05bb4819c03dfd3c140c289
-  mpp-rb (0.1.6) sha256=9d798610a9ef543014d8d406b3428dd4792a944ee49b3c37e774a0b59e7288dd
+  mpp-rb (0.1.9) sha256=fa9bb05b293cf854e31360c59038a46e753e7697f0461a6412cd26ff636bb1e6
   openssl (3.3.3) sha256=d46902138f2987c13122fab826030a11c2bb9b8a16394215cbfc5062c5e2d335
   pkg-config (1.6.5) sha256=33f9f81c5322983d22b439b8b672f27777b406fea23bfec74ff14bbeb42ec733
   rake (13.4.2) sha256=cb825b2bd5f1f8e91ca37bddb4b9aaf345551b4731da62949be002fa89283701
@@ -99,7 +99,7 @@ CHECKSUMS
   rlp (0.7.3) sha256=a4f3ac65b1206ac84212811bc8f8590c136a49d848071ab2e60ae621bac8869f
   rubyzip (3.7.0) sha256=65c19294da75297a939006f3516deacc33185fbd721ff1954f7a231db6d3e121
   scrypt (3.1.0) sha256=67fde35bc7e3b7fe906c5be9c242acf95fe4a886c89572f405f6b11df30aa6af
-  sorbet-runtime (0.6.13508) sha256=011ee266adead459077ebc0058d36aeb75d6c90968db8524916050ce3c62e526
+  sorbet-runtime (0.6.13573) sha256=7a96a9699c4aa6987e915ff7ca166ae79056efc3714ef4f3719d672fb3222afb
 
 BUNDLED WITH
   4.0.9
