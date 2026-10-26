@@ -310,11 +310,13 @@ async function verifyTempoReceipt(input: TempoReceiptVerifyInput): Promise<Adapt
 	await new Promise<void>((resolve) => rpc.listen(0, '127.0.0.1', resolve))
 	try {
 		const { port } = rpc.address() as AddressInfo
-		const method = tempo.charge({
+		const charge = tempo.charge({
 			getClient: () =>
 				createClient({ chain: tempoChain, transport: http(`http://127.0.0.1:${port}`, { retryCount: 0 }) }),
 			store: Store.memory(),
 		})
+		// Newer mppx returns the configured method group (one method per currency).
+		const method = Array.isArray(charge) ? charge[0] : charge
 		const { challenge: challengeData, payload, source } = input.credential
 		const challenge = Challenge.from(challengeData)
 		const credential = Credential.from({ challenge, payload, ...(source === undefined ? {} : { source }) })

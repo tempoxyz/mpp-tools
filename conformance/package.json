@@ -17,7 +17,8 @@
     "build:all": "make install"
   },
   "dependencies": {
-    "mppx": "0.11.0"
+    "mppx": "0.11.0",
+    "viem": "2.57.1"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",
