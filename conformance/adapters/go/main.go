@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -857,12 +859,19 @@ func runTempoReceiptVerify(raw json.RawMessage) adapterResponse {
 	}
 	request := input.Credential.Challenge.Request
 
+	wantHash, _ := input.Receipt["transactionHash"].(string)
+	var unexpected []string
+	var unexpectedMu sync.Mutex
 	rpc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var call struct {
 			ID     json.RawMessage `json:"id"`
 			Method string          `json:"method"`
+			Params []any           `json:"params"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&call); err != nil {
+			unexpectedMu.Lock()
+			unexpected = append(unexpected, "undecodable request: "+err.Error())
+			unexpectedMu.Unlock()
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -870,9 +879,20 @@ func runTempoReceiptVerify(raw json.RawMessage) adapterResponse {
 		switch call.Method {
 		case "eth_chainId":
 			response["result"] = "0x1079"
+		case "eth_getTransactionByHash":
+			// Optional lookup in newer SDKs; the fixture carries no transaction body.
+			response["result"] = nil
 		case "eth_getTransactionReceipt":
-			response["result"] = input.Receipt
+			// A node only returns the receipt of the requested transaction.
+			if len(call.Params) > 0 && strings.EqualFold(fmt.Sprint(call.Params[0]), wantHash) {
+				response["result"] = input.Receipt
+			} else {
+				response["error"] = map[string]any{"code": -32000, "message": "receipt not found for transaction hash"}
+			}
 		default:
+			unexpectedMu.Lock()
+			unexpected = append(unexpected, "unexpected method "+call.Method)
+			unexpectedMu.Unlock()
 			response["error"] = map[string]any{"code": -32601, "message": "unexpected method " + call.Method}
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -885,7 +905,18 @@ func runTempoReceiptVerify(raw json.RawMessage) adapterResponse {
 		return adapterResponse{OK: false, Error: &adapterError{Type: "unknown_error", Message: err.Error()}}
 	}
 	receipt, err := intent.Verify(context.Background(), credential, request)
+	unexpectedMu.Lock()
+	setupErrors := strings.Join(unexpected, "; ")
+	unexpectedMu.Unlock()
+	if setupErrors != "" {
+		// A fake-RPC failure is not a payment rejection: keep it from passing rejection vectors.
+		return adapterResponse{OK: false, Error: &adapterError{Type: "unknown_error", Message: setupErrors}}
+	}
 	if err != nil {
+		var paymentErr *mpp.PaymentError
+		if !errors.As(err, &paymentErr) {
+			return adapterResponse{OK: false, Error: &adapterError{Type: "unknown_error", Message: err.Error()}}
+		}
 		return adapterResponse{OK: false, Error: &adapterError{Type: "verification_error", Message: err.Error()}}
 	}
 	return adapterResponse{OK: true, Value: map[string]any{"status": receipt.Status, "reference": receipt.Reference}}

@@ -12,6 +12,7 @@ use sha2::Sha256;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::process::{Command, Stdio};
+use std::sync::{Arc, Mutex};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -554,21 +555,37 @@ fn run_http_payment_request(input: &Value) -> Result<Value, (&'static str, Strin
     })
 }
 
+/// The first request a fake JSON-RPC could not serve: a body it could not
+/// decode or a method it does not answer.
+type UnexpectedRpcCall = Arc<Mutex<Option<String>>>;
+
 /// Serve JSON-RPC from a local HTTP server: `eth_chainId` is Tempo mainnet
-/// (4217) and `eth_getTransactionReceipt` returns `receipt`.
-fn serve_fake_tempo_rpc(receipt: Value) -> io::Result<String> {
+/// (4217) and `eth_getTransactionReceipt` returns `receipt` for its own
+/// `transactionHash` and a "not found" error for any other hash, and
+/// `eth_getTransactionByHash` returns null. Any other call is recorded in
+/// `unexpected`.
+fn serve_fake_tempo_rpc(receipt: Value, unexpected: UnexpectedRpcCall) -> io::Result<String> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
     let url = format!("http://{}", listener.local_addr()?);
     std::thread::spawn(move || {
         for stream in listener.incoming() {
             let Ok(stream) = stream else { continue };
-            let _ = answer_fake_rpc(stream, &receipt);
+            let _ = answer_fake_rpc(stream, &receipt, &unexpected);
         }
     });
     Ok(url)
 }
 
-fn answer_fake_rpc(stream: std::net::TcpStream, receipt: &Value) -> io::Result<()> {
+fn answer_fake_rpc(
+    stream: std::net::TcpStream,
+    receipt: &Value,
+    unexpected: &UnexpectedRpcCall,
+) -> io::Result<()> {
+    let record = |call: String| {
+        if let Ok(mut slot) = unexpected.lock() {
+            slot.get_or_insert(call);
+        }
+    };
     let mut reader = BufReader::new(stream.try_clone()?);
     let mut content_length = 0;
     loop {
@@ -584,18 +601,53 @@ fn answer_fake_rpc(stream: std::net::TcpStream, receipt: &Value) -> io::Result<(
     }
     let mut body = vec![0; content_length];
     reader.read_exact(&mut body)?;
-    let call: Value = serde_json::from_slice(&body).unwrap_or(json!({}));
-    let id = call.get("id").cloned().unwrap_or(Value::Null);
-    let response = match call.get("method").and_then(Value::as_str) {
-        Some("eth_chainId") => json!({ "jsonrpc": "2.0", "id": id, "result": "0x1079" }),
-        Some("eth_getTransactionReceipt") => {
-            json!({ "jsonrpc": "2.0", "id": id, "result": receipt })
+    let response = match serde_json::from_slice::<Value>(&body) {
+        Ok(call) if call.is_object() => {
+            let id = call.get("id").cloned().unwrap_or(Value::Null);
+            match call.get("method").and_then(Value::as_str) {
+                Some("eth_chainId") => json!({ "jsonrpc": "2.0", "id": id, "result": "0x1079" }),
+                Some("eth_getTransactionReceipt") => {
+                    let requested = call.pointer("/params/0").and_then(Value::as_str);
+                    let fixture = receipt.get("transactionHash").and_then(Value::as_str);
+                    match (requested, fixture) {
+                        (Some(requested), Some(fixture))
+                            if requested.eq_ignore_ascii_case(fixture) =>
+                        {
+                            json!({ "jsonrpc": "2.0", "id": id, "result": receipt })
+                        }
+                        _ => json!({
+                            "jsonrpc": "2.0",
+                            "id": id,
+                            "error": { "code": -32000, "message": "receipt not found for transaction hash" },
+                        }),
+                    }
+                }
+                // The fixture has no transaction body for this optional lookup.
+                Some("eth_getTransactionByHash") => {
+                    json!({ "jsonrpc": "2.0", "id": id, "result": null })
+                }
+                other => {
+                    let method = other.unwrap_or("");
+                    record(format!("unexpected JSON-RPC method {method}"));
+                    json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "error": { "code": -32601, "message": format!("unexpected method {method}") },
+                    })
+                }
+            }
         }
-        other => json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "error": { "code": -32601, "message": format!("unexpected method {}", other.unwrap_or("")) },
-        }),
+        _ => {
+            record(format!(
+                "undecodable JSON-RPC request: {}",
+                String::from_utf8_lossy(&body)
+            ));
+            json!({
+                "jsonrpc": "2.0",
+                "id": null,
+                "error": { "code": -32700, "message": "parse error" },
+            })
+        }
     };
     let body = serde_json::to_vec(&response)?;
     let mut stream = stream;
@@ -690,7 +742,9 @@ fn run_tempo_receipt_verify(input: &Value) -> Result<Value, (&'static str, Strin
         input.get("receipt").cloned().unwrap_or(json!({})),
         credential.source.as_deref(),
     );
-    let rpc_url = serve_fake_tempo_rpc(receipt).map_err(|e| unknown(e.to_string()))?;
+    let unexpected = UnexpectedRpcCall::default();
+    let rpc_url =
+        serve_fake_tempo_rpc(receipt, unexpected.clone()).map_err(|e| unknown(e.to_string()))?;
     let provider = mpp::server::tempo_provider(&rpc_url).map_err(|e| unknown(e.to_string()))?;
     let method = mpp::server::TempoChargeMethod::new(provider)
         .with_store(std::sync::Arc::new(mpp::MemoryStore::new()));
@@ -699,14 +753,18 @@ fn run_tempo_receipt_verify(input: &Value) -> Result<Value, (&'static str, Strin
         .enable_all()
         .build()
         .map_err(|e| unknown(e.to_string()))?;
-    let receipt = runtime
-        .block_on(method.verify(&credential, &request))
-        .map_err(|e| match e.code {
-            // A receipt the fake RPC could not deliver is an adapter fault,
-            // not a verification result.
-            Some(mpp::ErrorCode::NetworkError) => ("unknown_error", e.to_string()),
-            _ => ("verification_error", e.to_string()),
-        })?;
+    let verified = runtime.block_on(method.verify(&credential, &request));
+    // A call the fake RPC could not serve means the setup is broken, so the
+    // outcome, even a rejection, says nothing about the SDK.
+    if let Some(call) = unexpected.lock().ok().and_then(|slot| slot.clone()) {
+        return Err(unknown(format!("fake RPC received {call}")));
+    }
+    let receipt = verified.map_err(|e| match e.code {
+        // A receipt the fake RPC could not deliver is an adapter fault,
+        // not a verification result.
+        Some(mpp::ErrorCode::NetworkError) => ("unknown_error", e.to_string()),
+        _ => ("verification_error", e.to_string()),
+    })?;
     Ok(json!({ "status": receipt.status, "reference": receipt.reference }))
 }
 

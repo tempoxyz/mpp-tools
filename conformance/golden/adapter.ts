@@ -271,15 +271,38 @@ async function verifyTempoReceipt(input: TempoReceiptVerifyInput): Promise<Adapt
 			logs: logs.map((log, index) => ({ logIndex: `0x${index.toString(16)}`, ...log })),
 		}
 		: input.receipt
+	// The fixture answers only for its own transaction hash, and has no
+	// transaction body for the optional eth_getTransactionByHash lookup. Any
+	// call the fake node cannot serve is recorded so a broken setup is not
+	// mistaken for a rejected credential.
+	const receiptHash = String(input.receipt.transactionHash ?? '').toLowerCase()
+	let unexpectedCall: string | undefined
 	const rpc = createServer((req, res) => {
 		let body = ''
 		req.on('data', (chunk) => (body += chunk))
 		req.on('end', () => {
-			const call = JSON.parse(body) as { id: unknown; method: string }
-			const response: Record<string, unknown> = { jsonrpc: '2.0', id: call.id }
+			let call: { id?: unknown; method?: unknown; params?: unknown }
+			try {
+				call = JSON.parse(body)
+				if (call === null || typeof call !== 'object' || Array.isArray(call)) throw new Error('not a JSON-RPC object')
+			} catch {
+				unexpectedCall ??= `undecodable JSON-RPC request: ${body}`
+				res.statusCode = 400
+				res.setHeader('Content-Type', 'application/json')
+				res.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }))
+				return
+			}
+			const response: Record<string, unknown> = { jsonrpc: '2.0', id: call.id ?? null }
 			if (call.method === 'eth_chainId') response.result = '0x1079'
-			else if (call.method === 'eth_getTransactionReceipt') response.result = receipt
-			else response.error = { code: -32601, message: `unexpected method ${call.method}` }
+			else if (call.method === 'eth_getTransactionReceipt') {
+				const hash = Array.isArray(call.params) ? call.params[0] : undefined
+				if (typeof hash === 'string' && hash.toLowerCase() === receiptHash) response.result = receipt
+				else response.error = { code: -32000, message: 'receipt not found for transaction hash' }
+			} else if (call.method === 'eth_getTransactionByHash') response.result = null
+			else {
+				unexpectedCall ??= `unexpected JSON-RPC method ${String(call.method)}`
+				response.error = { code: -32601, message: `unexpected method ${String(call.method)}` }
+			}
 			res.setHeader('Content-Type', 'application/json')
 			res.end(JSON.stringify(response))
 		})
@@ -295,12 +318,15 @@ async function verifyTempoReceipt(input: TempoReceiptVerifyInput): Promise<Adapt
 		const { challenge: challengeData, payload, source } = input.credential
 		const challenge = Challenge.from(challengeData)
 		const credential = Credential.from({ challenge, payload, ...(source === undefined ? {} : { source }) })
+		let result: AdapterResponse
 		try {
 			const receipt = await method.verify({ credential, request: challengeData.request } as never)
-			return adapterSuccess({ status: receipt.status, reference: receipt.reference })
+			result = adapterSuccess({ status: receipt.status, reference: receipt.reference })
 		} catch (err) {
-			return adapterError(err instanceof Error ? err.message : String(err), 'verification_error')
+			result = adapterError(err instanceof Error ? err.message : String(err), 'verification_error')
 		}
+		if (unexpectedCall) return adapterError(`fake RPC received ${unexpectedCall}`, 'unknown_error')
+		return result
 	} finally {
 		await new Promise<void>((resolve) => rpc.close(() => resolve()))
 	}
