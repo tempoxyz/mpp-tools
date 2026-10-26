@@ -103,7 +103,10 @@ Server verification cases live in `server-verification/`. These call the `server
 ```bash
 make server-verify
 make server-verify-go
+make server-verify-sdk ADAPTER=python
 ```
+
+`make server-verify` runs every adapter whose manifest declares `server.verify` (currently Go and Python). The reusable SDK workflow (`.github/workflows/sdk-conformance.yml`) runs these cases for any adapter that declares the capability and skips the rest.
 
 ## Adapters
 

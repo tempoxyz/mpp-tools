@@ -4,8 +4,6 @@
 import sys
 import json
 import base64
-import hashlib
-import hmac
 import subprocess
 import asyncio
 from importlib.metadata import version as _package_version
@@ -61,30 +59,45 @@ def base64url_decode(data: str) -> str:
     return decoded.decode("utf-8")
 
 
-def canonical_json(value) -> str:
-    """Encode JSON with stable ordering for challenge-id vectors."""
-    return json.dumps(value, separators=(",", ":"), sort_keys=True, ensure_ascii=False)
+def generate_conformance_challenge_id(
+    *,
+    secret_key: str,
+    realm: str,
+    method: str,
+    intent: str,
+    request,
+    expires: str | None = None,
+    digest: str | None = None,
+    header: str | None = None,
+    opaque: str | None = None,
+) -> str:
+    """Compute a challenge ID with pympp's own ``generate_challenge_id``.
 
-
-def generate_conformance_challenge_id(*, secret_key: str, realm: str, method: str, intent: str, request, expires: str | None = None, digest: str | None = None, header: str | None = None, opaque: str | None = None) -> str:
+    Vectors carry ``opaque`` in its wire form (base64url JCS JSON); pympp binds
+    the decoded map and re-canonicalizes it, exactly as its server does when it
+    authenticates an echoed challenge.
+    """
+    # pympp accepts any secret length, while mppx refuses keys shorter than
+    # 32 bytes (error_weak_secret_key); this guard is the adapter's, not the SDK's.
     if len(secret_key.encode("utf-8")) < MINIMUM_SECRET_KEY_BYTES:
         raise ValueError(f"secretKey must be at least {MINIMUM_SECRET_KEY_BYTES} bytes")
 
-    request_b64 = base64.urlsafe_b64encode(canonical_json(request or {}).encode("utf-8")).decode("ascii").rstrip("=")
-    payload_parts = [
-        realm,
-        method,
-        intent,
-        request_b64,
-        expires or "",
-        digest or "",
-    ]
-    if header and header.lower() != "authorization":
-        payload_parts.append(header)
-    payload_parts.append(opaque or "")
-    payload = "|".join(payload_parts)
-    signature = hmac.new(secret_key.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).digest()
-    return base64.urlsafe_b64encode(signature).decode("ascii").rstrip("=")
+    opaque_map = None
+    if opaque:
+        opaque_map = json.loads(base64url_decode(opaque))
+        if not isinstance(opaque_map, dict):
+            raise ValueError("opaque must encode a JSON object")
+    return generate_challenge_id(
+        secret_key=secret_key,
+        realm=realm,
+        method=method,
+        intent=intent,
+        request=request or {},
+        expires=expires,
+        digest=digest,
+        opaque=opaque_map,
+        header=header,
+    )
 
 
 def tempo_proof_typed_data(
@@ -429,6 +442,110 @@ async def verify_tempo_receipt(input_value: dict):
     return success({"status": receipt.status, "reference": receipt.reference})
 
 
+# Problem types pympp's server reports, by the server.verify result errorType.
+SERVER_ERROR_TYPES = {
+    "malformed-credential": "malformed_credential",
+    "invalid-challenge": "invalid_challenge",
+    "payment-expired": "payment_expired",
+    "verification-failed": "verification_failed",
+}
+
+
+def server_error_type(error: BaseException | None) -> str:
+    from mpp.errors import PaymentError
+
+    if not isinstance(error, PaymentError):
+        return "unknown_error"
+    return SERVER_ERROR_TYPES.get(error.type.rsplit("/", 1)[-1], "unknown_error")
+
+
+class ConformanceServerIntent:
+    """Settles every credential pympp's server lets through, or rejects it with
+    ``verificationError``, so server.verify isolates the SDK's challenge checks."""
+
+    def __init__(self, name: str, method: str, error_message: str | None):
+        self.name = name
+        self._method = method
+        self._error_message = error_message
+
+    async def verify(self, credential: Credential, request: dict) -> Receipt:
+        from datetime import UTC, datetime
+
+        from mpp.errors import VerificationFailedError
+
+        if self._error_message:
+            raise VerificationFailedError(self._error_message)
+        return Receipt(
+            status="success",
+            timestamp=datetime(2026, 1, 29, 12, 0, 0, tzinfo=UTC),
+            reference="conformance-receipt",
+            method=self._method,
+        )
+
+
+def credential_from_dict(data: dict) -> Credential:
+    """Build a Credential whose echo carries the request as base64url JSON."""
+    challenge_data = data["challenge"]
+    request_json = json.dumps(challenge_data.get("request", {}), separators=(",", ":"))
+    echo_fields = {}
+    if challenge_data.get("opaque") is not None:
+        echo_fields["opaque"] = challenge_data["opaque"]
+    return Credential(
+        challenge=ChallengeEcho(
+            id=challenge_data["id"],
+            realm=challenge_data.get("realm", ""),
+            method=challenge_data["method"],
+            intent=challenge_data["intent"],
+            request=base64url_encode(request_json),
+            expires=challenge_data.get("expires"),
+            digest=challenge_data.get("digest"),
+            **echo_fields,
+        ),
+        payload=data.get("payload") or {},
+        source=data.get("source"),
+    )
+
+
+async def run_server_verify(input_value: dict) -> dict:
+    """Verify a credential the way pympp's server does for a paid route.
+
+    ``verify_or_challenge`` is the verifier the Mpp engine's route handlers run for
+    each offer (pympp >= 0.16) and the server entry point before it. A rejected
+    credential comes back as a fresh challenge, with the reason on the
+    ``payment.failed`` event; a failed settlement raises.
+    """
+    from mpp.events import PAYMENT_FAILED, EventDispatcher
+    from mpp.server.verify import verify_or_challenge
+
+    credential = credential_from_dict(input_value["credential"])
+    failures: list[BaseException] = []
+    events = EventDispatcher()
+    events.on(PAYMENT_FAILED, lambda payload: failures.append(payload["error"]))
+    intent = ConformanceServerIntent(
+        input_value["intent"], input_value["method"], input_value.get("verificationError")
+    )
+    try:
+        result = await verify_or_challenge(
+            authorization=format_authorization(credential),
+            intent=intent,
+            request=input_value["request"],
+            realm=input_value["realm"],
+            secret_key=input_value["secretKey"],
+            method=input_value["method"],
+            expires=input_value.get("expires"),
+            events=events,
+        )
+    except Exception as exc:
+        return {"ok": False, "errorType": server_error_type(exc)}
+    if isinstance(result, Challenge):
+        return {
+            "ok": False,
+            "errorType": server_error_type(failures[-1] if failures else None),
+        }
+    _, receipt = result
+    return {"ok": True, "receipt": receipt_to_dict(receipt)}
+
+
 def run_legacy_subprocess(command: str, input_data: str = ""):
     result = subprocess.run(
         [sys.executable, __file__, command],
@@ -450,6 +567,11 @@ def run_adapter_request(request: dict):
             return adapter_success(asyncio.run(run_http_payment_request(input_value)))
         except Exception as exc:
             return adapter_error(str(exc), "http_error")
+    if op == "server.verify":
+        try:
+            return adapter_success(asyncio.run(run_server_verify(input_value)))
+        except Exception as exc:
+            return adapter_error(str(exc), "verification_error")
 
     command = OP_TO_COMMAND.get(op)
     if command is None:

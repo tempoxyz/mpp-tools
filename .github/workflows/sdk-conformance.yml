@@ -162,8 +162,33 @@ jobs:
         env:
           ADAPTER: ${{ steps.resolve.outputs.adapter }}
 
+      # Server verification runs for every adapter whose manifest declares
+      # server.verify; adapters without it are skipped rather than failed.
+      - name: Detect server verification support
+        id: server-verify
+        run: |
+          manifest="adapters/$ADAPTER/adapter.json"
+          set +e
+          jq -e '.capabilities | index("server.verify") != null' "$manifest" > /dev/null
+          status=$?
+          set -e
+          case "$status" in
+            0) enabled=true ;;
+            1)
+              enabled=false
+              echo "$ADAPTER does not declare server.verify; skipping server verification conformance."
+              ;;
+            *)
+              echo "Could not read capabilities from $manifest" >&2
+              exit "$status"
+              ;;
+          esac
+          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
+        env:
+          ADAPTER: ${{ steps.resolve.outputs.adapter }}
+
       - name: Run server verification conformance
-        if: steps.resolve.outputs.adapter == 'go'
+        if: steps.server-verify.outputs.enabled == 'true'
         run: uv run --locked python scripts/server_verify_runner.py --adapter "$ADAPTER"
         env:
           ADAPTER: ${{ steps.resolve.outputs.adapter }}
@@ -177,7 +202,7 @@ jobs:
             echo "- Adapter: \`$ADAPTER\`"
             echo "- SDK checkout: \`$SDK_PATH\`"
             echo "- Flow tests: \`${{ inputs.run-flows }}\`"
-            echo "- Server verification: \`${{ steps.resolve.outputs.adapter == 'go' }}\`"
+            echo "- Server verification: \`${{ steps.server-verify.outputs.enabled == 'true' }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
         env:
           ADAPTER: ${{ steps.resolve.outputs.adapter }}
