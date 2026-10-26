@@ -20,8 +20,8 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.stripe:mpp-java:0.1.4'
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.3'
+    implementation 'com.stripe:mpp-java:0.1.6'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.4'
 
     constraints {
         implementation 'org.bouncycastle:bcprov-jdk18on:1.86'
