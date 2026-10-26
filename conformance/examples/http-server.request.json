@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "op": "http.server",
+  "input": {
+    "port": 0,
+    "realm": "pairs.conformance",
+    "secretKey": "pair-conformance-secret-key-32-bytes-minimum",
+    "requiresAuth": false,
+    "routes": [
+      {
+        "path": "/paid",
+        "offers": [
+          {
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z",
+            "meta": {
+              "account": "alice"
+            }
+          }
+        ],
+        "echoHeaders": [
+          "authorization"
+        ]
+      }
+    ]
+  }
+}

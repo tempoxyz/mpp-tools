@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import json
 import os
+import selectors
+import signal
 import subprocess
+import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -345,6 +349,76 @@ class AdapterClient:
             }
         return response
 
+    def start(
+        self,
+        op: str,
+        input_value: Any,
+        context: dict[str, Any] | None = None,
+        timeout: float = 60,
+    ) -> tuple[dict[str, Any], subprocess.Popen[str] | None]:
+        """Start a long-running operation such as http.server.
+
+        The adapter writes one response line and keeps running until it is
+        terminated. Returns the validated response and, when it is ok, the
+        running process; stop it with stop_adapter_process().
+        """
+        if op not in self.adapter.capabilities:
+            return {
+                "ok": False,
+                "error": {
+                    "type": "unsupported_operation",
+                    "message": f"{self.adapter.name} does not declare {op}",
+                },
+            }, None
+
+        request: dict[str, Any] = {"schema": 1, "op": op, "input": input_value}
+        if context:
+            request["context"] = context
+        validate_value(request, "adapter-request.schema.json", f"{self.adapter.name} request")
+
+        env = os.environ.copy()
+        if self.adapter.env:
+            env.update(self.adapter.env)
+        # The child keeps its own descriptor of the (already unlinked) file.
+        with tempfile.TemporaryFile(mode="w+") as stderr:
+            process = subprocess.Popen(
+                self.adapter.command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=stderr,
+                text=True,
+                cwd=self.adapter.cwd,
+                env=env,
+                start_new_session=True,
+            )
+            assert process.stdin is not None and process.stdout is not None
+            process.stdin.write(json.dumps(request))
+            process.stdin.close()
+
+            line = ""
+            with selectors.DefaultSelector() as selector:
+                selector.register(process.stdout, selectors.EVENT_READ)
+                if selector.select(timeout=timeout):
+                    line = process.stdout.readline()
+            if not line.strip():
+                stop_adapter_process(process)
+                stderr.seek(0)
+                message = stderr.read().strip() or f"{self.adapter.name} {op} wrote no response"
+                return {"ok": False, "error": {"type": "unknown_error", "message": message}}, None
+            try:
+                response = json.loads(line)
+                validate_value(response, "adapter-response.schema.json", f"{self.adapter.name} response")
+                if response.get("ok") is True:
+                    success_ref = OPERATIONS[op]["successRef"]
+                    validate_value(response["value"], {"$ref": success_ref}, f"{self.adapter.name} {op} value")
+            except Exception as exc:
+                stop_adapter_process(process)
+                return {"ok": False, "error": {"type": "unknown_error", "message": str(exc)}}, None
+        if response.get("ok") is not True:
+            stop_adapter_process(process)
+            return response, None
+        return response, process
+
     def run_legacy_command(
         self,
         command: str,
@@ -360,3 +434,24 @@ class AdapterClient:
             validate_input=validate_input,
         )
         return legacy_response_for_operation(op, response)
+
+
+def stop_adapter_process(process: subprocess.Popen[str], timeout: float = 5) -> None:
+    """Terminate a process started by AdapterClient.start, with its children."""
+    # The adapter may run the server in a child, such as uv run's Python.
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    if process.poll() is None:
+        deadline = time.monotonic() + timeout
+        while process.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.05)
+        if process.poll() is None:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.wait()
+    if process.stdout is not None:
+        process.stdout.close()

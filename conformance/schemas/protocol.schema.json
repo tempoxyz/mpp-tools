@@ -20,6 +20,7 @@
         "tempo.receipt.verify",
         "tempo.proof.typed_data",
         "http.payment_request",
+        "http.server",
         "stripe.external_id_binding"
       ]
     },
@@ -273,6 +274,72 @@
           "additionalProperties": { "type": "string" }
         },
         "body": { "type": "string" }
+      }
+    },
+    "HttpServerOffer": {
+      "type": "object",
+      "required": ["method", "intent", "request"],
+      "additionalProperties": false,
+      "properties": {
+        "method": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "intent": { "const": "charge" },
+        "request": {
+          "type": "object",
+          "required": ["amount", "currency", "recipient"],
+          "additionalProperties": false,
+          "properties": {
+            "amount": { "type": "string", "minLength": 1 },
+            "currency": { "type": "string", "minLength": 1 },
+            "recipient": { "type": "string", "minLength": 1 }
+          }
+        },
+        "expires": { "type": "string", "format": "date-time" },
+        "meta": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "HttpServerRoute": {
+      "type": "object",
+      "required": ["path", "offers"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string", "pattern": "^/[A-Za-z0-9/_-]*$" },
+        "offers": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/HttpServerOffer" }
+        },
+        "echoHeaders": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+        }
+      }
+    },
+    "HttpServerConfig": {
+      "type": "object",
+      "required": ["port", "realm", "secretKey", "routes"],
+      "additionalProperties": false,
+      "properties": {
+        "port": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "realm": { "type": "string", "minLength": 1 },
+        "secretKey": { "type": "string", "minLength": 32 },
+        "requiresAuth": { "type": "boolean" },
+        "routes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/HttpServerRoute" }
+        }
+      }
+    },
+    "HttpServerInfo": {
+      "type": "object",
+      "required": ["url"],
+      "additionalProperties": false,
+      "properties": {
+        "url": { "type": "string", "pattern": "^http://127\\.0\\.0\\.1:[0-9]+$" }
       }
     },
     "ServerVerifyRequest": {

@@ -1,0 +1,704 @@
+{
+  "$schema": "../schemas/pair-snapshots.schema.json",
+  "scenarios": {
+    "cross_route_replay": [
+      {
+        "name": "cheap_challenge",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/payment-required",
+          "status": 402
+        }
+      },
+      {
+        "name": "expensive_with_cheap_credential",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/invalid-challenge",
+          "status": 402
+        }
+      }
+    ],
+    "expired_challenge": [
+      {
+        "name": "issued_expired",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2020-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/payment-required",
+          "status": 402
+        }
+      },
+      {
+        "name": "pay_issued_expired",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2020-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/payment-expired",
+          "status": 402
+        }
+      },
+      {
+        "name": "unpaid",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/payment-required",
+          "status": 402
+        }
+      },
+      {
+        "name": "rebound_expired",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/payment-expired",
+          "status": 402
+        }
+      }
+    ],
+    "happy_path": [
+      {
+        "name": "unpaid",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/payment-required",
+          "status": 402
+        }
+      },
+      {
+        "name": "pay",
+        "status": 200,
+        "receipt": {
+          "method": "tempo",
+          "reference": "ref-0xabc123",
+          "status": "success",
+          "timestamp": "2026-01-01T00:00:00Z"
+        },
+        "cacheControl": "private",
+        "contentType": "application/json",
+        "body": {
+          "ok": true,
+          "path": "/paid"
+        }
+      }
+    ],
+    "malformed_authorization": [
+      {
+        "name": "not_base64url",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/malformed-credential",
+          "status": 402
+        }
+      },
+      {
+        "name": "empty_object",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/malformed-credential",
+          "status": 402
+        }
+      },
+      {
+        "name": "empty_payment",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/payment-required",
+          "status": 402
+        }
+      },
+      {
+        "name": "other_scheme",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/payment-required",
+          "status": 402
+        }
+      }
+    ],
+    "meta_binding": [
+      {
+        "name": "pay_alice",
+        "status": 200,
+        "receipt": {
+          "method": "tempo",
+          "reference": "ref-0xabc123",
+          "status": "success",
+          "timestamp": "2026-01-01T00:00:00Z"
+        },
+        "cacheControl": "private",
+        "contentType": "application/json",
+        "body": {
+          "ok": true,
+          "path": "/alice"
+        }
+      },
+      {
+        "name": "alice_challenge",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z",
+            "opaque": {
+              "account": "alice"
+            }
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/payment-required",
+          "status": 402
+        }
+      },
+      {
+        "name": "bob_with_alice_credential",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z",
+            "opaque": {
+              "account": "bob"
+            }
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/invalid-challenge",
+          "status": 402
+        }
+      }
+    ],
+    "multi_offer": [
+      {
+        "name": "unpaid",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "conformance",
+            "intent": "charge",
+            "request": {
+              "amount": "5",
+              "currency": "EUR",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          },
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/payment-required",
+          "status": 402
+        }
+      },
+      {
+        "name": "pay",
+        "status": 200,
+        "receipt": {
+          "method": "tempo",
+          "reference": "ref-0xabc123",
+          "status": "success",
+          "timestamp": "2026-01-01T00:00:00Z"
+        },
+        "cacheControl": "private",
+        "contentType": "application/json",
+        "body": {
+          "ok": true,
+          "path": "/multi"
+        }
+      }
+    ],
+    "replay_rejected": [
+      {
+        "name": "unpaid",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/payment-required",
+          "status": 402
+        }
+      },
+      {
+        "name": "paid",
+        "status": 200,
+        "receipt": {
+          "method": "tempo",
+          "reference": "ref-0xabc123",
+          "status": "success",
+          "timestamp": "2026-01-01T00:00:00Z"
+        },
+        "cacheControl": "private",
+        "contentType": "application/json",
+        "body": {
+          "ok": true,
+          "path": "/paid"
+        }
+      },
+      {
+        "name": "replayed",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/verification-failed",
+          "status": 402
+        }
+      }
+    ],
+    "requires_auth": [
+      {
+        "name": "unpaid",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z",
+            "header": "Payment-Authorization"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/payment-required",
+          "status": 402
+        }
+      },
+      {
+        "name": "pay",
+        "status": 200,
+        "receipt": {
+          "method": "tempo",
+          "reference": "ref-0xabc123",
+          "status": "success",
+          "timestamp": "2026-01-01T00:00:00Z"
+        },
+        "cacheControl": "private",
+        "contentType": "application/json",
+        "body": {
+          "ok": true,
+          "path": "/paid",
+          "authorization": "Bearer app-token"
+        }
+      },
+      {
+        "name": "credential_in_authorization",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z",
+            "header": "Payment-Authorization"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/payment-required",
+          "status": 402
+        }
+      }
+    ],
+    "tampered_challenge": [
+      {
+        "name": "unpaid",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/payment-required",
+          "status": 402
+        }
+      },
+      {
+        "name": "tampered_id",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/invalid-challenge",
+          "status": 402
+        }
+      },
+      {
+        "name": "tampered_amount",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/invalid-challenge",
+          "status": 402
+        }
+      }
+    ],
+    "verification_failed": [
+      {
+        "name": "pay_declined",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/verification-failed",
+          "status": 402
+        }
+      }
+    ],
+    "wrong_realm": [
+      {
+        "name": "unpaid",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/payment-required",
+          "status": 402
+        }
+      },
+      {
+        "name": "other_realm",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/invalid-challenge",
+          "status": 402
+        }
+      }
+    ]
+  }
+}
