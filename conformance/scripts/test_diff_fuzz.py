@@ -234,7 +234,16 @@ class VectorScenarioTests(unittest.TestCase):
         ))
         self.assertEqual(scenario["object"], challenge)
         self.assertEqual(scenario["wire"], 'Payment id="a"')
+        self.assertEqual(scenario["tests"], {"format": "exact"})
+        self.assertEqual(scenario["adapters"], ["typescript", "python"])
         self.assert_valid_vector("challenge.format", scenario)
+
+        scenario = vector_scenario(divergence(
+            operation="challenge.format", kind="rejects", input=challenge,
+            reference={"ok": True, "value": {"header": 'Payment id="a"'}},
+        ))
+        self.assertEqual(scenario["tests"], {"format": True})
+        self.assertNotIn("adapters", scenario)
 
         scenario = vector_scenario(divergence(
             operation="base64url.decode", input={"text": "YQ"},
@@ -250,6 +259,13 @@ class VectorScenarioTests(unittest.TestCase):
         ))
         self.assertEqual((scenario["input"], scenario["expected"]), (params, "abc"))
         self.assert_valid_vector("challenge.id", scenario)
+
+    def test_reference_crash_has_no_reproducer(self) -> None:
+        self.assertIsNone(vector_scenario(divergence(
+            kind="reference_crash",
+            reference={"ok": False, "error": {"type": "unknown_error", "message": "boom"}},
+            actual={"ok": False, "error": {"type": "parse_error", "message": "bad"}},
+        )))
 
     def test_every_operation_names_a_vector_file(self) -> None:
         from harness import VECTORS_DIR

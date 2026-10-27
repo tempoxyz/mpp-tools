@@ -385,8 +385,13 @@ def _error_expectation(operation: str) -> dict[str, Any]:
     return {"success": False, "error_type": error_type}
 
 
-def vector_scenario(divergence: Divergence) -> dict[str, Any]:
-    """Render a divergence as a vector scenario expecting the reference result."""
+def vector_scenario(divergence: Divergence) -> dict[str, Any] | None:
+    """Render a divergence as a vector scenario expecting the reference result.
+
+    None when the reference crashed: there is no reference result to expect.
+    """
+    if divergence.kind == "reference_crash":
+        return None
     op = divergence.operation
     digest = hashlib.sha256(json.dumps(divergence.input, sort_keys=True).encode()).hexdigest()[:8]
     reference = divergence.reference
@@ -423,6 +428,13 @@ def vector_scenario(divergence: Divergence) -> dict[str, Any]:
         scenario["object"] = divergence.input
         if ok:
             scenario["wire"] = value["header"]
+        if divergence.kind == "value":
+            # The fuzzer compares headers by what the reference parses them
+            # to, while a semantic format test parses with each adapter's own
+            # parser, which may hide the difference. Compare the wire exactly,
+            # for the two adapters that diverged.
+            expectation = "exact"
+            scenario["adapters"] = [REFERENCE, divergence.adapter]
         scenario["tests"] = {"format": expectation}
     return scenario
 
@@ -640,6 +652,15 @@ def text_input(strategy: st.SearchStrategy[str]) -> st.SearchStrategy[dict[str, 
     return strategy.map(lambda text: {"text": text})
 
 
+# The credential header a challenge names. Authorization is the default and
+# binds like no header; any other value is inserted before opaque.
+credential_header = st.one_of(
+    st.sampled_from(["Authorization", "Payment-Authorization", "authorization", "PAYMENT-AUTHORIZATION"]),
+    token,
+    header_text.filter(bool),
+)
+
+
 @st.composite
 def challenge_id_inputs(draw: st.DrawFn) -> dict[str, Any]:
     challenge = draw(challenges())
@@ -653,6 +674,8 @@ def challenge_id_inputs(draw: st.DrawFn) -> dict[str, Any]:
     for key in ("expires", "digest", "opaque"):
         if key in challenge:
             params[key] = challenge[key]
+    if draw(st.booleans()):
+        params["header"] = draw(credential_header)
     return params
 
 
@@ -841,6 +864,9 @@ class Fuzzer:
             round_index += 1
 
 
+REFERENCE_CRASH_NOTE = "Fix the reference adapter or mppx, or allowlist it with kind reference_crash."
+
+
 def render_finding(divergence: Divergence) -> str:
     vector_file = VECTOR_FILES[divergence.operation]
     lines = [
@@ -850,8 +876,11 @@ def render_finding(divergence: Divergence) -> str:
         f"  {divergence.adapter + ':':<10} {json.dumps(divergence.actual, ensure_ascii=False)}",
         f"  vector scenario for vectors/{vector_file}:",
     ]
-    scenario = json.dumps(vector_scenario(divergence), indent=2, ensure_ascii=False)
-    lines.extend("    " + line for line in scenario.splitlines())
+    scenario = vector_scenario(divergence)
+    if scenario is None:
+        lines[-1] = f"  no vector scenario: {REFERENCE} crashed, so there is no result to expect. {REFERENCE_CRASH_NOTE}"
+    else:
+        lines.extend("    " + line for line in json.dumps(scenario, indent=2, ensure_ascii=False).splitlines())
     return "\n".join(lines)
 
 
@@ -945,6 +974,7 @@ def main(argv: list[str] | None = None) -> int:
                     "actual": d.actual,
                     "vectorFile": VECTOR_FILES[d.operation],
                     "scenario": vector_scenario(d),
+                    **({"note": REFERENCE_CRASH_NOTE} if d.kind == "reference_crash" else {}),
                 }
                 for d in fuzzer.findings
             ],

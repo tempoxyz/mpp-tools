@@ -159,11 +159,14 @@ uv run --locked python scripts/diff_fuzz.py --seed 0 --max-examples 150
 ```
 
 Each new divergence is shrunk to a minimal input and printed as a vector
-scenario expecting the reference result, ready to paste into `vectors/`.
+scenario expecting the reference result, ready to paste into `vectors/`. A format
+value divergence compares the wire exactly (`"format": "exact"`) for the reference
+and the diverging adapter, and a divergence where the reference crashed has
+no scenario.
 Known differences live in [`fuzz/allowlist.json`](./fuzz/allowlist.json), each
 with a category (`harmless`, `sdk-bug` or `adapter-bug`) and a reason; remove
 an entry when its bug is fixed. Pull requests run a short fixed-seed pass and a
-nightly run fuzzes every adapter for 30 minutes
+nightly run fuzzes the Python, Go and Rust adapters for 30 minutes
 ([`diff-fuzz.yml`](../.github/workflows/diff-fuzz.yml)).
 
 ## Adapters

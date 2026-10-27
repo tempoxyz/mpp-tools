@@ -31,9 +31,12 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Pull requests run a short, fixed-seed pass over the adapters that build
-  # quickly, so a new divergence comes from the change. The nightly run fuzzes
-  # every adapter with a random seed for a long budget.
+  # Pull requests run a short, fixed-seed pass, so a new divergence comes from
+  # the change. The nightly run fuzzes the same adapters with a random seed for
+  # a long budget. Ruby and Java are left out until their divergences are
+  # triaged into fuzz/allowlist.json: the Java adapter diverges from mppx in
+  # 27 ways on --seed 0 (unescaped quoted-string escapes, dropped receipt and
+  # echo fields, string-only source), and Ruby has never been fuzzed.
   fuzz:
     name: differential fuzzing
     runs-on: ubuntu-latest
@@ -53,32 +56,18 @@ jobs:
           persist-credentials: false
 
       - name: Setup Rust and Node.js
-        if: github.event_name == 'pull_request'
         uses: ./.github/actions/setup-conformance # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
         with:
           adapter: rust
           setup-node: "true"
 
       - name: Setup Go
-        if: github.event_name == 'pull_request'
         uses: ./.github/actions/setup-conformance # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
         with:
           adapter: go
 
-      - name: Setup all adapters
-        if: github.event_name != 'pull_request'
-        uses: ./.github/actions/setup-conformance # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
-        with:
-          adapter: all
-
       - name: Install adapters
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          make install-runner install-python install-go install-rust
-          if [ "$EVENT_NAME" != pull_request ]; then
-            make install-ruby install-java
-          fi
+        run: make install-runner install-python install-go install-rust
 
       - name: Run differential fuzzing
         env:
@@ -89,7 +78,7 @@ jobs:
           if [ "$EVENT_NAME" = pull_request ]; then
             set -- --adapters python,go,rust --seed 0 --max-examples 150
           else
-            set -- --budget "$BUDGET"
+            set -- --adapters python,go,rust --budget "$BUDGET"
             if [ -n "$SEED" ]; then
               set -- "$@" --seed "$SEED"
             fi

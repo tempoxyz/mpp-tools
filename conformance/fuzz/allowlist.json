@@ -286,14 +286,29 @@
         "python"
       ],
       "operations": [
-        "credential.parse",
+        "credential.parse"
+      ],
+      "kinds": [
+        "accepts"
+      ],
+      "inputPattern": "^\\S+\\s+[A-Za-z0-9_=-]*(?:[^A-Za-z0-9_=\\s-]|\\s+\\S)",
+      "category": "sdk-bug",
+      "reason": "pympp decodes credentials with base64.urlsafe_b64decode, which discards characters outside the alphabet, so a credential token with quotes, commas, '+', '/' or trailing text decodes where mppx rejects it."
+    },
+    {
+      "id": "python-receipt-base64-ignores-invalid-chars",
+      "adapters": [
+        "python"
+      ],
+      "operations": [
         "receipt.parse"
       ],
       "kinds": [
         "accepts"
       ],
+      "inputPattern": "^\\s*[A-Za-z0-9_=-]*(?:[^A-Za-z0-9_=\\s-]|\\s+\\S)",
       "category": "sdk-bug",
-      "reason": "pympp decodes credentials and receipts with base64.urlsafe_b64decode, which discards characters outside the alphabet, so values with quotes, commas, spaces or trailing text decode where mppx rejects them."
+      "reason": "pympp decodes receipts with base64.urlsafe_b64decode, which discards characters outside the alphabet, so a receipt with quotes, commas, '+', '/' or inner spaces decodes where mppx rejects it."
     },
     {
       "id": "source-is-a-string",
@@ -409,6 +424,22 @@
       "messagePattern": "reserved delimiter",
       "category": "harmless",
       "reason": "mpp-go refuses to bind a realm, method or intent containing '|', the HMAC input delimiter, so two challenges cannot share an id. mppx binds it as is."
+    },
+    {
+      "id": "header-name-validation",
+      "adapters": [
+        "python",
+        "go"
+      ],
+      "operations": [
+        "challenge.id"
+      ],
+      "kinds": [
+        "rejects"
+      ],
+      "messagePattern": "(?i)invalid HTTP header name",
+      "category": "harmless",
+      "reason": "pympp and mpp-go refuse to bind a credential header that is not an HTTP field name (an RFC 9110 token), such as one with quotes or ':'. mppx binds any string. A challenge cannot name such a header, so rejecting it is stricter, not wrong."
     },
     {
       "id": "mppx-credential-without-payload",

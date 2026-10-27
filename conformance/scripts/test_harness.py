@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -251,6 +254,24 @@ for count, line in enumerate(sys.stdin, 1):
     print(json.dumps({"ok": True, "value": value}), flush=True)
 """
 
+# Serves from a child process, as uv run does, and records the child's pid.
+WRAPPER_SCRIPT = """
+import os, subprocess, sys
+child = subprocess.Popen([sys.executable, "-c", os.environ["SERVE_SCRIPT"]])
+with open(os.environ["CHILD_PID_FILE"], "w") as handle:
+    handle.write(str(child.pid))
+sys.exit(child.wait())
+"""
+
+
+def process_alive(pid: int) -> bool:
+    try:
+        with open(f"/proc/{pid}/stat") as handle:
+            # A zombie has exited and only waits to be reaped.
+            return handle.read().rsplit(")", 1)[1].split()[0] != "Z"
+    except FileNotFoundError:
+        return False
+
 
 class AdapterSessionTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -284,6 +305,28 @@ class AdapterSessionTests(unittest.TestCase):
             restarted = self.call(session, "a")["value"]["id"]
         self.assertNotEqual(restarted.split(":")[0], pid)
         self.assertEqual(restarted.split(":")[1], "1")
+
+    @unittest.skipUnless(Path("/proc").is_dir(), "needs /proc")
+    def test_timeout_kills_the_serve_process_children(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pid_file = Path(tmp) / "child.pid"
+            adapter = AdapterConfig(
+                name="wrapped",
+                command=["unused"],
+                serve_command=[sys.executable, "-c", WRAPPER_SCRIPT],
+                capabilities=["challenge.parse"],
+                env={"SERVE_SCRIPT": SERVE_SCRIPT, "CHILD_PID_FILE": str(pid_file)},
+            )
+            with AdapterSession(adapter) as session:
+                self.call(session, "a")
+                child = int(pid_file.read_text())
+                self.assertTrue(process_alive(child))
+                hung = self.call(session, "hang", timeout=0.5)
+                self.assertEqual(hung["error"], {"type": "unknown_error", "message": "Timeout"})
+                deadline = time.monotonic() + 5
+                while process_alive(child) and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                self.assertFalse(process_alive(child), "the serve process's child outlived the timeout")
 
     @patch("harness.subprocess.run")
     def test_without_serve_runs_one_process_per_call(self, run) -> None:

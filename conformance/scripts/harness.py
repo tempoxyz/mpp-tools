@@ -449,25 +449,33 @@ class AdapterClient:
         return legacy_response_for_operation(op, response)
 
 
-def stop_adapter_process(process: subprocess.Popen[str], timeout: float = 5) -> None:
-    """Terminate a process started by AdapterClient.start, with its children."""
-    # The adapter may run the server in a child, such as uv run's Python.
+def _kill_process_group(process: subprocess.Popen[str], timeout: float) -> None:
+    """SIGTERM a session leader's process group, then SIGKILL what is left.
+
+    Adapters may run their work in a child, such as uv run's Python, that
+    would outlive a signal sent to the leader alone.
+    """
     try:
         os.killpg(process.pid, signal.SIGTERM)
     except ProcessLookupError:
         pass
-    if process.poll() is None:
-        deadline = time.monotonic() + timeout
-        while process.poll() is None and time.monotonic() < deadline:
-            time.sleep(0.05)
-        if process.poll() is None:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            process.wait()
+    try:
+        process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    process.wait()
+
+
+def stop_adapter_process(process: subprocess.Popen[str], timeout: float = 5) -> None:
+    """Terminate a process started by AdapterClient.start, with its children."""
+    _kill_process_group(process, timeout)
     if process.stdout is not None:
         process.stdout.close()
+
 
 class AdapterSession(AdapterClient):
     """An adapter client that keeps one adapter process alive across calls.
@@ -482,6 +490,7 @@ class AdapterSession(AdapterClient):
         super().__init__(adapter)
         self._process: subprocess.Popen[str] | None = None
         self._lines: queue.Queue[str | None] = queue.Queue()
+        self._reader: threading.Thread | None = None
 
     def __enter__(self) -> AdapterSession:
         return self
@@ -490,16 +499,7 @@ class AdapterSession(AdapterClient):
         self.close()
 
     def close(self) -> None:
-        process, self._process = self._process, None
-        if process is None:
-            return
-        try:
-            if process.stdin:
-                process.stdin.close()
-            process.wait(timeout=5)
-        except Exception:
-            process.kill()
-            process.wait()
+        self._stop(graceful=True)
 
     def _start(self) -> subprocess.Popen[str]:
         assert self.adapter.serve_command is not None
@@ -511,17 +511,23 @@ class AdapterSession(AdapterClient):
             encoding="utf-8",
             cwd=self.adapter.cwd,
             env=self._env(),
+            # Its own process group, so _stop also reaches a child such as uv run's Python.
+            start_new_session=True,
         )
         lines: queue.Queue[str | None] = queue.Queue()
 
         def read() -> None:
             assert process.stdout is not None
-            for line in process.stdout:
-                lines.put(line)
+            try:
+                for line in process.stdout:
+                    lines.put(line)
+            except (OSError, ValueError):
+                pass
             lines.put(None)
 
-        threading.Thread(target=read, daemon=True).start()
-        self._process, self._lines = process, lines
+        reader = threading.Thread(target=read, daemon=True)
+        reader.start()
+        self._process, self._lines, self._reader = process, lines, reader
         return process
 
     def _exchange(self, request: dict[str, Any], timeout: float) -> str | dict[str, Any]:
@@ -534,19 +540,39 @@ class AdapterSession(AdapterClient):
             process.stdin.flush()
             line = self._lines.get(timeout=timeout)
         except queue.Empty:
-            self._kill()
+            self._stop(graceful=False)
             return {"ok": False, "error": {"type": "unknown_error", "message": "Timeout"}}
         except (BrokenPipeError, OSError) as exc:
-            self._kill()
+            self._stop(graceful=False)
             return {"ok": False, "error": {"type": "unknown_error", "message": f"Adapter process failed: {exc}"}}
         if line is None:
             code = process.wait()
-            self._process = None
+            self._stop(graceful=False)
             return {"ok": False, "error": {"type": "unknown_error", "message": f"Adapter process exited with code {code}"}}
         return line
 
-    def _kill(self) -> None:
+    def _stop(self, *, graceful: bool) -> None:
+        """Stop the serve process and every process in its group, and close its pipes.
+
+        graceful closes stdin first and gives the adapter 5 s to exit on its own.
+        """
         process, self._process = self._process, None
-        if process is not None:
-            process.kill()
-            process.wait()
+        reader, self._reader = self._reader, None
+        if process is None:
+            return
+        if process.stdin is not None:
+            try:
+                process.stdin.close()
+            except OSError:
+                pass
+        if graceful:
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+        _kill_process_group(process, timeout=1 if not graceful else 5)
+        # The group is gone, so the reader sees EOF; let it finish before closing.
+        if reader is not None:
+            reader.join(timeout=1)
+        if process.stdout is not None:
+            process.stdout.close()
