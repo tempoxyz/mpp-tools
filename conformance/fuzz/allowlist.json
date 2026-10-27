@@ -1,0 +1,495 @@
+{
+  "$comment": "Known differences from the TypeScript (mppx) reference adapter that scripts/diff_fuzz.py accepts. category: harmless (allowed by the protocol), sdk-bug (an SDK is wrong; remove the entry when it is fixed) or adapter-bug (a conformance adapter is wrong). An entry matches a divergence when its adapters (or *), operations and kinds match, every differing field is listed in fields, messagePattern matches the failing side's error message, and inputPattern matches the header, text or JSON input.",
+  "entries": [
+    {
+      "id": "adapter-trims-input",
+      "adapters": [
+        "python",
+        "go",
+        "rust"
+      ],
+      "operations": [
+        "challenge.parse",
+        "credential.parse",
+        "receipt.parse",
+        "base64url.encode",
+        "base64url.decode"
+      ],
+      "kinds": [
+        "accepts",
+        "rejects",
+        "value"
+      ],
+      "inputPattern": "^\\s|\\s$",
+      "category": "adapter-bug",
+      "reason": "These adapters route operations through their legacy command path, which trims stdin (Python str.strip, Go strings.TrimSpace, Rust trim) before calling the SDK. The TypeScript adapter passes the input unchanged."
+    },
+    {
+      "id": "adapter-returns-decoded-opaque",
+      "adapters": [
+        "python",
+        "go",
+        "rust"
+      ],
+      "operations": [
+        "challenge.parse",
+        "credential.parse"
+      ],
+      "kinds": [
+        "crash"
+      ],
+      "messagePattern": "at (challenge\\.)?opaque:",
+      "category": "adapter-bug",
+      "reason": "These adapters return a parsed opaque as the SDK's decoded map instead of its wire string, so the value fails the Challenge schema. No vector parses an opaque yet."
+    },
+    {
+      "id": "python-adapter-drops-opaque",
+      "adapters": [
+        "python"
+      ],
+      "operations": [
+        "challenge.format",
+        "credential.format"
+      ],
+      "kinds": [
+        "value"
+      ],
+      "fields": [
+        "opaque",
+        "challenge.opaque"
+      ],
+      "category": "adapter-bug",
+      "reason": "The Python adapter's format-www-authenticate and format-authorization build the Challenge without opaque, so the header loses it."
+    },
+    {
+      "id": "echo-drops-description",
+      "adapters": [
+        "python",
+        "go",
+        "rust"
+      ],
+      "operations": [
+        "credential.parse",
+        "credential.format"
+      ],
+      "kinds": [
+        "value"
+      ],
+      "fields": [
+        "challenge.description"
+      ],
+      "category": "harmless",
+      "reason": "pympp, mpp-go and mpp-rs leave description out of a credential's challenge echo, so parsing or formatting a credential drops it. The challenge id does not bind description."
+    },
+    {
+      "id": "python-rejects-control-chars-in-echo",
+      "adapters": [
+        "python"
+      ],
+      "operations": [
+        "credential.parse"
+      ],
+      "kinds": [
+        "rejects"
+      ],
+      "messagePattern": "invalid (control|CRLF) characters",
+      "category": "harmless",
+      "reason": "pympp 0.16 applies its header-safety check (no control characters or CR/LF) to every string in a credential's challenge echo, including description, and rejects the credential. mppx accepts them. The pinned pympp 0.11 does not check, so this only shows against pympp main."
+    },
+    {
+      "id": "rust-adapter-formats-raw-opaque",
+      "adapters": [
+        "rust"
+      ],
+      "operations": [
+        "challenge.format",
+        "credential.format"
+      ],
+      "kinds": [
+        "value"
+      ],
+      "fields": [
+        "opaque",
+        "challenge.opaque"
+      ],
+      "category": "adapter-bug",
+      "reason": "The Rust adapter wraps a wire opaque string as {\"_raw\": ...} before formatting, so the header carries a different opaque."
+    },
+    {
+      "id": "method-id-grammar",
+      "adapters": [
+        "python",
+        "go"
+      ],
+      "operations": [
+        "challenge.parse",
+        "challenge.format",
+        "credential.parse",
+        "credential.format",
+        "receipt.parse",
+        "receipt.format"
+      ],
+      "kinds": [
+        "rejects"
+      ],
+      "messagePattern": "(?i)method",
+      "category": "harmless",
+      "reason": "pympp (1*LOWERALPHA) and mpp-go reject method ids with digits, ':', '_' or '-' after the first letter, which mppx and mpp-rs accept. vectors/www-authenticate.json extended_method_identifier is scoped to typescript and rust for the same reason."
+    },
+    {
+      "id": "empty-realm-rejected",
+      "adapters": [
+        "python",
+        "go"
+      ],
+      "operations": [
+        "challenge.parse",
+        "challenge.format"
+      ],
+      "kinds": [
+        "rejects"
+      ],
+      "messagePattern": "(?i)realm",
+      "category": "sdk-bug",
+      "reason": "pympp and mpp-go treat realm=\"\" as missing. mppx and mpp-rs accept an empty realm, and the Challenge schema allows one."
+    },
+    {
+      "id": "go-drops-empty-realm",
+      "adapters": [
+        "go"
+      ],
+      "operations": [
+        "credential.parse"
+      ],
+      "kinds": [
+        "crash"
+      ],
+      "messagePattern": "'realm' is a required property",
+      "category": "sdk-bug",
+      "reason": "mpp-go drops an empty challenge realm from a parsed credential, so the adapter's value fails the Credential schema."
+    },
+    {
+      "id": "multi-challenge-header",
+      "adapters": [
+        "python",
+        "go",
+        "rust"
+      ],
+      "operations": [
+        "challenge.parse"
+      ],
+      "kinds": [
+        "rejects"
+      ],
+      "inputPattern": ",\\s*(?i:basic|bearer|payment)\\b|^(?i:basic|bearer)\\b",
+      "category": "sdk-bug",
+      "reason": "mppx finds the Payment challenge in a WWW-Authenticate value that lists several challenges (RFC 9110 §11.6.1). pympp, mpp-go and mpp-rs parse only a value that is a single Payment challenge: another scheme before it is rejected, and one after it is read as more Payment parameters."
+    },
+    {
+      "id": "scheme-separator-tab",
+      "adapters": [
+        "python",
+        "go",
+        "rust"
+      ],
+      "operations": [
+        "challenge.parse",
+        "credential.parse"
+      ],
+      "kinds": [
+        "rejects"
+      ],
+      "inputPattern": "^(?i:payment)(?! )",
+      "category": "harmless",
+      "reason": "pympp, mpp-go and mpp-rs require a space after 'Payment'; mppx also accepts a tab. RFC 9110 separates the scheme with 1*SP."
+    },
+    {
+      "id": "rust-bws-around-equals",
+      "adapters": [
+        "rust"
+      ],
+      "operations": [
+        "challenge.parse"
+      ],
+      "kinds": [
+        "rejects",
+        "crash"
+      ],
+      "inputPattern": "\\w\\s+=|=\\s",
+      "category": "sdk-bug",
+      "reason": "mpp-rs mishandles whitespace around '=' in an auth-param (request = \"e30\"), which RFC 9110 allows as BWS and mppx accepts: it rejects the challenge or reads an empty value."
+    },
+    {
+      "id": "python-params-without-commas",
+      "adapters": [
+        "python"
+      ],
+      "operations": [
+        "challenge.parse"
+      ],
+      "kinds": [
+        "accepts"
+      ],
+      "inputPattern": "\"\\s+[A-Za-z0-9!#$%&'*+.^_\\x60|~-]+\\s*=",
+      "category": "sdk-bug",
+      "reason": "pympp accepts auth-params separated only by whitespace (id=\"a\" realm=\"b\"); RFC 9110 requires commas and mppx rejects them."
+    },
+    {
+      "id": "rust-accepts-non-object-request",
+      "adapters": [
+        "rust"
+      ],
+      "operations": [
+        "challenge.parse"
+      ],
+      "kinds": [
+        "crash"
+      ],
+      "messagePattern": "at request: .* is not of type 'object'",
+      "category": "sdk-bug",
+      "reason": "mpp-rs accepts a challenge whose request decodes to a JSON array or scalar, so the adapter's value fails the Challenge schema. mppx rejects a request that is not an object."
+    },
+    {
+      "id": "python-echo-field-types",
+      "adapters": [
+        "python"
+      ],
+      "operations": [
+        "credential.parse"
+      ],
+      "kinds": [
+        "crash"
+      ],
+      "messagePattern": "at challenge\\.(expires|digest|description|opaque):",
+      "category": "sdk-bug",
+      "reason": "pympp does not type-check a credential's optional challenge fields: \"expires\": true parses and is stringified to \"True\". mppx rejects it."
+    },
+    {
+      "id": "credential-trailing-text",
+      "adapters": [
+        "go",
+        "rust"
+      ],
+      "operations": [
+        "credential.parse"
+      ],
+      "kinds": [
+        "accepts"
+      ],
+      "inputPattern": "^\\S+\\s+[A-Za-z0-9_=+/-]+\\s*,",
+      "category": "sdk-bug",
+      "reason": "mpp-go and mpp-rs accept an Authorization value with text after the base64url credential (such as ', Basic realm=\"x\"'); mppx rejects it."
+    },
+    {
+      "id": "python-base64-ignores-invalid-chars",
+      "adapters": [
+        "python"
+      ],
+      "operations": [
+        "credential.parse",
+        "receipt.parse"
+      ],
+      "kinds": [
+        "accepts"
+      ],
+      "category": "sdk-bug",
+      "reason": "pympp decodes credentials and receipts with base64.urlsafe_b64decode, which discards characters outside the alphabet, so values with quotes, commas, spaces or trailing text decode where mppx rejects them."
+    },
+    {
+      "id": "source-is-a-string",
+      "adapters": [
+        "go",
+        "rust"
+      ],
+      "operations": [
+        "credential.parse",
+        "credential.format"
+      ],
+      "kinds": [
+        "rejects",
+        "value"
+      ],
+      "fields": [
+        "source"
+      ],
+      "category": "harmless",
+      "reason": "mpp-go and mpp-rs model a credential's source as a string (the payer DID): they reject an object source, or mpp-rs drops it when formatting. mppx and the Credential schema also allow an object.",
+      "messagePattern": "(?i)source|expected a string|^$"
+    },
+    {
+      "id": "python-source-repr",
+      "adapters": [
+        "python"
+      ],
+      "operations": [
+        "credential.parse"
+      ],
+      "kinds": [
+        "value"
+      ],
+      "fields": [
+        "source"
+      ],
+      "category": "sdk-bug",
+      "reason": "pympp's parse_authorization sets source=str(data[\"source\"]), so an object source becomes its Python repr (\"{'amount': None}\") instead of being kept or rejected."
+    },
+    {
+      "id": "rust-jcs-escapes-c1",
+      "adapters": [
+        "rust"
+      ],
+      "operations": [
+        "challenge.id"
+      ],
+      "kinds": [
+        "value"
+      ],
+      "inputPattern": "[\\x7f-\\x9f]",
+      "category": "sdk-bug",
+      "reason": "mpp-rs canonicalizes the request with U+007F to U+009F escaped, while JCS (RFC 8785) escapes only U+0000 to U+001F, so ids for requests containing them differ from mppx's."
+    },
+    {
+      "id": "rust-jcs-integral-floats",
+      "adapters": [
+        "rust"
+      ],
+      "operations": [
+        "challenge.id"
+      ],
+      "kinds": [
+        "value"
+      ],
+      "inputPattern": "\\d\\.0[,}\\] ]|\\de[+-]?\\d",
+      "category": "sdk-bug",
+      "reason": "mpp-rs canonicalizes integral floats such as 0.0 as written, while JCS (RFC 8785) uses ECMAScript number serialization (0.0 becomes 0), so the ids differ from mppx's."
+    },
+    {
+      "id": "python-quadratic-header-parsing",
+      "adapters": [
+        "python"
+      ],
+      "operations": [
+        "challenge.parse"
+      ],
+      "kinds": [
+        "crash"
+      ],
+      "messagePattern": "^Timeout$",
+      "inputPattern": "^[\\s\\S]{12000}",
+      "category": "sdk-bug",
+      "reason": "pympp's parse_www_authenticate is quadratic in the header length: 12 KB takes about 2 s, 48 KB about 26 s and 97 KB about 100 s, past the fuzzer's timeout. mppx, mpp-go and mpp-rs answer in milliseconds; mpp-go also caps the header size."
+    },
+    {
+      "id": "go-header-size-limit",
+      "adapters": [
+        "go"
+      ],
+      "operations": [
+        "challenge.parse",
+        "credential.parse"
+      ],
+      "kinds": [
+        "rejects"
+      ],
+      "messagePattern": "exceeds maximum size",
+      "category": "harmless",
+      "reason": "mpp-go rejects WWW-Authenticate and Authorization values above its size limit; mppx has none."
+    },
+    {
+      "id": "go-realm-delimiter",
+      "adapters": [
+        "go"
+      ],
+      "operations": [
+        "challenge.id"
+      ],
+      "kinds": [
+        "rejects"
+      ],
+      "messagePattern": "reserved delimiter",
+      "category": "harmless",
+      "reason": "mpp-go refuses to bind a realm, method or intent containing '|', the HMAC input delimiter, so two challenges cannot share an id. mppx binds it as is."
+    },
+    {
+      "id": "mppx-credential-without-payload",
+      "adapters": [
+        "*"
+      ],
+      "operations": [
+        "credential.parse"
+      ],
+      "kinds": [
+        "reference_crash"
+      ],
+      "messagePattern": "'payload' is a required property",
+      "category": "sdk-bug",
+      "reason": "mppx's Credential.deserialize accepts a credential with no payload, so the reference value fails the Credential schema. The other SDKs reject it."
+    },
+    {
+      "id": "receipt-timestamp-precision",
+      "adapters": [
+        "python",
+        "go"
+      ],
+      "operations": [
+        "receipt.parse",
+        "receipt.format"
+      ],
+      "kinds": [
+        "value"
+      ],
+      "fields": [
+        "timestamp"
+      ],
+      "category": "harmless",
+      "reason": "pympp and mpp-go re-render receipt timestamps, dropping zero milliseconds (2000-01-01T00:00:00.000Z becomes 2000-01-01T00:00:00Z). Both name the same instant."
+    },
+    {
+      "id": "reference-receipt-format-strict",
+      "adapters": [
+        "*"
+      ],
+      "operations": [
+        "receipt.format"
+      ],
+      "kinds": [
+        "accepts"
+      ],
+      "messagePattern": "\"(status|method)\"",
+      "category": "harmless",
+      "reason": "mppx's Receipt.serialize requires method and status \"success\"; the Receipt schema and other SDKs allow any status and no method."
+    },
+    {
+      "id": "reference-receipt-null-optional",
+      "adapters": [
+        "*"
+      ],
+      "operations": [
+        "receipt.parse"
+      ],
+      "kinds": [
+        "accepts"
+      ],
+      "messagePattern": "\"expected\": \"string\"",
+      "category": "harmless",
+      "reason": "mppx rejects a receipt whose optional string fields (such as externalId) are null; the other SDKs read null as absent."
+    },
+    {
+      "id": "reference-base64url-lenient",
+      "adapters": [
+        "*"
+      ],
+      "operations": [
+        "base64url.decode",
+        "credential.parse",
+        "receipt.parse"
+      ],
+      "kinds": [
+        "rejects"
+      ],
+      "messagePattern": "(?i)base64",
+      "category": "harmless",
+      "reason": "mppx decodes non-canonical base64url (padding, a lone trailing character, non-zero trailing bits) that the other SDKs reject. Rejecting them is stricter, not wrong."
+    }
+  ]
+}

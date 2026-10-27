@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import selectors
 import signal
 import subprocess
 import tempfile
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -183,6 +185,7 @@ class AdapterConfig:
     command: list[str]
     capabilities: list[str]
     build_command: list[str] | None = None
+    serve_command: list[str] | None = None
     cwd: Path | None = None
     env: dict[str, str] | None = None
     manifest_path: Path | None = None
@@ -199,6 +202,7 @@ def discover_adapters() -> dict[str, AdapterConfig]:
             name=manifest["name"],
             command=manifest["command"],
             build_command=manifest.get("build"),
+            serve_command=manifest.get("serve"),
             cwd=cwd.resolve(),
             env=manifest.get("env"),
             capabilities=manifest["capabilities"],
@@ -300,30 +304,11 @@ class AdapterClient:
         )
         validate_value(request, request_schema, f"{self.adapter.name} request")
 
-        env = os.environ.copy()
-        if self.adapter.env:
-            env.update(self.adapter.env)
+        stdout = self._exchange(request, timeout)
+        if isinstance(stdout, dict):
+            return stdout
         try:
-            result = subprocess.run(
-                self.adapter.command,
-                input=json.dumps(request),
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                cwd=self.adapter.cwd,
-                env=env,
-            )
-        except subprocess.TimeoutExpired:
-            return {"ok": False, "error": {"type": "unknown_error", "message": "Timeout"}}
-        except Exception as exc:
-            return {"ok": False, "error": {"type": "unknown_error", "message": str(exc)}}
-
-        if result.returncode != 0:
-            message = result.stderr.strip() or result.stdout.strip() or f"Command failed with exit code {result.returncode}"
-            return {"ok": False, "error": {"type": "unknown_error", "message": message}}
-
-        try:
-            response = json.loads(result.stdout.strip())
+            response = json.loads(stdout.strip())
         except json.JSONDecodeError as exc:
             return {
                 "ok": False,
@@ -419,6 +404,34 @@ class AdapterClient:
             return response, None
         return response, process
 
+    def _env(self) -> dict[str, str]:
+        env = os.environ.copy()
+        if self.adapter.env:
+            env.update(self.adapter.env)
+        return env
+
+    def _exchange(self, request: dict[str, Any], timeout: float) -> str | dict[str, Any]:
+        """Run the adapter on one request: its stdout, or an error response."""
+        try:
+            result = subprocess.run(
+                self.adapter.command,
+                input=json.dumps(request),
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                cwd=self.adapter.cwd,
+                env=self._env(),
+            )
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "error": {"type": "unknown_error", "message": "Timeout"}}
+        except Exception as exc:
+            return {"ok": False, "error": {"type": "unknown_error", "message": str(exc)}}
+
+        if result.returncode != 0:
+            message = result.stderr.strip() or result.stdout.strip() or f"Command failed with exit code {result.returncode}"
+            return {"ok": False, "error": {"type": "unknown_error", "message": message}}
+        return result.stdout
+
     def run_legacy_command(
         self,
         command: str,
@@ -455,3 +468,85 @@ def stop_adapter_process(process: subprocess.Popen[str], timeout: float = 5) -> 
             process.wait()
     if process.stdout is not None:
         process.stdout.close()
+
+class AdapterSession(AdapterClient):
+    """An adapter client that keeps one adapter process alive across calls.
+
+    Adapters whose manifest declares `serve` read one JSON request per line
+    and answer each with one JSON response line. Others start a process per
+    call, as AdapterClient does. A crashed or timed-out process is restarted
+    on the next call. Use as a context manager, or call close().
+    """
+
+    def __init__(self, adapter: AdapterConfig):
+        super().__init__(adapter)
+        self._process: subprocess.Popen[str] | None = None
+        self._lines: queue.Queue[str | None] = queue.Queue()
+
+    def __enter__(self) -> AdapterSession:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
+
+    def close(self) -> None:
+        process, self._process = self._process, None
+        if process is None:
+            return
+        try:
+            if process.stdin:
+                process.stdin.close()
+            process.wait(timeout=5)
+        except Exception:
+            process.kill()
+            process.wait()
+
+    def _start(self) -> subprocess.Popen[str]:
+        assert self.adapter.serve_command is not None
+        process = subprocess.Popen(
+            self.adapter.serve_command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            cwd=self.adapter.cwd,
+            env=self._env(),
+        )
+        lines: queue.Queue[str | None] = queue.Queue()
+
+        def read() -> None:
+            assert process.stdout is not None
+            for line in process.stdout:
+                lines.put(line)
+            lines.put(None)
+
+        threading.Thread(target=read, daemon=True).start()
+        self._process, self._lines = process, lines
+        return process
+
+    def _exchange(self, request: dict[str, Any], timeout: float) -> str | dict[str, Any]:
+        if self.adapter.serve_command is None:
+            return super()._exchange(request, timeout)
+        process = self._process if self._process and self._process.poll() is None else self._start()
+        try:
+            assert process.stdin is not None
+            process.stdin.write(json.dumps(request) + "\n")
+            process.stdin.flush()
+            line = self._lines.get(timeout=timeout)
+        except queue.Empty:
+            self._kill()
+            return {"ok": False, "error": {"type": "unknown_error", "message": "Timeout"}}
+        except (BrokenPipeError, OSError) as exc:
+            self._kill()
+            return {"ok": False, "error": {"type": "unknown_error", "message": f"Adapter process failed: {exc}"}}
+        if line is None:
+            code = process.wait()
+            self._process = None
+            return {"ok": False, "error": {"type": "unknown_error", "message": f"Adapter process exited with code {code}"}}
+        return line
+
+    def _kill(self) -> None:
+        process, self._process = self._process, None
+        if process is not None:
+            process.kill()
+            process.wait()

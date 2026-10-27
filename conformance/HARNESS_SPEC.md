@@ -99,6 +99,10 @@ Rules:
 - `command` must start a process that reads one JSON request from stdin and
   writes one JSON response to stdout.
 - stderr is free for logs. stdout must contain only the response JSON.
+- `serve` is optional: a command that stays alive, reads one JSON request per
+  stdin line and writes one JSON response line for each, in order. Runners
+  that send many requests, such as `scripts/diff_fuzz.py`, use it to skip
+  process startup; others start `command` once per request.
 
 ## Adapter ABI
 

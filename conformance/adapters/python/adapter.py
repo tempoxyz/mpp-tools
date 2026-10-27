@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Python conformance adapter using the pympp SDK."""
 
+import contextlib
+import io
 import sys
 import json
 import base64
@@ -697,7 +699,14 @@ def run_legacy_subprocess(command: str, input_data: str = ""):
     return json.loads(result.stdout)
 
 
-def run_adapter_request(request: dict):
+def run_legacy_in_process(command: str, input_data: str = ""):
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        run_legacy_command(command, input_data)
+    return json.loads(output.getvalue())
+
+
+def run_adapter_request(request: dict, legacy=run_legacy_subprocess):
     op = request.get("op")
     input_value = request.get("input")
     if op == "http.payment_request":
@@ -717,10 +726,22 @@ def run_adapter_request(request: dict):
     command = OP_TO_COMMAND.get(op)
     if command is None:
         return adapter_error(f"Unknown operation: {op}", "unsupported_operation")
-    result = run_legacy_subprocess(command, command_input_for_request(op, input_value))
+    result = legacy(command, command_input_for_request(op, input_value))
     if not result.get("success"):
         return adapter_error(result.get("error", ""), result.get("error_type", "unknown_error"))
     return adapter_success(response_value_for_operation(op, result.get("result")))
+
+
+def serve():
+    """Answer one JSON request per stdin line, for runners that keep the adapter alive."""
+    for line in sys.stdin:
+        if not line.strip():
+            continue
+        try:
+            response = run_adapter_request(json.loads(line), legacy=run_legacy_in_process)
+        except Exception as e:
+            response = adapter_error(str(e))
+        print(json.dumps(response), flush=True)
 
 
 def main():
@@ -735,10 +756,16 @@ def main():
             print(json.dumps(adapter_error(str(e))))
         return
 
-    command = sys.argv[1]
+    if sys.argv[1] == "--serve":
+        serve()
+        return
 
-    input_data = sys.stdin.read().strip()
+    run_legacy_command(sys.argv[1], sys.stdin.read())
 
+
+def run_legacy_command(command: str, input_data: str):
+    """Run one legacy command and print its result."""
+    input_data = input_data.strip()
     try:
         if command == "parse-www-authenticate":
             challenge = parse_www_authenticate(input_data)

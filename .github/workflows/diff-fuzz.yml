@@ -1,0 +1,105 @@
+name: Differential Fuzzing
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+    paths:
+      - .github/actions/setup-conformance/**
+      - .github/workflows/diff-fuzz.yml
+      - conformance/**
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+    inputs:
+      budget:
+        description: Seconds to fuzz for.
+        required: false
+        default: "1800"
+      seed:
+        description: Seed to reproduce a run, random when empty.
+        required: false
+        default: ""
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Pull requests run a short, fixed-seed pass over the adapters that build
+  # quickly, so a new divergence comes from the change. The nightly run fuzzes
+  # every adapter with a random seed for a long budget.
+  fuzz:
+    name: differential fuzzing
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: conformance
+    steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Rust and Node.js
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/setup-conformance # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
+        with:
+          adapter: rust
+          setup-node: "true"
+
+      - name: Setup Go
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/setup-conformance # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
+        with:
+          adapter: go
+
+      - name: Setup all adapters
+        if: github.event_name != 'pull_request'
+        uses: ./.github/actions/setup-conformance # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
+        with:
+          adapter: all
+
+      - name: Install adapters
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          make install-runner install-python install-go install-rust
+          if [ "$EVENT_NAME" != pull_request ]; then
+            make install-ruby install-java
+          fi
+
+      - name: Run differential fuzzing
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BUDGET: ${{ inputs.budget || '1800' }}
+          SEED: ${{ inputs.seed }}
+        run: |
+          if [ "$EVENT_NAME" = pull_request ]; then
+            set -- --adapters python,go,rust --seed 0 --max-examples 150
+          else
+            set -- --budget "$BUDGET"
+            if [ -n "$SEED" ]; then
+              set -- "$@" --seed "$SEED"
+            fi
+          fi
+          uv run --locked python scripts/diff_fuzz.py "$@" --report diff-fuzz-report.json
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: diff-fuzz-report
+          path: conformance/diff-fuzz-report.json
+          if-no-files-found: warn

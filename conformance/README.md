@@ -139,6 +139,30 @@ SDK-reserved challenge extensions (`_mpp_nonce`/`_mppx_nonce` in `opaque`,
 pympp's `_mppx_scope` route binding in `request`) are not compared; the
 cross-route scenarios check their effect.
 
+## Differential Fuzzing
+
+`scripts/diff_fuzz.py` generates inputs with [Hypothesis](https://hypothesis.readthedocs.io)
+for the vector operations (challenge, credential and receipt parse and format,
+base64url and challenge ids), sends each to every selected adapter and to the
+TypeScript reference adapter, and compares the normalized results: the same
+success or failure class and the same parsed value. Inputs range from valid
+values, whose formatted headers are parsed back, to adversarial header strings
+with quotes, backslashes, Unicode, decoy `Payment` text, several challenges,
+huge or nested JSON and bad base64.
+
+```bash
+uv run --locked python scripts/diff_fuzz.py --adapters python,go --budget 120
+uv run --locked python scripts/diff_fuzz.py --seed 0 --max-examples 150
+```
+
+Each new divergence is shrunk to a minimal input and printed as a vector
+scenario expecting the reference result, ready to paste into `vectors/`.
+Known differences live in [`fuzz/allowlist.json`](./fuzz/allowlist.json), each
+with a category (`harmless`, `sdk-bug` or `adapter-bug`) and a reason; remove
+an entry when its bug is fixed. Pull requests run a short fixed-seed pass and a
+nightly run fuzzes every adapter for 30 minutes
+([`diff-fuzz.yml`](../.github/workflows/diff-fuzz.yml)).
+
 ## Adapters
 
 Each adapter is a CLI binary that reads from stdin and writes JSON to stdout:
