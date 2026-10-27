@@ -57,6 +57,20 @@ class LoadScenariosTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "not an earlier step"):
             self.load(document)
 
+    def test_reference_to_a_pay_step_is_rejected(self) -> None:
+        document = copy.deepcopy(self.document)
+        document["scenarios"][0]["steps"].append({"name": "again", "kind": "request", "path": "/paid", "replay": "pay"})
+        with self.assertRaisesRegex(ValueError, "not a request step"):
+            self.load(document)
+
+    def test_expected_failure_of_an_unknown_step_is_rejected(self) -> None:
+        document = copy.deepcopy(self.document)
+        document["scenarios"][0]["expectedFailures"] = [
+            {"client": "*", "server": "python", "steps": ["missing"], "reason": "known"}
+        ]
+        with self.assertRaisesRegex(ValueError, "unknown steps: missing"):
+            self.load(document)
+
     def test_pay_step_cannot_carry_a_credential(self) -> None:
         document = copy.deepcopy(self.document)
         document["scenarios"][0]["steps"].append(
@@ -108,25 +122,52 @@ class WireNormalizationTest(unittest.TestCase):
 
 
 class CompareTest(unittest.TestCase):
-    scenario = {"name": "s", "expectedFailures": [{"client": "*", "server": "python", "reason": "known"}]}
+    scenario = {
+        "name": "s",
+        "expectedFailures": [
+            {"client": "*", "server": "python", "steps": ["b"], "reason": "known"},
+            {"client": "go", "server": "python", "steps": ["c"], "reason": "go"},
+        ],
+    }
+    expected = [{"name": "a", "status": 200}, {"name": "b", "status": 402}, {"name": "c", "status": 402}]
+
+    def run_with(self, **statuses: int) -> list[dict[str, object]]:
+        return [{**step, "status": statuses.get(str(step["name"]), step["status"])} for step in self.expected]
 
     def test_statuses(self) -> None:
-        same, other = [{"name": "a", "status": 200}], [{"name": "a", "status": 402}]
-        self.assertEqual(pair_runner.compare(self.scenario, same, same, "go", "typescript").status, "pass")
-        self.assertEqual(pair_runner.compare(self.scenario, same, other, "go", "typescript").status, "fail")
-        self.assertEqual(pair_runner.compare(self.scenario, same, other, "go", "python").status, "xfail")
-        xpass = pair_runner.compare(self.scenario, same, same, "go", "python")
+        same, other = self.run_with(), self.run_with(b=403, c=403)
+        self.assertEqual(pair_runner.compare(self.scenario, self.expected, same, "go", "typescript").status, "pass")
+        self.assertEqual(pair_runner.compare(self.scenario, self.expected, other, "go", "typescript").status, "fail")
+        xfail = pair_runner.compare(self.scenario, self.expected, other, "go", "python")
+        self.assertEqual((xfail.status, xfail.detail), ("xfail", "known go"))
+        xpass = pair_runner.compare(self.scenario, self.expected, same, "ruby", "python")
         self.assertEqual(xpass.status, "xpass")
         self.assertTrue(xpass.failed)
 
-    def test_errors_follow_expected_failures(self) -> None:
-        error = RuntimeError("adapter crashed")
-        self.assertEqual(pair_runner.compare(self.scenario, [], error, "go", "python").status, "xfail")
-        failed = pair_runner.compare(self.scenario, [], error, "go", "typescript")
-        self.assertEqual((failed.status, failed.detail), ("fail", "RuntimeError: adapter crashed"))
+    def test_expected_failure_covers_only_its_steps(self) -> None:
+        result = pair_runner.compare(self.scenario, self.expected, self.run_with(a=500, b=403), "ruby", "python")
+        self.assertEqual(result.status, "fail")
+        self.assertIn("step a:", str(result.detail))
+        self.assertNotIn("step b:", str(result.detail))
+
+    def test_entry_whose_steps_all_match_is_stale(self) -> None:
+        # b still differs, but the go entry for c no longer does.
+        result = pair_runner.compare(self.scenario, self.expected, self.run_with(b=403), "go", "python")
+        self.assertEqual((result.status, result.detail), ("xpass", "expected failure no longer fails: go"))
+
+    def test_step_errors_follow_expected_failures(self) -> None:
+        error = pair_runner.StepFailed("b", self.expected[:1], RuntimeError("adapter crashed"))
+        # The go entry's step c never ran, so it is not reported stale.
+        self.assertEqual(pair_runner.compare(self.scenario, self.expected, error, "go", "python").status, "xfail")
+        failed = pair_runner.compare(self.scenario, self.expected, error, "go", "typescript")
+        self.assertEqual((failed.status, failed.detail), ("fail", "step b: RuntimeError: adapter crashed"))
+
+    def test_errors_outside_a_step_fail(self) -> None:
+        failed = pair_runner.compare(self.scenario, self.expected, RuntimeError("server crashed"), "go", "python")
+        self.assertEqual((failed.status, failed.detail), ("fail", "RuntimeError: server crashed"))
 
     def test_missing_snapshot_fails(self) -> None:
-        result = pair_runner.compare({"name": "s"}, None, [], "typescript", "typescript")
+        result = pair_runner.compare(self.scenario, None, [], "go", "python")
         self.assertEqual(result.status, "fail")
 
 

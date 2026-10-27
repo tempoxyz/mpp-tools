@@ -235,6 +235,7 @@
       "required": [
         "client",
         "server",
+        "steps",
         "reason"
       ],
       "additionalProperties": false,
@@ -246,6 +247,15 @@
         "server": {
           "type": "string",
           "description": "Server adapter name, or * for any."
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/Name"
+          },
+          "description": "Steps the reason covers; every other step is compared strictly."
         },
         "reason": {
           "type": "string",
