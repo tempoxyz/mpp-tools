@@ -254,11 +254,13 @@ jobs:
       - name: Install runner dependencies
         run: uv sync --locked
 
-      - name: Install Go adapter dependencies
-        run: make install-go
+      # Every adapter that declares server.verify runs here; add its install
+      # target when another adapter declares it.
+      - name: Install Go and Python adapter dependencies
+        run: make install-go install-python
 
       - name: Run server verification conformance
-        run: uv run --locked python scripts/server_verify_runner.py --adapter go
+        run: uv run --locked python scripts/server_verify_runner.py
 
   conformance:
     runs-on: ubuntu-latest
