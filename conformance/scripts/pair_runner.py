@@ -63,6 +63,15 @@ class ScenarioSkipped(Exception):
     """The server adapter cannot run this scenario, such as an SDK too old for http.server."""
 
 
+class StepFailed(Exception):
+    """A step raised; carries the snapshots of the steps before it."""
+
+    def __init__(self, step: str, completed: list[dict[str, Any]], error: Exception):
+        super().__init__(f"{type(error).__name__}: {error}")
+        self.step = step
+        self.completed = completed
+
+
 @dataclass
 class PairResult:
     client: str
@@ -85,14 +94,22 @@ def load_scenarios(path: Path = SCENARIOS_PATH) -> list[dict[str, Any]]:
         if name in names:
             raise ValueError(f"{path} contains duplicate pair scenario name: {name}")
         names.add(name)
-        seen: set[str] = set()
+        # Earlier step names and kinds: replay and credential.from read the
+        # request a request step sent or the response it received.
+        seen: dict[str, str] = {}
         for step in scenario["steps"]:
             for reference in (step.get("replay"), step.get("credential", {}).get("from")):
                 if reference is not None and reference not in seen:
                     raise ValueError(f"{path} scenario {name} step {step['name']} refers to {reference}, not an earlier step")
+                if reference is not None and seen[reference] != "request":
+                    raise ValueError(f"{path} scenario {name} step {step['name']} refers to {reference}, not a request step")
             if step["name"] in seen:
                 raise ValueError(f"{path} scenario {name} contains duplicate step name: {step['name']}")
-            seen.add(step["name"])
+            seen[step["name"]] = step["kind"]
+        for entry in scenario.get("expectedFailures", []):
+            unknown = sorted(set(entry["steps"]) - set(seen))
+            if unknown:
+                raise ValueError(f"{path} scenario {name} expected failure names unknown steps: {', '.join(unknown)}")
     return document["scenarios"]
 
 
@@ -258,7 +275,13 @@ class ScenarioRun:
         self.sent: dict[str, dict[str, str]] = {}
 
     def run(self) -> list[dict[str, Any]]:
-        return [{"name": step["name"], **self.run_step(step)} for step in self.scenario["steps"]]
+        snapshots: list[dict[str, Any]] = []
+        for step in self.scenario["steps"]:
+            try:
+                snapshots.append({"name": step["name"], **self.run_step(step)})
+            except Exception as exc:
+                raise StepFailed(step["name"], snapshots, exc) from exc
+        return snapshots
 
     def run_step(self, step: dict[str, Any]) -> dict[str, Any]:
         url = self.base_url + step["path"]
@@ -371,11 +394,12 @@ def run_scenario(
         stop_adapter_process(process)
 
 
-def expected_failure(scenario: dict[str, Any], client: str, server: str) -> str | None:
-    for entry in scenario.get("expectedFailures", []):
-        if entry["client"] in {"*", client} and entry["server"] in {"*", server}:
-            return entry["reason"]
-    return None
+def expected_failures(scenario: dict[str, Any], client: str, server: str) -> list[dict[str, Any]]:
+    return [
+        entry
+        for entry in scenario.get("expectedFailures", [])
+        if entry["client"] in {"*", client} and entry["server"] in {"*", server}
+    ]
 
 
 def compare(
@@ -385,20 +409,44 @@ def compare(
     client: str,
     server: str,
 ) -> PairResult:
-    """Compare a run, or the error that stopped it, with the scenario's snapshot."""
-    if isinstance(actual, Exception):
-        diff = f"{type(actual).__name__}: {actual}"
-    elif expected is None:
-        diff = "missing snapshot; run --update"
+    """Compare a run, or the error that stopped it, with the scenario's snapshot.
+
+    An expected failure covers only the steps it names: a difference in any
+    other step fails, and an entry whose steps all ran and matched is an xpass.
+    """
+    name = scenario["name"]
+    if expected is None:
+        return PairResult(client, server, name, "fail", "missing snapshot; run --update")
+    differing: dict[str, str] = {}
+    if isinstance(actual, StepFailed):
+        steps = actual.completed
+        differing[actual.step] = str(actual)
+    elif isinstance(actual, Exception):
+        return PairResult(client, server, name, "fail", f"{type(actual).__name__}: {actual}")
     else:
-        changes = DeepDiff(expected, actual, verbose_level=2)
-        diff = json.dumps(changes, indent=2, default=str) if changes else ""
-    reason = expected_failure(scenario, client, server)
-    if reason is None:
-        return PairResult(client, server, scenario["name"], "fail" if diff else "pass", diff or None)
-    if diff:
-        return PairResult(client, server, scenario["name"], "xfail", reason)
-    return PairResult(client, server, scenario["name"], "xpass", f"expected failure no longer fails: {reason}")
+        steps = actual
+    expected_names = [step["name"] for step in expected]
+    ran = [step["name"] for step in steps] + list(differing)
+    if ran != expected_names[: len(ran)] or (not differing and len(ran) != len(expected_names)):
+        return PairResult(client, server, name, "fail", f"steps {ran} do not match snapshot steps {expected_names}")
+    for expected_step, actual_step in zip(expected, steps):
+        changes = DeepDiff(expected_step, actual_step, verbose_level=2)
+        if changes:
+            differing[expected_step["name"]] = json.dumps(changes, indent=2, default=str)
+    entries = expected_failures(scenario, client, server)
+    covered = {step for entry in entries for step in entry["steps"]}
+    unexpected = [f"step {step}: {diff}" for step, diff in differing.items() if step not in covered]
+    if unexpected:
+        return PairResult(client, server, name, "fail", "\n".join(unexpected))
+    # Steps after a failed one never ran, so entries naming them are neither confirmed nor stale.
+    stale = [entry for entry in entries if set(entry["steps"]) <= set(ran) and not set(entry["steps"]) & set(differing)]
+    if stale:
+        reasons = " ".join(entry["reason"] for entry in stale)
+        return PairResult(client, server, name, "xpass", f"expected failure no longer fails: {reasons}")
+    if differing:
+        reasons = " ".join(entry["reason"] for entry in entries if set(entry["steps"]) & set(differing))
+        return PairResult(client, server, name, "xfail", reasons)
+    return PairResult(client, server, name, "pass")
 
 
 def select_pairs(adapters: dict[str, AdapterConfig], adapter: str, client: str, server: str) -> list[tuple[str, str]]:
@@ -450,6 +498,11 @@ def main() -> int:
     parser.add_argument("--base-port", type=int, help="Bind servers to ports base..base+99 instead of any free port")
     parser.add_argument("--jobs", type=int, default=2, help="Pairs to run in parallel")
     parser.add_argument("--update", action="store_true", help="Regenerate pairs/snapshots.json from the TypeScript pair")
+    parser.add_argument(
+        "--allow-xpass",
+        action="store_true",
+        help="Report expected failures that now pass without failing, for SDK CI that fixes one before mpp-tools drops its entry",
+    )
     args = parser.parse_args()
 
     adapters = discover_adapters()
@@ -485,6 +538,9 @@ def main() -> int:
         return 0
     build_errors = {name: build_adapter(adapters[name]) for name in sorted({name for pair in pairs for name in pair})}
 
+    def is_failure(result: PairResult) -> bool:
+        return result.failed and not (args.allow_xpass and result.status == "xpass")
+
     def run_pair(pair: tuple[str, str]) -> list[PairResult]:
         client_name, server_name = pair
         client, server = AdapterClient(adapters[client_name]), AdapterClient(adapters[server_name])
@@ -503,7 +559,7 @@ def main() -> int:
             except Exception as exc:
                 actual = exc
             results.append(compare(scenario, snapshots.get(scenario["name"]), actual, client_name, server_name))
-        print(f"{client_name} client -> {server_name} server: {'failed' if any(r.failed for r in results) else 'ok'}", flush=True)
+        print(f"{client_name} client -> {server_name} server: {'failed' if any(is_failure(r) for r in results) else 'ok'}", flush=True)
         return results
 
     results: list[PairResult] = []
@@ -531,7 +587,14 @@ def main() -> int:
         for (client_name, server_name, detail), count in skipped.items():
             print(f"  {client_name} -> {server_name}: {count} scenario(s): {detail}")
         print("")
-    failures = [result for result in results if result.failed]
+    if args.allow_xpass:
+        stale = [result for result in results if result.status == "xpass"]
+        if stale:
+            print("Stale expected failures (remove them from pairs/scenarios.json):")
+            for result in stale:
+                print(f"  {result.client} -> {result.server} {result.scenario}: {result.detail}")
+            print("")
+    failures = [result for result in results if is_failure(result)]
     executed = [result for result in results if result.status != "skip"]
     if not executed:
         print("FAILED: no pair scenarios were executed")
