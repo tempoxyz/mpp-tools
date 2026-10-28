@@ -98,6 +98,14 @@
       "comparison": "http",
       "description": "Send one normalized HTTP request through the SDK payment-aware transport."
     },
+    "http.server": {
+      "category": "server",
+      "inputRef": "protocol.schema.json#/$defs/HttpServerConfig",
+      "successRef": "protocol.schema.json#/$defs/HttpServerInfo",
+      "errorTypes": ["http_error", "unsupported_operation"],
+      "comparison": "http",
+      "description": "Start a payment-protected HTTP server for a pair scenario and return its URL. Long-running: the adapter writes its response, then serves until SIGTERM."
+    },
     "server.verify": {
       "category": "server",
       "inputRef": "protocol.schema.json#/$defs/ServerVerifyRequest",

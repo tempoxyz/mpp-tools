@@ -50,6 +50,7 @@ FULL_PATTERNS = [
     "conformance/examples/**",
     "conformance/flows/**",
     "conformance/operations.json",
+    "conformance/pairs/**",
     "conformance/package-lock.json",
     "conformance/package.json",
     "conformance/pyproject.toml",

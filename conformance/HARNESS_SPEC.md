@@ -19,6 +19,8 @@ The normative contract lives in JSON Schema:
 - [`schemas/flow-cases.schema.json`](./schemas/flow-cases.schema.json)
 - [`schemas/flow-results.schema.json`](./schemas/flow-results.schema.json)
 - [`schemas/server-verification-cases.schema.json`](./schemas/server-verification-cases.schema.json)
+- [`schemas/pair-scenarios.schema.json`](./schemas/pair-scenarios.schema.json)
+- [`schemas/pair-snapshots.schema.json`](./schemas/pair-snapshots.schema.json)
 
 The operation list lives in [`operations.json`](./operations.json). Examples
 live in [`examples/`](./examples/).
@@ -97,6 +99,10 @@ Rules:
 - `command` must start a process that reads one JSON request from stdin and
   writes one JSON response to stdout.
 - stderr is free for logs. stdout must contain only the response JSON.
+- `serve` is optional: a command that stays alive, reads one JSON request per
+  stdin line and writes one JSON response line for each, in order. Runners
+  that send many requests, such as `scripts/diff_fuzz.py`, use it to skip
+  process startup; others start `command` once per request.
 
 ## Adapter ABI
 
@@ -217,6 +223,16 @@ Optional for server verification conformance:
 |---|---|---|
 | `server.verify` | server route params plus a credential object | `{ "ok": boolean, "errorType"?: string, "receipt"?: Receipt }` |
 
+Optional for client-server pair conformance:
+
+| Operation | Input | Output |
+|---|---|---|
+| `http.server` | realm, secret key, port, `requiresAuth` and routes of offers | `{ "url": string }` |
+
+A pair client needs `http.payment_request`, `challenge.parse`, `challenge.id`
+and `credential.format`; a pair server needs `http.server`. Adapters declaring
+neither are skipped.
+
 To add a new operation:
 
 1. Add the operation name to `Operation` in `schemas/protocol.schema.json`.
@@ -327,6 +343,60 @@ Output:
   "body": ""
 }
 ```
+
+### Server Operation
+
+`http.server` is the one long-running operation. The adapter reads the request,
+starts an HTTP server on `127.0.0.1` at `port` (`0` picks a free port), writes
+one response line with its URL, flushes stdout, and serves until it receives
+`SIGTERM`. The runner starts it in its own process group and terminates the
+group, so an adapter may serve from a child process such as `uv run`'s Python.
+An adapter whose SDK cannot serve returns `unsupported_operation` and exits;
+the runner skips that server.
+
+Input:
+
+```json
+{
+  "port": 0,
+  "realm": "pairs.conformance",
+  "secretKey": "pair-conformance-secret-key-32-bytes-minimum",
+  "requiresAuth": false,
+  "routes": [
+    {
+      "path": "/paid",
+      "offers": [
+        {
+          "method": "tempo",
+          "intent": "charge",
+          "request": { "amount": "1000", "currency": "USD", "recipient": "merchant" },
+          "expires": "2099-01-01T00:00:00Z",
+          "meta": { "account": "alice" }
+        }
+      ],
+      "echoHeaders": ["authorization"]
+    }
+  ]
+}
+```
+
+Each route answers `GET` through the SDK's server engine: one offer uses that
+method's route handler, several are composed. Every offer's method is a
+stand-in `charge` method named by `method`, with the request fields above and
+the payload `{ "type": "transaction", "signature": string }`; it is not a real
+Tempo charge, so no chain is needed. Its verification:
+
+- declines the signature `0xdecline` with the SDK's verification-failed error;
+- rejects a challenge id it already settled the way the SDK's own charge
+  methods reject a replay;
+- otherwise returns the receipt `{ "status": "success", "method": <method>,
+  "reference": "ref-<signature>", "timestamp": "2026-01-01T00:00:00Z" }`.
+
+`expires` and `meta` are the SDK's challenge expiry and opaque metadata route
+options, and `requiresAuth` moves credentials to `Payment-Authorization`. A paid
+response is the SDK's receipt-wrapped `200` with the JSON body
+`{ "ok": true, "path": <path> }` plus each `echoHeaders` request header's value
+(or `null`); every other response is returned as the SDK builds it.
 
 ## Canonical Values
 

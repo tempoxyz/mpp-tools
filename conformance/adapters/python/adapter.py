@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Python conformance adapter using the pympp SDK."""
 
+import contextlib
+import io
 import sys
 import json
 import base64
@@ -141,8 +143,16 @@ def challenge_to_dict(challenge: Challenge) -> dict:
     if challenge.digest is not None:
         result["digest"] = challenge.digest
     opaque = getattr(challenge, "opaque", None)
+    if isinstance(opaque, dict):
+        # pympp decodes opaque; canonical values carry its wire form (JCS base64url).
+        opaque = base64url_encode(
+            json.dumps(opaque, separators=(",", ":"), sort_keys=True, ensure_ascii=False)
+        )
     if opaque is not None:
         result["opaque"] = opaque
+    header = getattr(challenge, "header", None)
+    if header is not None:
+        result["header"] = header
     return result
 
 
@@ -546,6 +556,136 @@ async def run_server_verify(input_value: dict) -> dict:
     return {"ok": True, "receipt": receipt_to_dict(receipt)}
 
 
+def serve_http(input_value: dict) -> None:
+    """Serve a payment-protected route set until terminated (http.server).
+
+    Every offer uses a stand-in charge method whose payload is a fixed
+    signature, so the pair runner exercises pympp's challenge issuance,
+    credential parsing and binding checks without a chain. Like pympp's own
+    charge methods, it settles each challenge once (a replay raises
+    CredentialReplayedError), declines the signature 0xdecline, and returns a
+    fixed receipt. Writes the adapter response, then serves until SIGTERM.
+    """
+    from datetime import UTC, datetime
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from typing import Literal
+    from urllib.parse import urlsplit
+
+    from pydantic import BaseModel
+
+    from mpp.errors import CredentialReplayedError, VerificationFailedError
+    from mpp.methods import Method
+    from mpp.server import Mpp, Request, Response, ServerMethod
+
+    class ChargeRequest(BaseModel):
+        amount: str
+        currency: str
+        recipient: str
+
+    class ChargePayload(BaseModel):
+        type: Literal["transaction"]
+        signature: str
+
+    settled: set[str] = set()
+
+    def conformance_method(name: str) -> ServerMethod:
+        async def verify(context) -> Receipt:
+            payload = context.credential.payload
+            signature = payload["signature"] if isinstance(payload, dict) else payload.signature
+            if signature == "0xdecline":
+                raise VerificationFailedError("payment declined")
+            if context.credential.challenge.id in settled:
+                raise CredentialReplayedError("credential already used")
+            settled.add(context.credential.challenge.id)
+            return Receipt(
+                status="success",
+                timestamp=datetime(2026, 1, 1, tzinfo=UTC),
+                reference=f"ref-{signature}",
+                method=name,
+            )
+
+        return ServerMethod(
+            method=Method(
+                name=name,
+                intent="charge",
+                request_model=ChargeRequest,
+                payload_model=ChargePayload,
+            ),
+            verify=verify,
+        )
+
+    routes = input_value["routes"]
+    names = list(dict.fromkeys(offer["method"] for route in routes for offer in route["offers"]))
+    server = Mpp(
+        methods=[conformance_method(name) for name in names],
+        realm=input_value["realm"],
+        secret_key=input_value["secretKey"],
+        requires_auth=bool(input_value.get("requiresAuth")),
+    )
+
+    def route_options(offer: dict) -> dict:
+        options = dict(offer["request"])
+        for key in ("expires", "meta"):
+            if key in offer:
+                options[key] = offer[key]
+        return options
+
+    handlers = {}
+    for route in routes:
+        entries = [(f"{offer['method']}/charge", route_options(offer)) for offer in route["offers"]]
+        if len(entries) == 1:
+            handler = server[entries[0][0]](**entries[0][1])
+        else:
+            handler = server.compose(*entries)
+        handlers[route["path"]] = (handler, route)
+
+    loop = asyncio.new_event_loop()
+
+    async def respond(method: str, url: str, headers, body: bytes | None) -> Response:
+        entry = handlers.get(urlsplit(url).path)
+        if entry is None:
+            return Response(status=404, body="not found")
+        handler, route = entry
+        request = Request(method, url, headers=headers, body=body)
+        result = await handler(request)
+        if result.status != 200:
+            return result.challenge
+        echoed = {name: request.headers.get(name) for name in route.get("echoHeaders", [])}
+        return result.with_receipt(Response.json({"ok": True, "path": route["path"], **echoed}))
+
+    class Handler(BaseHTTPRequestHandler):
+        def handle_request(self) -> None:
+            length = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(length) if length else None
+            url = f"http://{self.server.server_address[0]}:{self.server.server_address[1]}{self.path}"
+            try:
+                response = loop.run_until_complete(
+                    respond(self.command, url, list(self.headers.items()), body)
+                )
+            except Exception as exc:
+                # Surface a crash as a 500 the snapshot shows, not a dropped connection.
+                print(f"http.server error: {exc!r}", file=sys.stderr)
+                response = Response(status=500, body=str(exc))
+            payload = response.body or b""
+            self.send_response(response.status)
+            for name, value in response.headers.multi_items():
+                if name.lower() != "content-length":
+                    self.send_header(name, value)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        do_GET = do_POST = do_PUT = do_PATCH = do_DELETE = handle_request
+
+        def log_message(self, format, *args) -> None:
+            return None
+
+    httpd = HTTPServer(("127.0.0.1", int(input_value.get("port") or 0)), Handler)
+    host, port = httpd.server_address[:2]
+    print(json.dumps(adapter_success({"url": f"http://{host}:{port}"})), flush=True)
+    httpd.serve_forever()
+
+
 def run_legacy_subprocess(command: str, input_data: str = ""):
     result = subprocess.run(
         [sys.executable, __file__, command],
@@ -559,7 +699,14 @@ def run_legacy_subprocess(command: str, input_data: str = ""):
     return json.loads(result.stdout)
 
 
-def run_adapter_request(request: dict):
+def run_legacy_in_process(command: str, input_data: str = ""):
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        run_legacy_command(command, input_data)
+    return json.loads(output.getvalue())
+
+
+def run_adapter_request(request: dict, legacy=run_legacy_subprocess):
     op = request.get("op")
     input_value = request.get("input")
     if op == "http.payment_request":
@@ -573,28 +720,52 @@ def run_adapter_request(request: dict):
         except Exception as exc:
             return adapter_error(str(exc), "verification_error")
 
+    if op == "http.server":
+        return adapter_error("http.server needs the pympp >= 0.16 engine", "unsupported_operation")
+
     command = OP_TO_COMMAND.get(op)
     if command is None:
         return adapter_error(f"Unknown operation: {op}", "unsupported_operation")
-    result = run_legacy_subprocess(command, command_input_for_request(op, input_value))
+    result = legacy(command, command_input_for_request(op, input_value))
     if not result.get("success"):
         return adapter_error(result.get("error", ""), result.get("error_type", "unknown_error"))
     return adapter_success(response_value_for_operation(op, result.get("result")))
+
+
+def serve():
+    """Answer one JSON request per stdin line, for runners that keep the adapter alive."""
+    for line in sys.stdin:
+        if not line.strip():
+            continue
+        try:
+            response = run_adapter_request(json.loads(line), legacy=run_legacy_in_process)
+        except Exception as e:
+            response = adapter_error(str(e))
+        print(json.dumps(response), flush=True)
 
 
 def main():
     if len(sys.argv) < 2:
         try:
             request = json.loads(sys.stdin.read())
+            if request.get("op") == "http.server" and ENGINE_API:
+                serve_http(request.get("input"))
+                return
             print(json.dumps(run_adapter_request(request)))
         except Exception as e:
             print(json.dumps(adapter_error(str(e))))
         return
 
-    command = sys.argv[1]
+    if sys.argv[1] == "--serve":
+        serve()
+        return
 
-    input_data = sys.stdin.read().strip()
+    run_legacy_command(sys.argv[1], sys.stdin.read())
 
+
+def run_legacy_command(command: str, input_data: str):
+    """Run one legacy command and print its result."""
+    input_data = input_data.strip()
     try:
         if command == "parse-www-authenticate":
             challenge = parse_www_authenticate(input_data)
@@ -635,6 +806,11 @@ def main():
                 request=request_b64,
                 expires=challenge_data.get("expires"),
                 digest=challenge_data.get("digest"),
+                **{
+                    key: challenge_data[key]
+                    for key in ("opaque", "header")
+                    if challenge_data.get(key) is not None
+                },
             )
             credential = Credential(
                 challenge=echo,

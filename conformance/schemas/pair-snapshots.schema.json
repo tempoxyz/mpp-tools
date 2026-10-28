@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tempo.xyz/mpp-tools/conformance/schemas/pair-snapshots.schema.json",
+  "title": "MPP Conformance Client-Server Pair Snapshots",
+  "description": "Normalized wire snapshots of each pair scenario step, generated from the TypeScript client and server.",
+  "type": "object",
+  "required": [
+    "scenarios"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "scenarios": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "name"
+          ],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "status": {
+              "type": "integer"
+            },
+            "error": {
+              "type": "string"
+            },
+            "challenges": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "receipt": {
+              "type": "object"
+            },
+            "cacheControl": {
+              "type": "string"
+            },
+            "contentType": {
+              "type": "string"
+            },
+            "body": true
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  }
+}

@@ -13,7 +13,7 @@ on:
         type: string
         default: main
       run-flows:
-        description: Whether to run end-to-end flow tests after vector tests.
+        description: Whether to run end-to-end flow and client-server pair tests after vector tests.
         required: false
         type: boolean
         default: true
@@ -159,6 +159,16 @@ jobs:
       - name: Run flow conformance
         if: inputs.run-flows
         run: uv run --locked python scripts/flow_runner.py --adapter "$ADAPTER"
+        env:
+          ADAPTER: ${{ steps.resolve.outputs.adapter }}
+
+      # Pairs the SDK's client and server with themselves and the TypeScript
+      # reference; adapters without the capabilities are skipped. An SDK change
+      # that fixes a recorded expected failure is reported, not failed, until
+      # mpp-tools drops the entry; mpp-tools' own CI still fails on it.
+      - name: Run pair conformance
+        if: inputs.run-flows
+        run: uv run --locked python scripts/pair_runner.py --adapter "$ADAPTER" --allow-xpass
         env:
           ADAPTER: ${{ steps.resolve.outputs.adapter }}
 
