@@ -27,6 +27,7 @@
 import { createHmac } from 'node:crypto'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { createInterface } from 'node:readline'
 
 import { Challenge, Credential, Errors, Method, Receipt, z } from 'mppx'
 import * as Client from 'mppx/client'
@@ -702,8 +703,24 @@ async function runAdapterRequest(request: { op: string; input: unknown }): Promi
 	return adapterSuccess(responseValueForOperation(request.op, result.result))
 }
 
+// Answers one JSON request per stdin line, for runners that keep the adapter alive.
+async function serve(): Promise<void> {
+	for await (const line of createInterface({ input: process.stdin, crlfDelay: Number.POSITIVE_INFINITY })) {
+		if (!line.trim()) continue
+		let response: AdapterResponse
+		try {
+			response = await runAdapterRequest(JSON.parse(line))
+		} catch (err) {
+			response = adapterError(err instanceof Error ? err.message : String(err))
+		}
+		process.stdout.write(`${JSON.stringify(response)}\n`)
+	}
+}
+
 async function main(): Promise<void> {
 	const command = process.argv[2]
+
+	if (command === '--serve') return serve()
 
 	if (!command) {
 		const stdin = await readStdin()

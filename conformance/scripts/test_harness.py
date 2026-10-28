@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -11,6 +14,7 @@ from jsonschema import Draft202012Validator
 from harness import (
     AdapterClient,
     AdapterConfig,
+    AdapterSession,
     FLOW_CASES_PATH,
     FLOW_RESULTS_PATH,
     SCHEMA_STORE,
@@ -234,6 +238,105 @@ class RepositoryDataSchemaTests(unittest.TestCase):
                 write_flow_results(invalid_results, path)
 
             self.assertFalse(path.exists())
+
+
+
+SERVE_SCRIPT = """
+import json, os, sys
+for count, line in enumerate(sys.stdin, 1):
+    request = json.loads(line)
+    header = request["input"]["header"]
+    if header == "exit":
+        sys.exit(3)
+    if header == "hang":
+        continue
+    value = {"id": f"{os.getpid()}:{count}", "realm": "", "method": "a", "intent": "a", "request": {}}
+    print(json.dumps({"ok": True, "value": value}), flush=True)
+"""
+
+# Serves from a child process, as uv run does, and records the child's pid.
+WRAPPER_SCRIPT = """
+import os, subprocess, sys
+child = subprocess.Popen([sys.executable, "-c", os.environ["SERVE_SCRIPT"]])
+with open(os.environ["CHILD_PID_FILE"], "w") as handle:
+    handle.write(str(child.pid))
+sys.exit(child.wait())
+"""
+
+
+def process_alive(pid: int) -> bool:
+    try:
+        with open(f"/proc/{pid}/stat") as handle:
+            # A zombie has exited and only waits to be reaped.
+            return handle.read().rsplit(")", 1)[1].split()[0] != "Z"
+    except FileNotFoundError:
+        return False
+
+
+class AdapterSessionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        import sys
+
+        self.adapter = AdapterConfig(
+            name="serving",
+            command=["unused"],
+            serve_command=[sys.executable, "-c", SERVE_SCRIPT],
+            capabilities=["challenge.parse"],
+        )
+
+    def call(self, session: AdapterSession, header: str, timeout: float = 10) -> dict:
+        return session.call("challenge.parse", {"header": header}, timeout=timeout)
+
+    def test_reuses_one_process_across_calls(self) -> None:
+        with AdapterSession(self.adapter) as session:
+            first = self.call(session, "a")["value"]["id"]
+            second = self.call(session, "b")["value"]["id"]
+        self.assertEqual(first.split(":")[0], second.split(":")[0])
+        self.assertEqual((first.split(":")[1], second.split(":")[1]), ("1", "2"))
+
+    def test_restarts_after_exit_or_timeout(self) -> None:
+        with AdapterSession(self.adapter) as session:
+            pid = self.call(session, "a")["value"]["id"].split(":")[0]
+            exited = self.call(session, "exit")
+            self.assertEqual(exited["error"]["type"], "unknown_error")
+            self.assertIn("exited with code 3", exited["error"]["message"])
+            hung = self.call(session, "hang", timeout=0.5)
+            self.assertEqual(hung["error"], {"type": "unknown_error", "message": "Timeout"})
+            restarted = self.call(session, "a")["value"]["id"]
+        self.assertNotEqual(restarted.split(":")[0], pid)
+        self.assertEqual(restarted.split(":")[1], "1")
+
+    @unittest.skipUnless(Path("/proc").is_dir(), "needs /proc")
+    def test_timeout_kills_the_serve_process_children(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pid_file = Path(tmp) / "child.pid"
+            adapter = AdapterConfig(
+                name="wrapped",
+                command=["unused"],
+                serve_command=[sys.executable, "-c", WRAPPER_SCRIPT],
+                capabilities=["challenge.parse"],
+                env={"SERVE_SCRIPT": SERVE_SCRIPT, "CHILD_PID_FILE": str(pid_file)},
+            )
+            with AdapterSession(adapter) as session:
+                self.call(session, "a")
+                child = int(pid_file.read_text())
+                self.assertTrue(process_alive(child))
+                hung = self.call(session, "hang", timeout=0.5)
+                self.assertEqual(hung["error"], {"type": "unknown_error", "message": "Timeout"})
+                deadline = time.monotonic() + 5
+                while process_alive(child) and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                self.assertFalse(process_alive(child), "the serve process's child outlived the timeout")
+
+    @patch("harness.subprocess.run")
+    def test_without_serve_runs_one_process_per_call(self, run) -> None:
+        run.return_value.returncode = 0
+        run.return_value.stdout = json.dumps({"ok": False, "error": {"type": "parse_error", "message": "x"}})
+        adapter = AdapterConfig(name="oneshot", command=["adapter"], capabilities=["challenge.parse"])
+        with AdapterSession(adapter) as session:
+            self.call(session, "a")
+            self.call(session, "b")
+        self.assertEqual(run.call_count, 2)
 
 
 if __name__ == "__main__":

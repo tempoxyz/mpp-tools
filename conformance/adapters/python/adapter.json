@@ -12,6 +12,16 @@
     "3.12",
     "adapter.py"
   ],
+  "serve": [
+    "uv",
+    "run",
+    "--project",
+    ".",
+    "--python",
+    "3.12",
+    "adapter.py",
+    "--serve"
+  ],
   "cwd": ".",
   "capabilities": [
     "challenge.parse",
