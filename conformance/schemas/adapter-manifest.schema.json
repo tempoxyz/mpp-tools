@@ -21,6 +21,12 @@
       "minItems": 1,
       "items": { "type": "string" }
     },
+    "serve": {
+      "description": "Optional command that keeps the adapter alive: it reads one JSON request per stdin line and writes one JSON response line for each.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" }
+    },
     "build": {
       "type": "array",
       "minItems": 1,

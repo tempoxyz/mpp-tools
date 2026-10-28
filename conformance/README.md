@@ -17,6 +17,7 @@ make install      # install the pinned TS/Rust/Python/Go/Ruby/Java releases
 make test         # run SDK adapters against all vectors
 make flow         # run the end-to-end flow suite against golden results
 make server-verify # run SDK server verification ABI tests
+make pair         # run every client adapter against every server adapter
 ```
 
 ## How It Works
@@ -103,7 +104,70 @@ Server verification cases live in `server-verification/`. These call the `server
 ```bash
 make server-verify
 make server-verify-go
+make server-verify-sdk ADAPTER=python
 ```
+
+`make server-verify` runs every adapter whose manifest declares `server.verify` (currently Go and Python). The reusable SDK workflow (`.github/workflows/sdk-conformance.yml`) runs these cases for any adapter that declares the capability and skips the rest.
+
+## Client-Server Pair Tests
+
+Pair scenarios live in `pairs/scenarios.json`. For each scenario the pair runner
+asks a server adapter to start a payment-protected HTTP server (`http.server`),
+then drives it with a client adapter: `pay` steps use the client's
+payment-aware HTTP client (`http.payment_request`), and `request` steps send one
+plain request, optionally with a credential the client adapter builds for an
+earlier challenge (`challenge.parse`, `challenge.id`, `credential.format`) after
+mutating it. Every step's response is normalized into a wire snapshot (status,
+challenges with ids masked, receipt, `Cache-Control`, media type, and the
+problem `type` and `status`) and compared with `pairs/snapshots.json`.
+
+```bash
+make pair                         # every client adapter x every server adapter
+make pair-sdk ADAPTER=python      # python x python, python <-> typescript
+make update-pair-snapshots        # regenerate snapshots from the TypeScript pair
+uv run --locked python scripts/pair_runner.py --client go --server typescript --scenario replay_rejected
+```
+
+Servers use a stand-in `charge` method whose payload is a fixed signature, so
+no chain is needed: it settles each challenge once, declines the signature
+`0xdecline`, and returns a fixed receipt. Snapshots are generated only from the
+TypeScript client and server. A pair that differs from them for a known reason
+is listed under the scenario's `expectedFailures` with the `steps` that reason
+covers; every other step is still compared, and an entry whose steps start
+matching fails as `xpass` until it is removed. The reusable SDK workflow passes
+`--allow-xpass`, so an SDK that fixes a known difference reports the stale
+entry without failing before mpp-tools removes it. Server adapters
+that cannot serve, such as Python before the pympp 0.16 engine, are skipped.
+SDK-reserved challenge extensions (`_mpp_nonce`/`_mppx_nonce` in `opaque`,
+pympp's `_mppx_scope` route binding in `request`) are not compared; the
+cross-route scenarios check their effect.
+
+## Differential Fuzzing
+
+`scripts/diff_fuzz.py` generates inputs with [Hypothesis](https://hypothesis.readthedocs.io)
+for the vector operations (challenge, credential and receipt parse and format,
+base64url and challenge ids), sends each to every selected adapter and to the
+TypeScript reference adapter, and compares the normalized results: the same
+success or failure class and the same parsed value. Inputs range from valid
+values, whose formatted headers are parsed back, to adversarial header strings
+with quotes, backslashes, Unicode, decoy `Payment` text, several challenges,
+huge or nested JSON and bad base64.
+
+```bash
+uv run --locked python scripts/diff_fuzz.py --adapters python,go --budget 120
+uv run --locked python scripts/diff_fuzz.py --seed 0 --max-examples 150
+```
+
+Each new divergence is shrunk to a minimal input and printed as a vector
+scenario expecting the reference result, ready to paste into `vectors/`. A format
+value divergence compares the wire exactly (`"format": "exact"`) for the reference
+and the diverging adapter, and a divergence where the reference crashed has
+no scenario.
+Known differences live in [`fuzz/allowlist.json`](./fuzz/allowlist.json), each
+with a category (`harmless`, `sdk-bug` or `adapter-bug`) and a reason; remove
+an entry when its bug is fixed. Pull requests run a short fixed-seed pass and a
+nightly run fuzzes the Python, Go and Rust adapters for 30 minutes
+([`diff-fuzz.yml`](../.github/workflows/diff-fuzz.yml)).
 
 ## Adapters
 
@@ -128,6 +192,8 @@ Schema-backed adapter operations use the JSON ABI from `HARNESS_SPEC.md`: reques
 `{"ok": true, "value": <value>}` or `{"ok": false, "error": <value>}`.
 `server.verify` is exposed only through that JSON ABI and accepts server route
 params plus a credential object, returning a normalized verification result.
+`http.server` is a long-running JSON ABI operation used by pair tests: the
+adapter writes its response with the server URL, then serves until `SIGTERM`.
 
 Adapter locations:
 

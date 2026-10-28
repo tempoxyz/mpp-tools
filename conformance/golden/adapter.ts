@@ -27,11 +27,12 @@
 import { createHmac } from 'node:crypto'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { createInterface } from 'node:readline'
 
-import { Challenge, Credential, Method, Receipt, z } from 'mppx'
+import { Challenge, Credential, Errors, Method, Receipt, z } from 'mppx'
 import * as Client from 'mppx/client'
 import { Proof } from 'mppx/tempo'
-import { Mppx, Store, stripe, tempo } from 'mppx/server'
+import { Mppx, Request as ServerRequest, Store, stripe, tempo } from 'mppx/server'
 import { createClient, http } from 'viem'
 import { tempo as tempoChain } from 'viem/chains'
 
@@ -528,7 +529,7 @@ const httpPaymentMethod = Method.toClient(
 				amount: z.string(),
 				currency: z.string(),
 				recipient: z.string(),
-				expires: z.string(),
+				expires: z.optional(z.string()),
 				resource: z.optional(z.string()),
 			}),
 		},
@@ -591,8 +592,109 @@ async function runHttpPaymentRequest(input: HttpPaymentRequest): Promise<Adapter
 	}
 }
 
+type HttpServerOffer = {
+	method: string
+	intent: 'charge'
+	request: Record<string, string>
+	expires?: string
+	meta?: Record<string, string>
+}
+
+type HttpServerInput = {
+	port?: number
+	realm: string
+	secretKey: string
+	requiresAuth?: boolean
+	routes: { path: string; offers: HttpServerOffer[]; echoHeaders?: string[] }[]
+}
+
+// Starts a payment-protected HTTP server for one http.server scenario. Every
+// offer uses a stand-in charge method whose payload is a fixed signature, so
+// the pair runner exercises mppx's challenge issuance, credential parsing and
+// binding checks without a chain. The method settles each challenge once,
+// declines the signature 0xdecline, and returns a fixed receipt.
+async function startHttpServer(input: HttpServerInput): Promise<AdapterResponse> {
+	const settled = new Set<string>()
+	const conformanceMethod = (name: string) =>
+		Method.toServer(
+			Method.from({
+				name,
+				intent: 'charge',
+				schema: {
+					credential: {
+						payload: z.object({ type: z.literal('transaction'), signature: z.string() }),
+					},
+					request: z.object({
+						amount: z.string(),
+						currency: z.string(),
+						recipient: z.string(),
+					}),
+				},
+			}),
+			{
+				async verify({ credential }) {
+					const { signature } = credential.payload as { signature: string }
+					if (signature === '0xdecline') throw new Errors.VerificationFailedError({ reason: 'payment declined' })
+					if (settled.has(credential.challenge.id))
+						throw new Errors.VerificationFailedError({ reason: 'credential already used' })
+					settled.add(credential.challenge.id)
+					return Receipt.from({
+						method: name,
+						status: 'success',
+						reference: `ref-${signature}`,
+						timestamp: '2026-01-01T00:00:00Z',
+					})
+				},
+			},
+		)
+	const names = [...new Set(input.routes.flatMap((route) => route.offers.map((offer) => offer.method)))]
+	const methods = names.map(conformanceMethod)
+	const mppx = Mppx.create({
+		methods,
+		realm: input.realm,
+		secretKey: input.secretKey,
+		...(input.requiresAuth ? { requiresAuth: true } : {}),
+	})
+	// Method names come from the scenario, so index the handlers untyped.
+	type RouteHandler = (request: Request) => Promise<any>
+	const routeHandlers = mppx as unknown as Record<string, (options: unknown) => RouteHandler> & {
+		compose: (...entries: unknown[]) => RouteHandler
+	}
+	const handlers = new Map(
+		input.routes.map((route) => {
+			const entries = route.offers.map(
+				({ method, intent: _intent, request, ...options }) =>
+					[methods[names.indexOf(method)]!, { ...request, ...options }] as const,
+			)
+			const handler =
+				entries.length === 1
+					? routeHandlers[`${entries[0]![0].name}/charge`]!(entries[0]![1])
+					: routeHandlers.compose(...entries)
+			return [route.path, { handler, route }] as const
+		}),
+	)
+	const server = createServer(
+		ServerRequest.toNodeListener(async (request) => {
+			const entry = handlers.get(new URL(request.url).pathname)
+			if (!entry) return new Response('not found', { status: 404 })
+			const result = await entry.handler(request)
+			if (result.status === 402) return result.challenge as Response
+			const echoed = Object.fromEntries(
+				(entry.route.echoHeaders ?? []).map((name) => [name, request.headers.get(name)]),
+			)
+			return result.withReceipt(Response.json({ ok: true, path: entry.route.path, ...echoed })) as Response
+		}),
+	)
+	await new Promise<void>((resolve) => server.listen(input.port ?? 0, '127.0.0.1', resolve))
+	const { port } = server.address() as AddressInfo
+	process.once('SIGTERM', () => server.close(() => process.exit(0)))
+	return adapterSuccess({ url: `http://127.0.0.1:${port}` })
+}
+
+
 async function runAdapterRequest(request: { op: string; input: unknown }): Promise<AdapterResponse> {
 	if (request.op === 'http.payment_request') return runHttpPaymentRequest(request.input as HttpPaymentRequest)
+	if (request.op === 'http.server') return startHttpServer(request.input as HttpServerInput)
 	if (request.op === 'tempo.receipt.verify') return verifyTempoReceipt(request.input as TempoReceiptVerifyInput)
 	const command = OP_TO_COMMAND[request.op]
 	if (!command) return adapterError(`Unknown operation: ${request.op}`, 'unsupported_operation')
@@ -601,8 +703,24 @@ async function runAdapterRequest(request: { op: string; input: unknown }): Promi
 	return adapterSuccess(responseValueForOperation(request.op, result.result))
 }
 
+// Answers one JSON request per stdin line, for runners that keep the adapter alive.
+async function serve(): Promise<void> {
+	for await (const line of createInterface({ input: process.stdin, crlfDelay: Number.POSITIVE_INFINITY })) {
+		if (!line.trim()) continue
+		let response: AdapterResponse
+		try {
+			response = await runAdapterRequest(JSON.parse(line))
+		} catch (err) {
+			response = adapterError(err instanceof Error ? err.message : String(err))
+		}
+		process.stdout.write(`${JSON.stringify(response)}\n`)
+	}
+}
+
 async function main(): Promise<void> {
 	const command = process.argv[2]
+
+	if (command === '--serve') return serve()
 
 	if (!command) {
 		const stdin = await readStdin()

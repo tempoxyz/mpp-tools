@@ -7,6 +7,11 @@
     "node",
     "golden/adapter.ts"
   ],
+  "serve": [
+    "node",
+    "golden/adapter.ts",
+    "--serve"
+  ],
   "cwd": "../..",
   "capabilities": [
     "challenge.parse",
@@ -19,6 +24,7 @@
     "base64url.decode",
     "challenge.id",
     "http.payment_request",
+    "http.server",
     "stripe.external_id_binding",
     "tempo.proof.typed_data",
     "tempo.receipt.verify"

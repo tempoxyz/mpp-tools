@@ -1,0 +1,267 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tempo.xyz/mpp-tools/conformance/schemas/pair-scenarios.schema.json",
+  "title": "MPP Conformance Client-Server Pair Scenarios",
+  "type": "object",
+  "required": [
+    "scenarios"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/Scenario"
+      }
+    }
+  },
+  "$defs": {
+    "Name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "Scenario": {
+      "type": "object",
+      "required": [
+        "name",
+        "description",
+        "server",
+        "steps"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/Name"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "server": {
+          "type": "object",
+          "required": [
+            "realm",
+            "routes"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "realm": {
+              "type": "string",
+              "minLength": 1
+            },
+            "requiresAuth": {
+              "type": "boolean"
+            },
+            "routes": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "protocol.schema.json#/$defs/HttpServerRoute"
+              }
+            }
+          }
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/Step"
+          }
+        },
+        "expectedFailures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExpectedFailure"
+          }
+        }
+      }
+    },
+    "Headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "Step": {
+      "type": "object",
+      "required": [
+        "name",
+        "kind",
+        "path"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/Name"
+        },
+        "kind": {
+          "enum": [
+            "pay",
+            "request"
+          ],
+          "description": "pay: the client adapter's http.payment_request. request: one plain HTTP request the runner sends."
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "headers": {
+          "$ref": "#/$defs/Headers"
+        },
+        "signature": {
+          "type": "string",
+          "description": "Payload signature of the stand-in charge method; 0xdecline makes the server decline."
+        },
+        "authorization": {
+          "type": "string",
+          "description": "request only: a raw Authorization header value."
+        },
+        "replay": {
+          "$ref": "#/$defs/Name",
+          "description": "request only: resend the headers of this earlier request step."
+        },
+        "credential": {
+          "type": "object",
+          "description": "request only: a credential the client adapter builds for a challenge an earlier request step received.",
+          "required": [
+            "from"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "from": {
+              "$ref": "#/$defs/Name"
+            },
+            "offer": {
+              "type": "string",
+              "description": "Method of the challenge to answer; the first challenge when absent."
+            },
+            "mutate": {
+              "type": "object",
+              "description": "Challenge fields to replace before formatting; request merges into the challenge request."
+            },
+            "rebind": {
+              "type": "boolean",
+              "description": "Recompute the challenge id with the server's secret after mutating, so only the server's other checks can reject it."
+            },
+            "header": {
+              "enum": [
+                "Authorization",
+                "Payment-Authorization"
+              ],
+              "description": "Header to send it in; the challenge's header parameter, else Authorization, when absent."
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "pay"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "authorization"
+                  ]
+                },
+                {
+                  "required": [
+                    "replay"
+                  ]
+                },
+                {
+                  "required": [
+                    "credential"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "request"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "signature"
+              ]
+            }
+          }
+        },
+        {
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "authorization",
+                  "replay"
+                ]
+              },
+              {
+                "required": [
+                  "authorization",
+                  "credential"
+                ]
+              },
+              {
+                "required": [
+                  "replay",
+                  "credential"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "ExpectedFailure": {
+      "type": "object",
+      "required": [
+        "client",
+        "server",
+        "steps",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "client": {
+          "type": "string",
+          "description": "Client adapter name, or * for any."
+        },
+        "server": {
+          "type": "string",
+          "description": "Server adapter name, or * for any."
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/Name"
+          },
+          "description": "Steps the reason covers; every other step is compared strictly."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

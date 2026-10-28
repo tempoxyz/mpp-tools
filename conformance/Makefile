@@ -1,7 +1,7 @@
 # Conformance Testing Makefile
 # Cross-SDK protocol compatibility testing for MPP implementations
 
-.PHONY: all update-locks update-java install install-runner install-java use-local-sdk test test-all test-sdk test-typescript test-rust test-python test-go test-ruby test-java test-json flow flow-sdk flow-typescript flow-rust flow-python flow-go flow-ruby flow-java server-verify server-verify-sdk server-verify-go update-flow-golden clean help
+.PHONY: all update-locks update-java install install-runner install-java use-local-sdk test test-all test-sdk test-typescript test-rust test-python test-go test-ruby test-java test-json flow flow-sdk flow-typescript flow-rust flow-python flow-go flow-ruby flow-java server-verify server-verify-sdk server-verify-go pair pair-sdk update-pair-snapshots update-flow-golden clean help
 
 RUBY ?= ruby
 BUNDLE ?= bundle
@@ -15,6 +15,7 @@ all: install
 	$(MAKE) test || status=$$?; \
 	$(MAKE) flow || status=$$?; \
 	$(MAKE) server-verify || status=$$?; \
+	$(MAKE) pair || status=$$?; \
 	exit $$status
 
 #------------------------------------------------------------------------------
@@ -109,6 +110,19 @@ server-verify-sdk:
 	@test -n "$(ADAPTER)" || (echo "ADAPTER is required, e.g. ADAPTER=go" >&2; exit 2)
 	@echo "→ Running $(ADAPTER) server verification conformance tests..."
 	$(RUNNER_PYTHON) scripts/server_verify_runner.py --adapter "$(ADAPTER)"
+
+pair:
+	@echo "→ Running client-server pair conformance tests..."
+	$(RUNNER_PYTHON) scripts/pair_runner.py
+
+pair-sdk:
+	@test -n "$(ADAPTER)" || (echo "ADAPTER is required, e.g. ADAPTER=python" >&2; exit 2)
+	@echo "→ Running $(ADAPTER) client-server pair conformance tests..."
+	$(RUNNER_PYTHON) scripts/pair_runner.py --adapter "$(ADAPTER)"
+
+update-pair-snapshots:
+	@echo "→ Updating pair snapshots from the TypeScript client and server..."
+	$(RUNNER_PYTHON) scripts/pair_runner.py --update
 
 server-verify-go:
 	@echo "→ Running Go server verification conformance tests..."
@@ -229,6 +243,9 @@ help:
 	@echo "  flow-sdk         Run flow tests for ADAPTER"
 	@echo "  server-verify    Run server verification conformance tests"
 	@echo "  server-verify-sdk  Run server verification tests for ADAPTER"
+	@echo "  pair             Run client-server pair conformance tests"
+	@echo "  pair-sdk         Run pair tests for ADAPTER against itself and TypeScript"
+	@echo "  update-pair-snapshots  Regenerate pair snapshots from the TypeScript pair"
 	@echo "  update-flow-golden  Regenerate flow golden results"
 	@echo "  test-typescript  Test TypeScript adapter only"
 	@echo "  test-rust        Test Rust adapter only"

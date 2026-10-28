@@ -217,6 +217,13 @@ jobs:
             --output "flow-${ADAPTER}.json"
           exit "$status"
 
+      # Pairs this adapter's client and server with itself and the TypeScript
+      # reference; adapters without the capabilities are skipped.
+      - name: Run pair conformance tests
+        env:
+          ADAPTER: ${{ matrix.adapter }}
+        run: uv run --locked python scripts/pair_runner.py --adapter "$ADAPTER"
+
       - name: Upload flow results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -254,11 +261,13 @@ jobs:
       - name: Install runner dependencies
         run: uv sync --locked
 
-      - name: Install Go adapter dependencies
-        run: make install-go
+      # Every adapter that declares server.verify runs here; add its install
+      # target when another adapter declares it.
+      - name: Install Go and Python adapter dependencies
+        run: make install-go install-python
 
       - name: Run server verification conformance
-        run: uv run --locked python scripts/server_verify_runner.py --adapter go
+        run: uv run --locked python scripts/server_verify_runner.py
 
   conformance:
     runs-on: ubuntu-latest

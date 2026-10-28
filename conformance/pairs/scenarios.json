@@ -1,0 +1,680 @@
+{
+  "$schema": "../schemas/pair-scenarios.schema.json",
+  "scenarios": [
+    {
+      "name": "happy_path",
+      "description": "An unpaid request gets a 402 challenge; the client pays it and gets 200 with a receipt.",
+      "server": {
+        "realm": "pairs.conformance",
+        "routes": [
+          {
+            "path": "/paid",
+            "offers": [
+              {
+                "method": "tempo",
+                "intent": "charge",
+                "request": {
+                  "amount": "1000",
+                  "currency": "USD",
+                  "recipient": "merchant"
+                },
+                "expires": "2099-01-01T00:00:00Z"
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "name": "unpaid",
+          "kind": "request",
+          "path": "/paid"
+        },
+        {
+          "name": "pay",
+          "kind": "pay",
+          "path": "/paid"
+        }
+      ]
+    },
+    {
+      "name": "replay_rejected",
+      "description": "A credential the server settled once is rejected when sent again.",
+      "server": {
+        "realm": "pairs.conformance",
+        "routes": [
+          {
+            "path": "/paid",
+            "offers": [
+              {
+                "method": "tempo",
+                "intent": "charge",
+                "request": {
+                  "amount": "1000",
+                  "currency": "USD",
+                  "recipient": "merchant"
+                },
+                "expires": "2099-01-01T00:00:00Z"
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "name": "unpaid",
+          "kind": "request",
+          "path": "/paid"
+        },
+        {
+          "name": "paid",
+          "kind": "request",
+          "path": "/paid",
+          "credential": {
+            "from": "unpaid"
+          }
+        },
+        {
+          "name": "replayed",
+          "kind": "request",
+          "path": "/paid",
+          "replay": "paid"
+        }
+      ],
+      "expectedFailures": [
+        {
+          "client": "*",
+          "server": "python",
+          "steps": [
+            "replayed"
+          ],
+          "reason": "pympp answers a replayed credential with 403 verification-failed and no challenge (CredentialReplayedError, so auto-paying clients do not pay again); mppx answers 402 verification-failed with a fresh challenge."
+        },
+        {
+          "client": "go",
+          "server": "python",
+          "steps": [
+            "paid"
+          ],
+          "reason": "The go adapter's challenge.parse returns opaque as a decoded object instead of its wire string, so it cannot echo a challenge that carries opaque (route meta, or pympp's per-challenge nonce)."
+        },
+        {
+          "client": "rust",
+          "server": "python",
+          "steps": [
+            "paid"
+          ],
+          "reason": "The rust adapter's challenge.parse returns opaque as a decoded object instead of its wire string, so it cannot echo a challenge that carries opaque (route meta, or pympp's per-challenge nonce)."
+        }
+      ]
+    },
+    {
+      "name": "cross_route_replay",
+      "description": "A credential for a cheap route is rejected at an expensive route.",
+      "server": {
+        "realm": "pairs.conformance",
+        "routes": [
+          {
+            "path": "/cheap",
+            "offers": [
+              {
+                "method": "tempo",
+                "intent": "charge",
+                "request": {
+                  "amount": "1",
+                  "currency": "USD",
+                  "recipient": "merchant"
+                },
+                "expires": "2099-01-01T00:00:00Z"
+              }
+            ]
+          },
+          {
+            "path": "/expensive",
+            "offers": [
+              {
+                "method": "tempo",
+                "intent": "charge",
+                "request": {
+                  "amount": "1000",
+                  "currency": "USD",
+                  "recipient": "merchant"
+                },
+                "expires": "2099-01-01T00:00:00Z"
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "name": "cheap_challenge",
+          "kind": "request",
+          "path": "/cheap"
+        },
+        {
+          "name": "expensive_with_cheap_credential",
+          "kind": "request",
+          "path": "/expensive",
+          "credential": {
+            "from": "cheap_challenge"
+          }
+        }
+      ],
+      "expectedFailures": [
+        {
+          "client": "*",
+          "server": "python",
+          "steps": [
+            "expensive_with_cheap_credential"
+          ],
+          "reason": "pympp answers a credential it rejects before settlement (bad challenge id, other realm, other route, expired, malformed) with a fresh payment-required challenge and reports the reason only on its payment.failed event; mppx returns the specific problem type: invalid-challenge, payment-expired or malformed-credential."
+        }
+      ]
+    },
+    {
+      "name": "wrong_realm",
+      "description": "A challenge the server's secret binds to another realm is rejected.",
+      "server": {
+        "realm": "pairs.conformance",
+        "routes": [
+          {
+            "path": "/paid",
+            "offers": [
+              {
+                "method": "tempo",
+                "intent": "charge",
+                "request": {
+                  "amount": "1000",
+                  "currency": "USD",
+                  "recipient": "merchant"
+                },
+                "expires": "2099-01-01T00:00:00Z"
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "name": "unpaid",
+          "kind": "request",
+          "path": "/paid"
+        },
+        {
+          "name": "other_realm",
+          "kind": "request",
+          "path": "/paid",
+          "credential": {
+            "from": "unpaid",
+            "mutate": {
+              "realm": "other.example"
+            },
+            "rebind": true
+          }
+        }
+      ],
+      "expectedFailures": [
+        {
+          "client": "*",
+          "server": "python",
+          "steps": [
+            "other_realm"
+          ],
+          "reason": "pympp answers a credential it rejects before settlement (bad challenge id, other realm, other route, expired, malformed) with a fresh payment-required challenge and reports the reason only on its payment.failed event; mppx returns the specific problem type: invalid-challenge, payment-expired or malformed-credential."
+        }
+      ]
+    },
+    {
+      "name": "expired_challenge",
+      "description": "A credential for an expired challenge is rejected, whether issued expired or re-bound with a past expiry.",
+      "server": {
+        "realm": "pairs.conformance",
+        "routes": [
+          {
+            "path": "/expired",
+            "offers": [
+              {
+                "method": "tempo",
+                "intent": "charge",
+                "request": {
+                  "amount": "1000",
+                  "currency": "USD",
+                  "recipient": "merchant"
+                },
+                "expires": "2020-01-01T00:00:00Z"
+              }
+            ]
+          },
+          {
+            "path": "/paid",
+            "offers": [
+              {
+                "method": "tempo",
+                "intent": "charge",
+                "request": {
+                  "amount": "1000",
+                  "currency": "USD",
+                  "recipient": "merchant"
+                },
+                "expires": "2099-01-01T00:00:00Z"
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "name": "issued_expired",
+          "kind": "request",
+          "path": "/expired"
+        },
+        {
+          "name": "pay_issued_expired",
+          "kind": "request",
+          "path": "/expired",
+          "credential": {
+            "from": "issued_expired"
+          }
+        },
+        {
+          "name": "unpaid",
+          "kind": "request",
+          "path": "/paid"
+        },
+        {
+          "name": "rebound_expired",
+          "kind": "request",
+          "path": "/paid",
+          "credential": {
+            "from": "unpaid",
+            "mutate": {
+              "expires": "2020-01-01T00:00:00Z"
+            },
+            "rebind": true
+          }
+        }
+      ],
+      "expectedFailures": [
+        {
+          "client": "*",
+          "server": "python",
+          "steps": [
+            "pay_issued_expired",
+            "rebound_expired"
+          ],
+          "reason": "pympp answers a credential it rejects before settlement (bad challenge id, other realm, other route, expired, malformed) with a fresh payment-required challenge and reports the reason only on its payment.failed event; mppx returns the specific problem type: invalid-challenge, payment-expired or malformed-credential."
+        }
+      ]
+    },
+    {
+      "name": "tampered_challenge",
+      "description": "Credentials whose echoed id or request were altered are rejected.",
+      "server": {
+        "realm": "pairs.conformance",
+        "routes": [
+          {
+            "path": "/paid",
+            "offers": [
+              {
+                "method": "tempo",
+                "intent": "charge",
+                "request": {
+                  "amount": "1000",
+                  "currency": "USD",
+                  "recipient": "merchant"
+                },
+                "expires": "2099-01-01T00:00:00Z"
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "name": "unpaid",
+          "kind": "request",
+          "path": "/paid"
+        },
+        {
+          "name": "tampered_id",
+          "kind": "request",
+          "path": "/paid",
+          "credential": {
+            "from": "unpaid",
+            "mutate": {
+              "id": "tampered-challenge-id"
+            }
+          }
+        },
+        {
+          "name": "tampered_amount",
+          "kind": "request",
+          "path": "/paid",
+          "credential": {
+            "from": "unpaid",
+            "mutate": {
+              "request": {
+                "amount": "1"
+              }
+            }
+          }
+        }
+      ],
+      "expectedFailures": [
+        {
+          "client": "*",
+          "server": "python",
+          "steps": [
+            "tampered_id",
+            "tampered_amount"
+          ],
+          "reason": "pympp answers a credential it rejects before settlement (bad challenge id, other realm, other route, expired, malformed) with a fresh payment-required challenge and reports the reason only on its payment.failed event; mppx returns the specific problem type: invalid-challenge, payment-expired or malformed-credential."
+        }
+      ]
+    },
+    {
+      "name": "requires_auth",
+      "description": "With requiresAuth the credential travels in Payment-Authorization, leaving Authorization to the application.",
+      "server": {
+        "realm": "pairs.conformance",
+        "requiresAuth": true,
+        "routes": [
+          {
+            "path": "/paid",
+            "offers": [
+              {
+                "method": "tempo",
+                "intent": "charge",
+                "request": {
+                  "amount": "1000",
+                  "currency": "USD",
+                  "recipient": "merchant"
+                },
+                "expires": "2099-01-01T00:00:00Z"
+              }
+            ],
+            "echoHeaders": [
+              "authorization"
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "name": "unpaid",
+          "kind": "request",
+          "path": "/paid",
+          "headers": {
+            "Authorization": "Bearer app-token"
+          }
+        },
+        {
+          "name": "pay",
+          "kind": "pay",
+          "path": "/paid",
+          "headers": {
+            "Authorization": "Bearer app-token"
+          }
+        },
+        {
+          "name": "credential_in_authorization",
+          "kind": "request",
+          "path": "/paid",
+          "credential": {
+            "from": "unpaid",
+            "header": "Authorization"
+          }
+        }
+      ],
+      "expectedFailures": [
+        {
+          "client": "go",
+          "server": "python",
+          "steps": [
+            "credential_in_authorization"
+          ],
+          "reason": "The go adapter's challenge.parse returns opaque as a decoded object instead of its wire string, so it cannot echo a challenge that carries opaque (route meta, or pympp's per-challenge nonce)."
+        },
+        {
+          "client": "rust",
+          "server": "python",
+          "steps": [
+            "credential_in_authorization"
+          ],
+          "reason": "The rust adapter's challenge.parse returns opaque as a decoded object instead of its wire string, so it cannot echo a challenge that carries opaque (route meta, or pympp's per-challenge nonce)."
+        }
+      ]
+    },
+    {
+      "name": "meta_binding",
+      "description": "Opaque route metadata is bound into the challenge: a credential for one account's route is rejected at another's.",
+      "server": {
+        "realm": "pairs.conformance",
+        "routes": [
+          {
+            "path": "/alice",
+            "offers": [
+              {
+                "method": "tempo",
+                "intent": "charge",
+                "request": {
+                  "amount": "1000",
+                  "currency": "USD",
+                  "recipient": "merchant"
+                },
+                "expires": "2099-01-01T00:00:00Z",
+                "meta": {
+                  "account": "alice"
+                }
+              }
+            ]
+          },
+          {
+            "path": "/bob",
+            "offers": [
+              {
+                "method": "tempo",
+                "intent": "charge",
+                "request": {
+                  "amount": "1000",
+                  "currency": "USD",
+                  "recipient": "merchant"
+                },
+                "expires": "2099-01-01T00:00:00Z",
+                "meta": {
+                  "account": "bob"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "name": "pay_alice",
+          "kind": "pay",
+          "path": "/alice"
+        },
+        {
+          "name": "alice_challenge",
+          "kind": "request",
+          "path": "/alice"
+        },
+        {
+          "name": "bob_with_alice_credential",
+          "kind": "request",
+          "path": "/bob",
+          "credential": {
+            "from": "alice_challenge"
+          }
+        }
+      ],
+      "expectedFailures": [
+        {
+          "client": "go",
+          "server": "*",
+          "steps": [
+            "bob_with_alice_credential"
+          ],
+          "reason": "The go adapter's challenge.parse returns opaque as a decoded object instead of its wire string, so it cannot echo a challenge that carries opaque (route meta, or pympp's per-challenge nonce)."
+        },
+        {
+          "client": "rust",
+          "server": "*",
+          "steps": [
+            "bob_with_alice_credential"
+          ],
+          "reason": "The rust adapter's challenge.parse returns opaque as a decoded object instead of its wire string, so it cannot echo a challenge that carries opaque (route meta, or pympp's per-challenge nonce)."
+        },
+        {
+          "client": "*",
+          "server": "python",
+          "steps": [
+            "bob_with_alice_credential"
+          ],
+          "reason": "pympp answers a credential it rejects before settlement (bad challenge id, other realm, other route, expired, malformed) with a fresh payment-required challenge and reports the reason only on its payment.failed event; mppx returns the specific problem type: invalid-challenge, payment-expired or malformed-credential."
+        }
+      ]
+    },
+    {
+      "name": "multi_offer",
+      "description": "A route offering two methods returns both challenges; the client pays the one it supports.",
+      "server": {
+        "realm": "pairs.conformance",
+        "routes": [
+          {
+            "path": "/multi",
+            "offers": [
+              {
+                "method": "conformance",
+                "intent": "charge",
+                "request": {
+                  "amount": "5",
+                  "currency": "EUR",
+                  "recipient": "merchant"
+                },
+                "expires": "2099-01-01T00:00:00Z"
+              },
+              {
+                "method": "tempo",
+                "intent": "charge",
+                "request": {
+                  "amount": "1000",
+                  "currency": "USD",
+                  "recipient": "merchant"
+                },
+                "expires": "2099-01-01T00:00:00Z"
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "name": "unpaid",
+          "kind": "request",
+          "path": "/multi"
+        },
+        {
+          "name": "pay",
+          "kind": "pay",
+          "path": "/multi"
+        }
+      ]
+    },
+    {
+      "name": "malformed_authorization",
+      "description": "Malformed or foreign Authorization values get a 402, never a 5xx.",
+      "server": {
+        "realm": "pairs.conformance",
+        "routes": [
+          {
+            "path": "/paid",
+            "offers": [
+              {
+                "method": "tempo",
+                "intent": "charge",
+                "request": {
+                  "amount": "1000",
+                  "currency": "USD",
+                  "recipient": "merchant"
+                },
+                "expires": "2099-01-01T00:00:00Z"
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "name": "not_base64url",
+          "kind": "request",
+          "path": "/paid",
+          "authorization": "Payment !!!"
+        },
+        {
+          "name": "empty_object",
+          "kind": "request",
+          "path": "/paid",
+          "authorization": "Payment e30"
+        },
+        {
+          "name": "empty_payment",
+          "kind": "request",
+          "path": "/paid",
+          "authorization": "Payment"
+        },
+        {
+          "name": "other_scheme",
+          "kind": "request",
+          "path": "/paid",
+          "authorization": "Bearer app-token"
+        }
+      ],
+      "expectedFailures": [
+        {
+          "client": "*",
+          "server": "python",
+          "steps": [
+            "not_base64url",
+            "empty_object"
+          ],
+          "reason": "pympp answers a credential it rejects before settlement (bad challenge id, other realm, other route, expired, malformed) with a fresh payment-required challenge and reports the reason only on its payment.failed event; mppx returns the specific problem type: invalid-challenge, payment-expired or malformed-credential."
+        }
+      ]
+    },
+    {
+      "name": "verification_failed",
+      "description": "A credential the method declines gets a 402 verification-failed problem.",
+      "server": {
+        "realm": "pairs.conformance",
+        "routes": [
+          {
+            "path": "/paid",
+            "offers": [
+              {
+                "method": "tempo",
+                "intent": "charge",
+                "request": {
+                  "amount": "1000",
+                  "currency": "USD",
+                  "recipient": "merchant"
+                },
+                "expires": "2099-01-01T00:00:00Z"
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "name": "pay_declined",
+          "kind": "pay",
+          "path": "/paid",
+          "signature": "0xdecline"
+        }
+      ]
+    }
+  ]
+}
