@@ -269,7 +269,8 @@ def process_alive(pid: int) -> bool:
         with open(f"/proc/{pid}/stat") as handle:
             # A zombie has exited and only waits to be reaped.
             return handle.read().rsplit(")", 1)[1].split()[0] != "Z"
-    except FileNotFoundError:
+    except (FileNotFoundError, ProcessLookupError):
+        # The process can exit between open() and read(), which raises ESRCH.
         return False
 
 

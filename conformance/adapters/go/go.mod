@@ -4,7 +4,7 @@ go 1.26.10
 
 require (
 	github.com/ethereum/go-ethereum v1.17.5
-	github.com/tempoxyz/mpp-go v0.5.2-0.20261026193420-2dcf39ae8f57
+	github.com/tempoxyz/mpp-go v0.6.0
 )
 
 require (

@@ -124,8 +124,8 @@ github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWD
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
 github.com/supranational/blst v0.3.16 h1:bTDadT+3fK497EvLdWRQEjiGnUtzJ7jjIUMF0jqwYhE=
 github.com/supranational/blst v0.3.16/go.mod h1:jZJtfjgudtNl4en1tzwPIV3KjUnQUvG3/j+w+fVonLw=
-github.com/tempoxyz/mpp-go v0.5.2-0.20261026193420-2dcf39ae8f57 h1:cp7imWcz3Y1PO31G4LLf1RiQGHyrODyBWo4tTkNaC9Y=
-github.com/tempoxyz/mpp-go v0.5.2-0.20261026193420-2dcf39ae8f57/go.mod h1:OIC8bzv3vMsOo/t9pKnoyt7tTDe4qQlyHAhcDPb+DMg=
+github.com/tempoxyz/mpp-go v0.6.0 h1:Joegy4JhV5HBMaNrSmzvSyIR8V5TwF/0jQXikgFeMcQ=
+github.com/tempoxyz/mpp-go v0.6.0/go.mod h1:2/QycvjTucxihDnCyDbQnRFhfDzDzn4NICMjAtbctIc=
 github.com/tempoxyz/tempo-go v0.5.0 h1:7doFtzBmPR2yNS8bzz8UzQX46BsnfeFhEozJEIbx1JI=
 github.com/tempoxyz/tempo-go v0.5.0/go.mod h1:2nszt4KN0N9JlVN5TBGJdqOlz/INWTtM7Zr7CYbliAU=
 github.com/tklauser/go-sysconf v0.3.12 h1:0QaGUFOdQaIVdPgfITYzaTegZvdCjmYO52cSFAEVmqU=
