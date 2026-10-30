@@ -337,6 +337,10 @@ func handleAdapterRequest() {
 		printJSON(runTempoReceiptVerify(request.Input))
 		return
 	}
+	if request.Op == "tempo.proof.verify" {
+		printJSON(runTempoProofVerify(request.Input))
+		return
+	}
 	if request.Op == "tempo.proof.typed_data" {
 		printJSON(runTempoProofTypedData(request.Input))
 		return
@@ -946,4 +950,129 @@ func runTempoReceiptVerify(raw json.RawMessage) adapterResponse {
 		return adapterResponse{OK: false, Error: &adapterError{Type: "verification_error", Message: err.Error()}}
 	}
 	return adapterResponse{OK: true, Value: map[string]any{"status": receipt.Status, "reference": receipt.Reference}}
+}
+
+type tempoAccessKeyFixture struct {
+	Account   string `json:"account"`
+	AccessKey string `json:"accessKey"`
+	Expiry    uint64 `json:"expiry"`
+	Revoked   bool   `json:"revoked"`
+}
+
+type tempoProofVerifyInput struct {
+	Credential credentialDTO           `json:"credential"`
+	AccessKeys []tempoAccessKeyFixture `json:"accessKeys"`
+}
+
+// accountKeychainGetKeySelector is AccountKeychain.getKey(address account, address keyId).
+const accountKeychainGetKeySelector = "0xbc298553"
+
+// runTempoProofVerify verifies a zero-amount proof credential against an
+// in-process JSON-RPC endpoint that answers AccountKeychain.getKey from the
+// vector's access keys; an unknown key reads as the zero key.
+func runTempoProofVerify(raw json.RawMessage) adapterResponse {
+	var input tempoProofVerifyInput
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return adapterResponse{OK: false, Error: &adapterError{Type: "unknown_error", Message: err.Error()}}
+	}
+	credential, err := input.Credential.toCredential()
+	if err != nil {
+		return adapterResponse{OK: false, Error: &adapterError{Type: "unknown_error", Message: err.Error()}}
+	}
+	request := input.Credential.Challenge.Request
+
+	var unexpected []string
+	var unexpectedMu sync.Mutex
+	rpc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var call struct {
+			ID     json.RawMessage `json:"id"`
+			Method string          `json:"method"`
+			Params []any           `json:"params"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&call); err != nil {
+			unexpectedMu.Lock()
+			unexpected = append(unexpected, "undecodable request: "+err.Error())
+			unexpectedMu.Unlock()
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		response := map[string]any{"jsonrpc": "2.0", "id": call.ID}
+		result, ok := "", false
+		switch call.Method {
+		case "eth_chainId":
+			result, ok = "0x1079", true
+		case "eth_call":
+			result, ok = answerAccountKeychainGetKey(call.Params, input.AccessKeys)
+		}
+		if ok {
+			response["result"] = result
+		} else {
+			unexpectedMu.Lock()
+			unexpected = append(unexpected, "unexpected method "+call.Method)
+			unexpectedMu.Unlock()
+			response["error"] = map[string]any{"code": -32601, "message": "unexpected method " + call.Method}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer rpc.Close()
+
+	intent, err := charge.NewIntent(charge.IntentConfig{RPCURL: rpc.URL, Store: tempo.NewMemoryStore()})
+	if err != nil {
+		return adapterResponse{OK: false, Error: &adapterError{Type: "unknown_error", Message: err.Error()}}
+	}
+	receipt, err := intent.Verify(context.Background(), credential, request)
+	unexpectedMu.Lock()
+	setupErrors := strings.Join(unexpected, "; ")
+	unexpectedMu.Unlock()
+	if setupErrors != "" {
+		return adapterResponse{OK: false, Error: &adapterError{Type: "unknown_error", Message: setupErrors}}
+	}
+	if err != nil {
+		var paymentErr *mpp.PaymentError
+		if !errors.As(err, &paymentErr) {
+			return adapterResponse{OK: false, Error: &adapterError{Type: "unknown_error", Message: err.Error()}}
+		}
+		return adapterResponse{OK: false, Error: &adapterError{Type: "verification_error", Message: err.Error()}}
+	}
+	return adapterResponse{OK: true, Value: map[string]any{"status": receipt.Status, "reference": receipt.Reference}}
+}
+
+// answerAccountKeychainGetKey answers an eth_call of AccountKeychain.getKey
+// with (signatureType, keyId, expiry, enforceLimits, isRevoked) words.
+func answerAccountKeychainGetKey(params []any, keys []tempoAccessKeyFixture) (string, bool) {
+	if len(params) == 0 {
+		return "", false
+	}
+	tx, _ := params[0].(map[string]any)
+	to, _ := tx["to"].(string)
+	data, _ := tx["data"].(string)
+	data = strings.ToLower(data)
+	if !strings.EqualFold(to, "0xaAAAaaAA00000000000000000000000000000000") ||
+		!strings.HasPrefix(data, accountKeychainGetKeySelector) ||
+		len(data) != len(accountKeychainGetKeySelector)+128 {
+		return "", false
+	}
+	body := data[len(accountKeychainGetKeySelector):]
+	account, keyID := common.HexToAddress(body[24:64]), common.HexToAddress(body[88:128])
+	words := make([]*big.Int, 5)
+	for index := range words {
+		words[index] = new(big.Int)
+	}
+	for _, key := range keys {
+		if common.HexToAddress(key.Account) == account && common.HexToAddress(key.AccessKey) == keyID {
+			words[1].SetBytes(keyID.Bytes())
+			words[2].SetUint64(key.Expiry)
+			if key.Revoked {
+				words[4].SetInt64(1)
+			}
+			break
+		}
+	}
+	var result strings.Builder
+	result.WriteString("0x")
+	for _, word := range words {
+		result.WriteString(fmt.Sprintf("%064x", word))
+	}
+	return result.String(), true
 }

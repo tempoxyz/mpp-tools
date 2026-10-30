@@ -1,0 +1,612 @@
+{
+  "version": "1.0.0",
+  "spec_ref": "Tempo zero-amount proof credential",
+  "description": "Server-side verification of zero-amount Tempo proof credentials ({type: 'proof', signature}), as mppx's tempo/server/Charge.ts validates them: the EIP-712 Proof (domain MPP v3, chain 4217) binds account, challengeId and realm, and must be signed by the did:pkh source account or by an access key the AccountKeychain holds for it, unrevoked and unexpired, bare or wrapped in a Keychain V1/V2 envelope naming the source. The adapter's fake node serves eth_chainId, AccountKeychain.getKey from accessKeys, and the ERC-6492 universal validator for accounts without code. Fixture keys: source 0xf39F...2266 (Anvil account 0), access key 0x7099...79C8 (Anvil account 1).",
+  "commands": {
+    "operation": "tempo.proof.verify"
+  },
+  "scenarios": [
+    {
+      "name": "eoa_proof_accepted",
+      "sdkVersions": {
+        "python": ">=0.19.0"
+      },
+      "description": "A proof the source account signed itself is accepted; the receipt reference is the challenge id.",
+      "tags": [
+        "tempo",
+        "proof",
+        "zero-amount",
+        "happy-path"
+      ],
+      "input": {
+        "credential": {
+          "challenge": {
+            "id": "zero-amount-challenge",
+            "realm": "api.example.com",
+            "method": "tempo",
+            "intent": "charge",
+            "expires": "2030-01-01T00:00:00Z",
+            "request": {
+              "amount": "0",
+              "currency": "0x1234567890123456789012345678901234567890",
+              "recipient": "0x4567890123456789012345678901234567890123",
+              "methodDetails": {
+                "chainId": 4217
+              }
+            }
+          },
+          "payload": {
+            "type": "proof",
+            "signature": "0x0fdcedc627bc81bab63f490e0e927074a25d2bb97a7c855f5a89da231977d12a45bc75f7517c11277ee17cac32e47ee5260130200439798d6bf91aff714d178c1b"
+          },
+          "source": "did:pkh:eip155:4217:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+        }
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "status": "success",
+          "reference": "zero-amount-challenge"
+        }
+      }
+    },
+    {
+      "name": "proof_for_other_challenge_rejected",
+      "description": "A proof the source account signed for another challenge id does not verify for this one.",
+      "tags": [
+        "tempo",
+        "proof",
+        "zero-amount",
+        "security",
+        "replay"
+      ],
+      "input": {
+        "credential": {
+          "challenge": {
+            "id": "zero-amount-challenge",
+            "realm": "api.example.com",
+            "method": "tempo",
+            "intent": "charge",
+            "expires": "2030-01-01T00:00:00Z",
+            "request": {
+              "amount": "0",
+              "currency": "0x1234567890123456789012345678901234567890",
+              "recipient": "0x4567890123456789012345678901234567890123",
+              "methodDetails": {
+                "chainId": 4217
+              }
+            }
+          },
+          "payload": {
+            "type": "proof",
+            "signature": "0x27f4f4609f2b0f0bbf236a325131478c78f05ad787744492debbb947e1f92c3828775a8286a0622ad52473354318a259c2dc0f954cdc42048165b5d38f1c5fea1c"
+          },
+          "source": "did:pkh:eip155:4217:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+        }
+      },
+      "expected": {
+        "ok": false,
+        "error": {
+          "type": "verification_error"
+        }
+      }
+    },
+    {
+      "name": "proof_signed_by_other_account_rejected",
+      "description": "A proof signed by an account that is neither the source nor one of its access keys is rejected.",
+      "tags": [
+        "tempo",
+        "proof",
+        "zero-amount",
+        "security"
+      ],
+      "input": {
+        "credential": {
+          "challenge": {
+            "id": "zero-amount-challenge",
+            "realm": "api.example.com",
+            "method": "tempo",
+            "intent": "charge",
+            "expires": "2030-01-01T00:00:00Z",
+            "request": {
+              "amount": "0",
+              "currency": "0x1234567890123456789012345678901234567890",
+              "recipient": "0x4567890123456789012345678901234567890123",
+              "methodDetails": {
+                "chainId": 4217
+              }
+            }
+          },
+          "payload": {
+            "type": "proof",
+            "signature": "0x4a6572b8164e3f90b40149cf8b9ea6f7558ddad191d622700830d65a43978f2a58f85f4073fa130ac1f84ecb432106fdeb14d6b2ef91bba25f87c4fd122817db1c"
+          },
+          "source": "did:pkh:eip155:4217:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+        }
+      },
+      "expected": {
+        "ok": false,
+        "error": {
+          "type": "verification_error"
+        }
+      }
+    },
+    {
+      "name": "proof_on_nonzero_amount_rejected",
+      "description": "A proof credential only pays a zero-amount challenge: the same valid signature is rejected for a paid amount.",
+      "tags": [
+        "tempo",
+        "proof",
+        "zero-amount",
+        "security"
+      ],
+      "input": {
+        "credential": {
+          "challenge": {
+            "id": "zero-amount-challenge",
+            "realm": "api.example.com",
+            "method": "tempo",
+            "intent": "charge",
+            "expires": "2030-01-01T00:00:00Z",
+            "request": {
+              "amount": "1000",
+              "currency": "0x1234567890123456789012345678901234567890",
+              "recipient": "0x4567890123456789012345678901234567890123",
+              "methodDetails": {
+                "chainId": 4217
+              }
+            }
+          },
+          "payload": {
+            "type": "proof",
+            "signature": "0x0fdcedc627bc81bab63f490e0e927074a25d2bb97a7c855f5a89da231977d12a45bc75f7517c11277ee17cac32e47ee5260130200439798d6bf91aff714d178c1b"
+          },
+          "source": "did:pkh:eip155:4217:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+        }
+      },
+      "expected": {
+        "ok": false,
+        "error": {
+          "type": "verification_error"
+        }
+      }
+    },
+    {
+      "name": "proof_without_source_rejected",
+      "description": "A proof credential must carry the did:pkh source it is bound to.",
+      "tags": [
+        "tempo",
+        "proof",
+        "zero-amount",
+        "security"
+      ],
+      "input": {
+        "credential": {
+          "challenge": {
+            "id": "zero-amount-challenge",
+            "realm": "api.example.com",
+            "method": "tempo",
+            "intent": "charge",
+            "expires": "2030-01-01T00:00:00Z",
+            "request": {
+              "amount": "0",
+              "currency": "0x1234567890123456789012345678901234567890",
+              "recipient": "0x4567890123456789012345678901234567890123",
+              "methodDetails": {
+                "chainId": 4217
+              }
+            }
+          },
+          "payload": {
+            "type": "proof",
+            "signature": "0x0fdcedc627bc81bab63f490e0e927074a25d2bb97a7c855f5a89da231977d12a45bc75f7517c11277ee17cac32e47ee5260130200439798d6bf91aff714d178c1b"
+          }
+        }
+      },
+      "expected": {
+        "ok": false,
+        "error": {
+          "type": "verification_error"
+        }
+      }
+    },
+    {
+      "name": "proof_source_on_other_chain_rejected",
+      "description": "A source on another chain than the challenge's methodDetails.chainId is rejected.",
+      "tags": [
+        "tempo",
+        "proof",
+        "zero-amount",
+        "security"
+      ],
+      "input": {
+        "credential": {
+          "challenge": {
+            "id": "zero-amount-challenge",
+            "realm": "api.example.com",
+            "method": "tempo",
+            "intent": "charge",
+            "expires": "2030-01-01T00:00:00Z",
+            "request": {
+              "amount": "0",
+              "currency": "0x1234567890123456789012345678901234567890",
+              "recipient": "0x4567890123456789012345678901234567890123",
+              "methodDetails": {
+                "chainId": 4217
+              }
+            }
+          },
+          "payload": {
+            "type": "proof",
+            "signature": "0x0fdcedc627bc81bab63f490e0e927074a25d2bb97a7c855f5a89da231977d12a45bc75f7517c11277ee17cac32e47ee5260130200439798d6bf91aff714d178c1b"
+          },
+          "source": "did:pkh:eip155:1:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+        }
+      },
+      "expected": {
+        "ok": false,
+        "error": {
+          "type": "verification_error"
+        }
+      }
+    },
+    {
+      "name": "keychain_v2_proof_from_active_access_key_accepted",
+      "sdkVersions": {
+        "python": ">=0.19.0"
+      },
+      "description": "A Keychain V2 envelope (0x04 || account || inner) signed by an unrevoked, unexpired access key of the source is accepted; the inner signature signs keccak256(0x04 || proofHash || account).",
+      "tags": [
+        "tempo",
+        "proof",
+        "zero-amount",
+        "happy-path",
+        "keychain",
+        "access-key"
+      ],
+      "input": {
+        "credential": {
+          "challenge": {
+            "id": "zero-amount-challenge",
+            "realm": "api.example.com",
+            "method": "tempo",
+            "intent": "charge",
+            "expires": "2030-01-01T00:00:00Z",
+            "request": {
+              "amount": "0",
+              "currency": "0x1234567890123456789012345678901234567890",
+              "recipient": "0x4567890123456789012345678901234567890123",
+              "methodDetails": {
+                "chainId": 4217
+              }
+            }
+          },
+          "payload": {
+            "type": "proof",
+            "signature": "0x04f39fd6e51aad88f6f4ce6ab8827279cfffb9226697fcebe2ccd942a1d50f330d334ce2489cf430b0dc0be1fb962946bcecc36df7303b80a8b074de688cf7d75b9970c1a1af29916cff48645d56946e90e9fc6f531b"
+          },
+          "source": "did:pkh:eip155:4217:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+        },
+        "accessKeys": [
+          {
+            "account": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+            "accessKey": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+            "expiry": 4102444800,
+            "revoked": false
+          }
+        ]
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "status": "success",
+          "reference": "zero-amount-challenge"
+        }
+      }
+    },
+    {
+      "name": "keychain_v1_proof_from_active_access_key_accepted",
+      "sdkVersions": {
+        "go": ">0.6.0",
+        "python": ">=0.19.0"
+      },
+      "description": "A legacy Keychain V1 envelope (0x03 || account || inner) whose inner signature signs the proof hash itself is accepted from an active access key.",
+      "tags": [
+        "tempo",
+        "proof",
+        "zero-amount",
+        "happy-path",
+        "keychain",
+        "access-key"
+      ],
+      "input": {
+        "credential": {
+          "challenge": {
+            "id": "zero-amount-challenge",
+            "realm": "api.example.com",
+            "method": "tempo",
+            "intent": "charge",
+            "expires": "2030-01-01T00:00:00Z",
+            "request": {
+              "amount": "0",
+              "currency": "0x1234567890123456789012345678901234567890",
+              "recipient": "0x4567890123456789012345678901234567890123",
+              "methodDetails": {
+                "chainId": 4217
+              }
+            }
+          },
+          "payload": {
+            "type": "proof",
+            "signature": "0x03f39fd6e51aad88f6f4ce6ab8827279cfffb9226638472ae9a51efc9077f72655d9640d5d6c6006eadca3ca52e6032b7e1e117b1004457c374ebbfebb4245e4306cc9a846a715bc8e8dfc4d6ad577b02f515cd3da1c"
+          },
+          "source": "did:pkh:eip155:4217:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+        },
+        "accessKeys": [
+          {
+            "account": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+            "accessKey": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+            "expiry": 4102444800,
+            "revoked": false
+          }
+        ]
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "status": "success",
+          "reference": "zero-amount-challenge"
+        }
+      }
+    },
+    {
+      "name": "bare_access_key_proof_accepted",
+      "sdkVersions": {
+        "python": ">=0.19.0"
+      },
+      "description": "A bare secp256k1 proof signed by an active access key of the source (no Keychain envelope) is accepted.",
+      "tags": [
+        "tempo",
+        "proof",
+        "zero-amount",
+        "happy-path",
+        "access-key"
+      ],
+      "input": {
+        "credential": {
+          "challenge": {
+            "id": "zero-amount-challenge",
+            "realm": "api.example.com",
+            "method": "tempo",
+            "intent": "charge",
+            "expires": "2030-01-01T00:00:00Z",
+            "request": {
+              "amount": "0",
+              "currency": "0x1234567890123456789012345678901234567890",
+              "recipient": "0x4567890123456789012345678901234567890123",
+              "methodDetails": {
+                "chainId": 4217
+              }
+            }
+          },
+          "payload": {
+            "type": "proof",
+            "signature": "0x38472ae9a51efc9077f72655d9640d5d6c6006eadca3ca52e6032b7e1e117b1004457c374ebbfebb4245e4306cc9a846a715bc8e8dfc4d6ad577b02f515cd3da1c"
+          },
+          "source": "did:pkh:eip155:4217:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+        },
+        "accessKeys": [
+          {
+            "account": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+            "accessKey": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+            "expiry": 4102444800,
+            "revoked": false
+          }
+        ]
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "status": "success",
+          "reference": "zero-amount-challenge"
+        }
+      }
+    },
+    {
+      "name": "keychain_v2_proof_from_unknown_access_key_rejected",
+      "description": "A Keychain V2 proof from a key the AccountKeychain does not hold for the source is rejected.",
+      "tags": [
+        "tempo",
+        "proof",
+        "zero-amount",
+        "security",
+        "keychain",
+        "access-key"
+      ],
+      "input": {
+        "credential": {
+          "challenge": {
+            "id": "zero-amount-challenge",
+            "realm": "api.example.com",
+            "method": "tempo",
+            "intent": "charge",
+            "expires": "2030-01-01T00:00:00Z",
+            "request": {
+              "amount": "0",
+              "currency": "0x1234567890123456789012345678901234567890",
+              "recipient": "0x4567890123456789012345678901234567890123",
+              "methodDetails": {
+                "chainId": 4217
+              }
+            }
+          },
+          "payload": {
+            "type": "proof",
+            "signature": "0x04f39fd6e51aad88f6f4ce6ab8827279cfffb9226697fcebe2ccd942a1d50f330d334ce2489cf430b0dc0be1fb962946bcecc36df7303b80a8b074de688cf7d75b9970c1a1af29916cff48645d56946e90e9fc6f531b"
+          },
+          "source": "did:pkh:eip155:4217:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+        },
+        "accessKeys": []
+      },
+      "expected": {
+        "ok": false,
+        "error": {
+          "type": "verification_error"
+        }
+      }
+    },
+    {
+      "name": "keychain_v2_proof_from_revoked_access_key_rejected",
+      "description": "A Keychain V2 proof from a revoked access key is rejected.",
+      "tags": [
+        "tempo",
+        "proof",
+        "zero-amount",
+        "security",
+        "keychain",
+        "access-key"
+      ],
+      "input": {
+        "credential": {
+          "challenge": {
+            "id": "zero-amount-challenge",
+            "realm": "api.example.com",
+            "method": "tempo",
+            "intent": "charge",
+            "expires": "2030-01-01T00:00:00Z",
+            "request": {
+              "amount": "0",
+              "currency": "0x1234567890123456789012345678901234567890",
+              "recipient": "0x4567890123456789012345678901234567890123",
+              "methodDetails": {
+                "chainId": 4217
+              }
+            }
+          },
+          "payload": {
+            "type": "proof",
+            "signature": "0x04f39fd6e51aad88f6f4ce6ab8827279cfffb9226697fcebe2ccd942a1d50f330d334ce2489cf430b0dc0be1fb962946bcecc36df7303b80a8b074de688cf7d75b9970c1a1af29916cff48645d56946e90e9fc6f531b"
+          },
+          "source": "did:pkh:eip155:4217:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+        },
+        "accessKeys": [
+          {
+            "account": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+            "accessKey": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+            "expiry": 4102444800,
+            "revoked": true
+          }
+        ]
+      },
+      "expected": {
+        "ok": false,
+        "error": {
+          "type": "verification_error"
+        }
+      }
+    },
+    {
+      "name": "keychain_v2_proof_from_expired_access_key_rejected",
+      "description": "A Keychain V2 proof from an access key whose expiry has passed is rejected.",
+      "tags": [
+        "tempo",
+        "proof",
+        "zero-amount",
+        "security",
+        "keychain",
+        "access-key"
+      ],
+      "input": {
+        "credential": {
+          "challenge": {
+            "id": "zero-amount-challenge",
+            "realm": "api.example.com",
+            "method": "tempo",
+            "intent": "charge",
+            "expires": "2030-01-01T00:00:00Z",
+            "request": {
+              "amount": "0",
+              "currency": "0x1234567890123456789012345678901234567890",
+              "recipient": "0x4567890123456789012345678901234567890123",
+              "methodDetails": {
+                "chainId": 4217
+              }
+            }
+          },
+          "payload": {
+            "type": "proof",
+            "signature": "0x04f39fd6e51aad88f6f4ce6ab8827279cfffb9226697fcebe2ccd942a1d50f330d334ce2489cf430b0dc0be1fb962946bcecc36df7303b80a8b074de688cf7d75b9970c1a1af29916cff48645d56946e90e9fc6f531b"
+          },
+          "source": "did:pkh:eip155:4217:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+        },
+        "accessKeys": [
+          {
+            "account": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+            "accessKey": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+            "expiry": 1700000000,
+            "revoked": false
+          }
+        ]
+      },
+      "expected": {
+        "ok": false,
+        "error": {
+          "type": "verification_error"
+        }
+      }
+    },
+    {
+      "name": "keychain_v2_proof_naming_other_account_rejected",
+      "sdkVersions": {
+        "rust": ">0.12.0"
+      },
+      "description": "A Keychain envelope whose user is not the source account is rejected, even when its access key is active for the source.",
+      "tags": [
+        "tempo",
+        "proof",
+        "zero-amount",
+        "security",
+        "keychain",
+        "access-key"
+      ],
+      "input": {
+        "credential": {
+          "challenge": {
+            "id": "zero-amount-challenge",
+            "realm": "api.example.com",
+            "method": "tempo",
+            "intent": "charge",
+            "expires": "2030-01-01T00:00:00Z",
+            "request": {
+              "amount": "0",
+              "currency": "0x1234567890123456789012345678901234567890",
+              "recipient": "0x4567890123456789012345678901234567890123",
+              "methodDetails": {
+                "chainId": 4217
+              }
+            }
+          },
+          "payload": {
+            "type": "proof",
+            "signature": "0x04c1b18acb31925f4265e421e53890b99baaeebbcccac639b52d4ac05da7010969b6fa5a4cf2985eeecc5ad1c16e0b80cbbce1117e357f8c8b8b95edb0182d701ba3fb2fa8bc2d9937a55cd80e83cc0b5195a6be581b"
+          },
+          "source": "did:pkh:eip155:4217:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+        },
+        "accessKeys": [
+          {
+            "account": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+            "accessKey": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+            "expiry": 4102444800,
+            "revoked": false
+          }
+        ]
+      },
+      "expected": {
+        "ok": false,
+        "error": {
+          "type": "verification_error"
+        }
+      }
+    }
+  ]
+}

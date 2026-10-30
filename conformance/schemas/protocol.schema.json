@@ -19,6 +19,7 @@
         "tempo.fee_payer.cosign",
         "tempo.receipt.verify",
         "tempo.proof.typed_data",
+        "tempo.proof.verify",
         "http.payment_request",
         "http.server",
         "stripe.external_id_binding"
@@ -503,6 +504,30 @@
       "properties": {
         "status": { "type": "string", "const": "success" },
         "reference": { "type": "string", "minLength": 1 }
+      }
+    },
+    "TempoProofVerificationInput": {
+      "type": "object",
+      "required": ["credential"],
+      "additionalProperties": false,
+      "properties": {
+        "credential": { "$ref": "#/$defs/Credential" },
+        "accessKeys": {
+          "type": "array",
+          "description": "AccountKeychain entries the fake node holds; any other key reads as the zero key (expiry 0).",
+          "items": { "$ref": "#/$defs/TempoAccessKeyFixture" }
+        }
+      }
+    },
+    "TempoAccessKeyFixture": {
+      "type": "object",
+      "required": ["account", "accessKey", "expiry", "revoked"],
+      "additionalProperties": false,
+      "properties": {
+        "account": { "$ref": "#/$defs/Address" },
+        "accessKey": { "$ref": "#/$defs/Address" },
+        "expiry": { "type": "integer", "minimum": 0, "description": "Unix seconds." },
+        "revoked": { "type": "boolean" }
       }
     }
   }

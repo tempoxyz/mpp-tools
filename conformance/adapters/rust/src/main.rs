@@ -443,6 +443,14 @@ fn handle_adapter_request() {
         return;
     }
 
+    if op == "tempo.proof.verify" {
+        match run_tempo_proof_verify(&input_value) {
+            Ok(value) => print_adapter_success(value),
+            Err((error_type, message)) => print_adapter_error(&message, error_type),
+        }
+        return;
+    }
+
     let Some(command) = legacy_command_for_operation(op) else {
         print_adapter_error(
             &format!("Unknown operation: {}", op),
@@ -562,23 +570,80 @@ type UnexpectedRpcCall = Arc<Mutex<Option<String>>>;
 /// Serve JSON-RPC from a local HTTP server: `eth_chainId` is Tempo mainnet
 /// (4217) and `eth_getTransactionReceipt` returns `receipt` for its own
 /// `transactionHash` and a "not found" error for any other hash, and
-/// `eth_getTransactionByHash` returns null. Any other call is recorded in
-/// `unexpected`.
-fn serve_fake_tempo_rpc(receipt: Value, unexpected: UnexpectedRpcCall) -> io::Result<String> {
+/// `eth_getTransactionByHash` returns null. With `access_keys`, `eth_call` of
+/// AccountKeychain.getKey answers from them (an unknown key reads as the zero
+/// key). Any other call is recorded in `unexpected`.
+fn serve_fake_tempo_rpc(
+    receipt: Value,
+    access_keys: Option<Vec<Value>>,
+    unexpected: UnexpectedRpcCall,
+) -> io::Result<String> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
     let url = format!("http://{}", listener.local_addr()?);
     std::thread::spawn(move || {
         for stream in listener.incoming() {
             let Ok(stream) = stream else { continue };
-            let _ = answer_fake_rpc(stream, &receipt, &unexpected);
+            let _ = answer_fake_rpc(stream, &receipt, access_keys.as_deref(), &unexpected);
         }
     });
     Ok(url)
 }
 
+const ACCOUNT_KEYCHAIN: &str = "0xaaaaaaaa00000000000000000000000000000000";
+/// AccountKeychain.getKey(address account, address keyId).
+const GET_KEY_SELECTOR: &str = "0xbc298553";
+
+/// Answer an `eth_call` of AccountKeychain.getKey with the
+/// (signatureType, keyId, expiry, enforceLimits, isRevoked) words of the
+/// matching access key, or the zero key.
+fn answer_get_key(call: &Value, access_keys: &[Value]) -> Option<String> {
+    let tx = call.pointer("/params/0")?;
+    let to = tx.get("to").and_then(Value::as_str)?;
+    let data = tx
+        .get("input")
+        .or_else(|| tx.get("data"))
+        .and_then(Value::as_str)?
+        .to_ascii_lowercase();
+    if !to.eq_ignore_ascii_case(ACCOUNT_KEYCHAIN)
+        || !data.starts_with(GET_KEY_SELECTOR)
+        || data.len() != GET_KEY_SELECTOR.len() + 128
+    {
+        return None;
+    }
+    let body = &data[GET_KEY_SELECTOR.len()..];
+    let (account, key_id) = (&body[24..64], &body[88..128]);
+    let is = |key: &Value, field: &str, expected: &str| {
+        key.get(field).and_then(Value::as_str).is_some_and(|value| {
+            value
+                .trim_start_matches("0x")
+                .eq_ignore_ascii_case(expected)
+        })
+    };
+    let entry = access_keys
+        .iter()
+        .find(|key| is(key, "account", account) && is(key, "accessKey", key_id));
+    let mut words = [0u64; 5].map(|word| format!("{word:064x}"));
+    if let Some(entry) = entry {
+        words[1] = format!("{key_id:0>64}");
+        words[2] = format!(
+            "{:064x}",
+            entry.get("expiry").and_then(Value::as_u64).unwrap_or(0)
+        );
+        if entry
+            .get("revoked")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        {
+            words[4] = format!("{:064x}", 1);
+        }
+    }
+    Some(format!("0x{}", words.concat()))
+}
+
 fn answer_fake_rpc(
     stream: std::net::TcpStream,
     receipt: &Value,
+    access_keys: Option<&[Value]>,
     unexpected: &UnexpectedRpcCall,
 ) -> io::Result<()> {
     let record = |call: String| {
@@ -625,6 +690,12 @@ fn answer_fake_rpc(
                 // The fixture has no transaction body for this optional lookup.
                 Some("eth_getTransactionByHash") => {
                     json!({ "jsonrpc": "2.0", "id": id, "result": null })
+                }
+                Some("eth_call")
+                    if access_keys.is_some_and(|keys| answer_get_key(&call, keys).is_some()) =>
+                {
+                    let result = access_keys.and_then(|keys| answer_get_key(&call, keys));
+                    json!({ "jsonrpc": "2.0", "id": id, "result": result })
                 }
                 other => {
                     let method = other.unwrap_or("");
@@ -717,6 +788,26 @@ fn rpc_receipt_envelope(receipt: Value, source: Option<&str>) -> Value {
 /// Verify a hash credential with the SDK's server-side Tempo charge method
 /// against a receipt fixture served by a fake JSON-RPC.
 fn run_tempo_receipt_verify(input: &Value) -> Result<Value, (&'static str, String)> {
+    let receipt = input.get("receipt").cloned().unwrap_or(json!({}));
+    verify_with_fake_tempo_rpc(input, Some(receipt), None)
+}
+
+/// Verify a zero-amount proof credential with the SDK's server-side Tempo
+/// charge method against a fake JSON-RPC holding the vector's access keys.
+fn run_tempo_proof_verify(input: &Value) -> Result<Value, (&'static str, String)> {
+    let access_keys = input
+        .get("accessKeys")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    verify_with_fake_tempo_rpc(input, None, Some(access_keys))
+}
+
+fn verify_with_fake_tempo_rpc(
+    input: &Value,
+    receipt: Option<Value>,
+    access_keys: Option<Vec<Value>>,
+) -> Result<Value, (&'static str, String)> {
     use mpp::protocol::traits::ChargeMethod as _;
 
     let unknown = |message: String| ("unknown_error", message);
@@ -738,13 +829,13 @@ fn run_tempo_receipt_verify(input: &Value) -> Result<Value, (&'static str, Strin
         source: opt_str_field(&credential_value, "source"),
     };
 
-    let receipt = rpc_receipt_envelope(
-        input.get("receipt").cloned().unwrap_or(json!({})),
-        credential.source.as_deref(),
-    );
+    // Without a receipt fixture, eth_getTransactionReceipt finds no transaction.
+    let receipt = receipt
+        .map(|receipt| rpc_receipt_envelope(receipt, credential.source.as_deref()))
+        .unwrap_or(json!({}));
     let unexpected = UnexpectedRpcCall::default();
-    let rpc_url =
-        serve_fake_tempo_rpc(receipt, unexpected.clone()).map_err(|e| unknown(e.to_string()))?;
+    let rpc_url = serve_fake_tempo_rpc(receipt, access_keys, unexpected.clone())
+        .map_err(|e| unknown(e.to_string()))?;
     let provider = mpp::server::tempo_provider(&rpc_url).map_err(|e| unknown(e.to_string()))?;
     let method = mpp::server::TempoChargeMethod::new(provider)
         .with_store(std::sync::Arc::new(mpp::MemoryStore::new()));

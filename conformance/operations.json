@@ -129,6 +129,14 @@
       "errorTypes": ["verification_error"],
       "comparison": "exact",
       "description": "Verify a Tempo credential against a supplied receipt fixture. This is an optional staged capability until full signed transaction verification vectors are available."
+    },
+    "tempo.proof.verify": {
+      "category": "vector",
+      "inputRef": "protocol.schema.json#/$defs/TempoProofVerificationInput",
+      "successRef": "protocol.schema.json#/$defs/TempoReceiptVerificationOutput",
+      "errorTypes": ["verification_error"],
+      "comparison": "exact",
+      "description": "Verify a zero-amount Tempo proof credential with the SDK's server-side Tempo charge against a fake node holding the supplied AccountKeychain entries. An optional staged capability."
     }
   }
 }

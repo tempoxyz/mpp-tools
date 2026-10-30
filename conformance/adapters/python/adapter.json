@@ -37,6 +37,7 @@
     "http.server",
     "server.verify",
     "tempo.receipt.verify",
+    "tempo.proof.verify",
     "tempo.proof.typed_data"
   ]
 }
