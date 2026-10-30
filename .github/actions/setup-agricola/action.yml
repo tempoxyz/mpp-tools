@@ -33,7 +33,7 @@ runs:
         PROJECT_PATH: ${{ inputs.project-path }}
       run: |
         requirements="$RUNNER_TEMP/agricola-requirements.txt"
-        uv export --project "$PROJECT_PATH" --locked --no-dev --no-emit-project \
+        uv export --no-config --project "$PROJECT_PATH" --locked --no-dev --no-emit-project \
           --format requirements.txt --output-file "$requirements"
         python -m pip install --require-hashes -r "$requirements"
         python -m pip install --no-deps "$PROJECT_PATH"
