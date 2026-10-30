@@ -120,6 +120,33 @@
       }
     },
     {
+      "name": "supported_modes_method_details",
+      "description": "Tempo charge challenge whose methodDetails restricts credentials with supportedModes (push = hash, pull = transaction), as mppx's tempo/charge request schema emits it.",
+      "tags": ["happy-path", "nested-object", "tempo", "supported-modes"],
+      "object": {
+        "id": "ch_supported_modes",
+        "intent": "charge",
+        "method": "tempo",
+        "realm": "api.example.com",
+        "request": {
+          "amount": "1000",
+          "currency": "0x20c0000000000000000000000000000000000000",
+          "methodDetails": {
+            "chainId": 4217,
+            "supportedModes": ["push"]
+          },
+          "recipient": "0x742d35Cc6634c0532925a3b844bC9e7595F8fE00"
+        },
+        "expires": "2099-01-01T00:00:00Z"
+      },
+      "wire": "Payment id=\"ch_supported_modes\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJtZXRob2REZXRhaWxzIjp7ImNoYWluSWQiOjQyMTcsInN1cHBvcnRlZE1vZGVzIjpbInB1c2giXX0sInJlY2lwaWVudCI6IjB4NzQyZDM1Q2M2NjM0YzA1MzI5MjVhM2I4NDRiQzllNzU5NUY4ZkUwMCJ9\", expires=\"2099-01-01T00:00:00Z\"",
+      "tests": {
+        "parse": true,
+        "format": true,
+        "roundtrip": true
+      }
+    },
+    {
       "name": "unescaped_quotes_in_description",
       "description": "Unescaped quotes in description value — parsers truncate at quote boundary, remaining text is ignored",
       "tags": ["happy-path", "edge-case", "permissive-parsing"],

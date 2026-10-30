@@ -33,7 +33,21 @@ import { Challenge, Credential, Errors, Method, Receipt, z } from 'mppx'
 import * as Client from 'mppx/client'
 import { Proof } from 'mppx/tempo'
 import { Mppx, Request as ServerRequest, Store, stripe, tempo } from 'mppx/server'
-import { createClient, http } from 'viem'
+import {
+	type Hex,
+	createClient,
+	decodeAbiParameters,
+	decodeFunctionData,
+	encodeFunctionResult,
+	erc6492SignatureValidatorByteCode,
+	http,
+	isAddressEqual,
+	parseAbi,
+	parseAbiParameters,
+	size,
+	zeroAddress,
+} from 'viem'
+import { Secp256k1, Signature } from 'ox'
 import { tempo as tempoChain } from 'viem/chains'
 
 const minimumSecretKeyBytes = 32
@@ -240,49 +254,48 @@ async function verifyStripeExternalIdBinding(input: {
 	}
 }
 
-type TempoReceiptVerifyInput = {
-	credential: {
-		challenge: {
-			id: string
-			realm: string
-			method: string
-			intent: string
-			request: Record<string, unknown>
-			expires?: string
-			digest?: string
-			opaque?: string
-		}
-		payload: Record<string, unknown>
-		source?: string
+type TempoCredentialInput = {
+	challenge: {
+		id: string
+		realm: string
+		method: string
+		intent: string
+		request: Record<string, unknown>
+		expires?: string
+		digest?: string
+		opaque?: string
 	}
+	payload: Record<string, unknown>
+	source?: string
+}
+
+type TempoReceiptVerifyInput = {
+	credential: TempoCredentialInput
 	receipt: Record<string, unknown>
 }
 
-// Verifies a hash credential with mppx's server-side Tempo charge, reading
-// the transaction receipt from an in-process JSON-RPC server that serves the
-// vector's receipt fixture on Tempo mainnet (chain id 4217).
-async function verifyTempoReceipt(input: TempoReceiptVerifyInput): Promise<AdapterResponse> {
-	// Nodes always return each log's position in the block. mppx pairs a TIP-20
-	// Transfer with its TransferWithMemo by adjacent logIndex, so number logs
-	// the fixture leaves unnumbered in receipt order, as a node would.
-	const logs = Array.isArray(input.receipt.logs) ? (input.receipt.logs as Record<string, unknown>[]) : undefined
-	const receipt = logs
-		? {
-			...input.receipt,
-			logs: logs.map((log, index) => ({ logIndex: `0x${index.toString(16)}`, ...log })),
-		}
-		: input.receipt
-	// The fixture answers only for its own transaction hash, and has no
-	// transaction body for the optional eth_getTransactionByHash lookup. Any
-	// call the fake node cannot serve is recorded so a broken setup is not
-	// mistaken for a rejected credential.
-	const receiptHash = String(input.receipt.transactionHash ?? '').toLowerCase()
+type TempoProofVerifyInput = {
+	credential: TempoCredentialInput
+	accessKeys?: { account: string; accessKey: string; expiry: number; revoked: boolean }[]
+}
+
+type JsonRpcCall = { id?: unknown; method?: unknown; params?: unknown }
+type JsonRpcAnswer = { result: unknown } | { error: { code: number; message: string } }
+
+// Verifies a Tempo credential with mppx's server-side Tempo charge against an
+// in-process JSON-RPC server on Tempo mainnet (chain id 4217). `answer` serves
+// the calls a vector's fixture covers; any other call is recorded so a broken
+// setup is not mistaken for a rejected credential.
+async function verifyWithFakeTempoRpc(
+	credentialInput: TempoCredentialInput,
+	answer: (call: JsonRpcCall) => JsonRpcAnswer | undefined,
+): Promise<AdapterResponse> {
 	let unexpectedCall: string | undefined
 	const rpc = createServer((req, res) => {
 		let body = ''
 		req.on('data', (chunk) => (body += chunk))
 		req.on('end', () => {
-			let call: { id?: unknown; method?: unknown; params?: unknown }
+			let call: JsonRpcCall
 			try {
 				call = JSON.parse(body)
 				if (call === null || typeof call !== 'object' || Array.isArray(call)) throw new Error('not a JSON-RPC object')
@@ -293,19 +306,22 @@ async function verifyTempoReceipt(input: TempoReceiptVerifyInput): Promise<Adapt
 				res.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }))
 				return
 			}
-			const response: Record<string, unknown> = { jsonrpc: '2.0', id: call.id ?? null }
-			if (call.method === 'eth_chainId') response.result = '0x1079'
-			else if (call.method === 'eth_getTransactionReceipt') {
-				const hash = Array.isArray(call.params) ? call.params[0] : undefined
-				if (typeof hash === 'string' && hash.toLowerCase() === receiptHash) response.result = receipt
-				else response.error = { code: -32000, message: 'receipt not found for transaction hash' }
-			} else if (call.method === 'eth_getTransactionByHash') response.result = null
-			else {
-				unexpectedCall ??= `unexpected JSON-RPC method ${String(call.method)}`
-				response.error = { code: -32601, message: `unexpected method ${String(call.method)}` }
+			let answered: JsonRpcAnswer | undefined
+			try {
+				answered = call.method === 'eth_chainId' ? { result: '0x1079' } : answer(call)
+			} catch {
+				// A call the fixture can't decode is unexpected, not a crash.
+				answered = undefined
 			}
+			if (!answered) unexpectedCall ??= `unexpected JSON-RPC method ${String(call.method)}`
 			res.setHeader('Content-Type', 'application/json')
-			res.end(JSON.stringify(response))
+			res.end(
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: call.id ?? null,
+					...(answered ?? { error: { code: -32601, message: `unexpected method ${String(call.method)}` } }),
+				}),
+			)
 		})
 	})
 	await new Promise<void>((resolve) => rpc.listen(0, '127.0.0.1', resolve))
@@ -318,7 +334,7 @@ async function verifyTempoReceipt(input: TempoReceiptVerifyInput): Promise<Adapt
 		})
 		// Newer mppx returns the configured method group (one method per currency).
 		const method = Array.isArray(charge) ? charge[0] : charge
-		const { challenge: challengeData, payload, source } = input.credential
+		const { challenge: challengeData, payload, source } = credentialInput
 		const challenge = Challenge.from(challengeData)
 		const credential = Credential.from({ challenge, payload, ...(source === undefined ? {} : { source }) })
 		let result: AdapterResponse
@@ -334,6 +350,90 @@ async function verifyTempoReceipt(input: TempoReceiptVerifyInput): Promise<Adapt
 		await new Promise<void>((resolve) => rpc.close(() => resolve()))
 	}
 }
+
+// Verifies a hash credential, serving the vector's receipt fixture.
+async function verifyTempoReceipt(input: TempoReceiptVerifyInput): Promise<AdapterResponse> {
+	// Nodes always return each log's position in the block. mppx pairs a TIP-20
+	// Transfer with its TransferWithMemo by adjacent logIndex, so number logs
+	// the fixture leaves unnumbered in receipt order, as a node would.
+	const logs = Array.isArray(input.receipt.logs) ? (input.receipt.logs as Record<string, unknown>[]) : undefined
+	const receipt = logs
+		? {
+			...input.receipt,
+			logs: logs.map((log, index) => ({ logIndex: `0x${index.toString(16)}`, ...log })),
+		}
+		: input.receipt
+	// The fixture answers only for its own transaction hash, and has no
+	// transaction body for the optional eth_getTransactionByHash lookup.
+	const receiptHash = String(input.receipt.transactionHash ?? '').toLowerCase()
+	return verifyWithFakeTempoRpc(input.credential, (call) => {
+		if (call.method === 'eth_getTransactionReceipt') {
+			const hash = Array.isArray(call.params) ? call.params[0] : undefined
+			if (typeof hash === 'string' && hash.toLowerCase() === receiptHash) return { result: receipt }
+			return { error: { code: -32000, message: 'receipt not found for transaction hash' } }
+		}
+		if (call.method === 'eth_getTransactionByHash') return { result: null }
+		return undefined
+	})
+}
+
+const accountKeychainAbi = parseAbi([
+	'function getKey(address account, address keyId) view returns ((uint8 signatureType, address keyId, uint64 expiry, bool enforceLimits, bool isRevoked))',
+])
+const accountKeychainAddress = '0xaaaaaaaa00000000000000000000000000000000'
+
+// Verifies a zero-amount proof credential. The fake node holds accounts
+// without code and the vector's AccountKeychain entries: it answers
+// AccountKeychain.getKey from them (an unknown key reads as the zero key), and
+// runs the ERC-6492 universal signature validator the way a node does for an
+// account without code, by recovering a 65-byte secp256k1 signature.
+async function verifyTempoProof(input: TempoProofVerifyInput): Promise<AdapterResponse> {
+	const accessKeys = input.accessKeys ?? []
+	const word = (value: boolean) => `0x${(value ? 1 : 0).toString(16).padStart(64, '0')}`
+	return verifyWithFakeTempoRpc(input.credential, (call) => {
+		if (call.method === 'eth_getCode') return { result: '0x' }
+		if (call.method !== 'eth_call' || !Array.isArray(call.params)) return undefined
+		const { to, data } = (call.params[0] ?? {}) as { to?: string; data?: Hex }
+		if (typeof data !== 'string') return undefined
+		if (to?.toLowerCase() === accountKeychainAddress) {
+			const { functionName, args } = decodeFunctionData({ abi: accountKeychainAbi, data })
+			if (functionName !== 'getKey') return undefined
+			const [account, keyId] = args
+			const entry = accessKeys.find(
+				(key) => isAddressEqual(key.account as Hex, account) && isAddressEqual(key.accessKey as Hex, keyId),
+			)
+			return {
+				result: encodeFunctionResult({
+					abi: accountKeychainAbi,
+					functionName: 'getKey',
+					result: {
+						signatureType: 0,
+						keyId: entry ? keyId : zeroAddress,
+						expiry: BigInt(entry?.expiry ?? 0),
+						enforceLimits: false,
+						isRevoked: entry?.revoked ?? false,
+					},
+				}),
+			}
+		}
+		if (to === undefined && data.toLowerCase().startsWith(erc6492SignatureValidatorByteCode.toLowerCase())) {
+			const [address, hash, signature] = decodeAbiParameters(
+				parseAbiParameters('address, bytes32, bytes'),
+				`0x${data.slice(erc6492SignatureValidatorByteCode.length)}`,
+			)
+			if (size(signature) !== 65) return { result: word(false) }
+			try {
+				return {
+					result: word(isAddressEqual(Secp256k1.recoverAddress({ payload: hash, signature: Signature.fromHex(signature) }), address)),
+				}
+			} catch {
+				return { result: word(false) }
+			}
+		}
+		return undefined
+	})
+}
+
 
 function hasDuplicateChallengeParameter(header: string): boolean {
 	// Walk the header so commas and `key=` text inside quoted-string values
@@ -696,6 +796,7 @@ async function runAdapterRequest(request: { op: string; input: unknown }): Promi
 	if (request.op === 'http.payment_request') return runHttpPaymentRequest(request.input as HttpPaymentRequest)
 	if (request.op === 'http.server') return startHttpServer(request.input as HttpServerInput)
 	if (request.op === 'tempo.receipt.verify') return verifyTempoReceipt(request.input as TempoReceiptVerifyInput)
+	if (request.op === 'tempo.proof.verify') return verifyTempoProof(request.input as TempoProofVerifyInput)
 	const command = OP_TO_COMMAND[request.op]
 	if (!command) return adapterError(`Unknown operation: ${request.op}`, 'unsupported_operation')
 	const result = await runCommand(command, commandInputForRequest(request.op, request.input))

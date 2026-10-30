@@ -203,11 +203,21 @@ Required for vector conformance:
 | `challenge.id` | challenge id params | `{ "id": string }` |
 | `tempo.fee_payer.cosign` | fee-payer transaction params plus sponsor config | cosigned transaction summary |
 | `tempo.receipt.verify` | Tempo credential plus receipt fixture | `{ "status": "success", "reference": string }` |
+| `tempo.proof.verify` | zero-amount Tempo proof credential plus AccountKeychain fixture | `{ "status": "success", "reference": string }` |
 | `stripe.external_id_binding` | Stripe request, credential payload, and PaymentIntent fixture | verification outcome |
 
 `tempo.receipt.verify` is an optional staged vector capability. Adapters that do
 not advertise it are skipped; passing it demonstrates conformance for supplied
 receipt fixture verification, not full signed Tempo transaction verification.
+
+`tempo.proof.verify` is also optional and staged. The adapter verifies a
+`{ "type": "proof", "signature": string }` credential with its SDK's
+server-side Tempo charge against a fake node on chain 4217 that answers
+`eth_chainId`, `AccountKeychain.getKey` from the vector's `accessKeys` (any
+other key reads as the zero key, expiry 0), and, for SDKs that check contract
+signatures first, the ERC-6492 universal validator as a node runs it for an
+account without code. Any other RPC call is an adapter failure, not a
+rejection.
 
 Required for flow conformance:
 

@@ -27,6 +27,7 @@
     "http.server",
     "stripe.external_id_binding",
     "tempo.proof.typed_data",
-    "tempo.receipt.verify"
+    "tempo.receipt.verify",
+    "tempo.proof.verify"
   ]
 }

@@ -187,6 +187,28 @@
       "expected": "W8sYOWDDrcuRcku27vjJoqLX0uAnBmql7qAOuQwdmPo"
     },
     {
+      "name": "supported_modes_binding",
+      "description": "methodDetails.supportedModes is part of the canonical request, so the id binds the allowed credential modes: widening [\"push\"] to [\"push\", \"pull\"] changes it (w0p3gr2EOl5rHNR91Q1PFCnqvzt1vRJ3XjP1nQWpl9I).",
+      "tags": ["happy-path", "tempo", "supported-modes", "challenge-binding"],
+      "input": {
+        "secretKey": "test-vector-secret-minimum-32-byte-secret",
+        "realm": "api.example.com",
+        "method": "tempo",
+        "intent": "charge",
+        "request": {
+          "amount": "1000",
+          "currency": "0x20c0000000000000000000000000000000000000",
+          "methodDetails": {
+            "chainId": 4217,
+            "supportedModes": ["push"]
+          },
+          "recipient": "0x742d35Cc6634c0532925a3b844bC9e7595F8fE00"
+        },
+        "expires": "2099-01-01T00:00:00Z"
+      },
+      "expected": "27a0Jjbe8wVbeQBTFFEijRdvhDUecenNyxk42Zm87Vs"
+    },
+    {
       "name": "html_sensitive_request_canonicalization",
       "description": "HMAC input preserves HTML-sensitive JSON string characters without escaping them",
       "tags": ["happy-path", "cross-sdk-validated", "canonicalization"],

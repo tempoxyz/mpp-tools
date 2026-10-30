@@ -415,6 +415,36 @@
         }
       }
     ],
+    "no_payable_challenge": [
+      {
+        "name": "unpaid",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "conformance",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/payment-required",
+          "status": 402
+        }
+      },
+      {
+        "name": "pay_unpayable",
+        "error": "http_error"
+      }
+    ],
     "replay_rejected": [
       {
         "name": "unpaid",

@@ -675,6 +675,60 @@
           "signature": "0xdecline"
         }
       ]
+    },
+    {
+      "name": "no_payable_challenge",
+      "description": "A route offers only a method the client cannot pay. On that first 402 the client fails with no method found instead of returning the 402; it returns a 402 as-is only after a paid retry (see verification_failed).",
+      "server": {
+        "realm": "pairs.conformance",
+        "routes": [
+          {
+            "path": "/other",
+            "offers": [
+              {
+                "method": "conformance",
+                "intent": "charge",
+                "request": {
+                  "amount": "1000",
+                  "currency": "USD",
+                  "recipient": "merchant"
+                },
+                "expires": "2099-01-01T00:00:00Z"
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "name": "unpaid",
+          "kind": "request",
+          "path": "/other"
+        },
+        {
+          "name": "pay_unpayable",
+          "kind": "pay",
+          "path": "/other"
+        }
+      ],
+      "expectedFailures": [
+        {
+          "client": "go",
+          "server": "*",
+          "steps": [
+            "pay_unpayable"
+          ],
+          "reason": "mpp-go v0.6.0's client returns the first 402 unchanged when no challenge matches its methods; mppx fails with 'No method found for challenges: ... Available: ...' and returns a 402 only after a paid retry."
+        },
+        {
+          "client": "python",
+          "server": "*",
+          "steps": [
+            "pay_unpayable"
+          ],
+          "reason": "pympp before 0.19 returns the first 402 unchanged when no challenge matches its methods; mppx (and pympp 0.19, tempoxyz/pympp#368) fails with 'No method found for challenges: ... Available: ...' and returns a 402 only after a paid retry."
+        }
+      ]
     }
   ]
 }

@@ -46,6 +46,8 @@ Vectors live in `vectors/` and cover the core protocol surface:
 | `base64url.json` | RFC 4648 §5 encoding: no padding, URL-safe alphabet (`-`/`_` instead of `+`/`/`). |
 | `challenge-id.json` | Deterministic challenge ID generation via HMAC-SHA256. Input is pipe-delimited (`realm\|method\|intent\|canonicalized_request\|expires\|digest\|[header\|]opaque`); a non-default credential header is inserted before `opaque`. Output is unpadded base64url. |
 | `tempo-proof.json` | EIP-712 typed-data shape for zero-amount Tempo proof credentials. Binds `account`, `challengeId` and `realm` under domain `MPP` version `3`. |
+| `tempo-proof-verification.json` | Server-side verification of zero-amount Tempo proof credentials (`tempo.proof.verify`): signed by the source account or by an active access key, bare or in a Keychain V1/V2 envelope naming the source; proofs for another challenge, from revoked, expired or unknown keys, naming another account, or for a paid amount are rejected. |
+| `tempo-receipt-verification.json` | Server-side verification of Tempo hash credentials against receipt fixtures (`tempo.receipt.verify`): challenge-bound memos, splits, zero-amount challenges (proof only) and `methodDetails.supportedModes`. |
 
 Each vector file contains **scenarios** — individual test cases with a name, description, tags, and expected inputs/outputs:
 

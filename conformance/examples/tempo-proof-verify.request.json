@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "op": "tempo.proof.verify",
+  "input": {
+    "credential": {
+      "challenge": {
+        "id": "zero-amount-challenge",
+        "realm": "api.example.com",
+        "method": "tempo",
+        "intent": "charge",
+        "expires": "2030-01-01T00:00:00Z",
+        "request": {
+          "amount": "0",
+          "currency": "0x1234567890123456789012345678901234567890",
+          "recipient": "0x4567890123456789012345678901234567890123",
+          "methodDetails": {
+            "chainId": 4217
+          }
+        }
+      },
+      "payload": {
+        "type": "proof",
+        "signature": "0x04f39fd6e51aad88f6f4ce6ab8827279cfffb9226697fcebe2ccd942a1d50f330d334ce2489cf430b0dc0be1fb962946bcecc36df7303b80a8b074de688cf7d75b9970c1a1af29916cff48645d56946e90e9fc6f531b"
+      },
+      "source": "did:pkh:eip155:4217:0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    },
+    "accessKeys": [
+      {
+        "account": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "accessKey": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "expiry": 4102444800,
+        "revoked": false
+      }
+    ]
+  }
+}

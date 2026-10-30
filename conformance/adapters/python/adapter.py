@@ -245,6 +245,7 @@ OP_TO_COMMAND = {
     "base64url.decode": "base64url-decode",
     "challenge.id": "generate-challenge-id",
     "tempo.receipt.verify": "verify-tempo-receipt",
+    "tempo.proof.verify": "verify-tempo-proof",
     "tempo.proof.typed_data": "tempo-proof-typed-data",
 }
 
@@ -260,16 +261,46 @@ class FakeRpcResponse:
         return self._payload
 
 
-class FakeRpcClient:
-    """Serves eth_chainId and, for its own transactionHash only, the receipt
-    fixture; eth_getTransactionByHash returns None, as the fixture has no
-    transaction body. Any other call is recorded in unexpected_call so a
-    broken setup is not mistaken for a rejected credential."""
+ACCOUNT_KEYCHAIN = "0xaaaaaaaa00000000000000000000000000000000"
+# AccountKeychain.getKey(address account, address keyId).
+GET_KEY_SELECTOR = "0xbc298553"
 
-    def __init__(self, receipt, chain_id=4217):
+
+class FakeRpcClient:
+    """Serves eth_chainId and the calls a vector's fixture covers: for its own
+    transactionHash only, the receipt fixture (eth_getTransactionByHash returns
+    None, as the fixture has no transaction body), and, given access_keys,
+    AccountKeychain.getKey from them (an unknown key reads as the zero key).
+    Any other call is recorded in unexpected_call so a broken setup is not
+    mistaken for a rejected credential."""
+
+    def __init__(self, receipt=None, chain_id=4217, access_keys=None):
         self._receipt = receipt
         self._chain_id = chain_id
+        self._access_keys = access_keys
         self.unexpected_call = None
+
+    def _get_key(self, data: str):
+        body = data[len(GET_KEY_SELECTOR):]
+        if len(body) != 128:
+            return None
+        account, key_id = ("0x" + body[24:64]).lower(), ("0x" + body[88:128]).lower()
+        entry = next(
+            (
+                key
+                for key in self._access_keys
+                if key["account"].lower() == account and key["accessKey"].lower() == key_id
+            ),
+            None,
+        )
+        words = [
+            0,
+            int(key_id, 16) if entry else 0,
+            int(entry["expiry"]) if entry else 0,
+            0,
+            1 if entry and entry["revoked"] else 0,
+        ]
+        return "0x" + "".join(f"{word:064x}" for word in words)
 
     async def post(self, *args, **kwargs):
         call = kwargs.get("json")
@@ -280,10 +311,10 @@ class FakeRpcClient:
             )
         call_id = call.get("id", 1)
         method = call.get("method")
+        params = call.get("params") or []
         if method == "eth_chainId":
             return FakeRpcResponse({"jsonrpc": "2.0", "result": hex(self._chain_id), "id": call_id})
-        if method == "eth_getTransactionReceipt":
-            params = call.get("params") or []
+        if method == "eth_getTransactionReceipt" and self._receipt is not None:
             requested = params[0] if isinstance(params, list) and params else None
             fixture = str(self._receipt.get("transactionHash", ""))
             if isinstance(requested, str) and requested.lower() == fixture.lower():
@@ -295,8 +326,15 @@ class FakeRpcClient:
                     "id": call_id,
                 }
             )
-        if method == "eth_getTransactionByHash":
+        if method == "eth_getTransactionByHash" and self._receipt is not None:
             return FakeRpcResponse({"jsonrpc": "2.0", "result": None, "id": call_id})
+        if method == "eth_call" and self._access_keys is not None and isinstance(params, list) and params:
+            tx = params[0] if isinstance(params[0], dict) else {}
+            data = str(tx.get("data") or tx.get("input") or "").lower()
+            if str(tx.get("to", "")).lower() == ACCOUNT_KEYCHAIN and data.startswith(GET_KEY_SELECTOR):
+                result = self._get_key(data)
+                if result is not None:
+                    return FakeRpcResponse({"jsonrpc": "2.0", "result": result, "id": call_id})
         self.unexpected_call = self.unexpected_call or f"unexpected JSON-RPC method {method}"
         return FakeRpcResponse(
             {
@@ -369,7 +407,14 @@ async def run_http_payment_request(input_value: dict):
         "content": input_value.get("body"),
         "follow_redirects": True,
     }
-    if ENGINE_API:
+    if mode == "plain":
+        # As the TypeScript golden adapter: a plain request is a bare HTTP client, not a
+        # payment client with no methods (which raises on a 402, as mppx does).
+        import httpx
+
+        async with httpx.AsyncClient() as client:
+            response = await client.request(input_value["method"], input_value["url"], **request)
+    elif ENGINE_API:
         from mpp.client import Mpp
 
         engine = Mpp(methods=[_engine_client_method(method) for method in methods])
@@ -406,14 +451,14 @@ def response_value_for_operation(op: str, result):
     return result
 
 
-async def verify_tempo_receipt(input_value: dict):
+async def verify_with_fake_rpc(credential_data: dict, rpc: FakeRpcClient):
+    """Verify a credential with pympp's server-side Tempo charge against a fake node."""
     from mpp.methods.tempo.intents import ChargeIntent
     if ENGINE_API:
         from mpp.errors import VerificationError
     else:
         from mpp.server.intent import VerificationError
 
-    credential_data = input_value["credential"]
     challenge_data = credential_data["challenge"]
     request_json = json.dumps(challenge_data["request"], separators=(",", ":"))
     request_b64 = base64url_encode(request_json)
@@ -433,7 +478,6 @@ async def verify_tempo_receipt(input_value: dict):
     )
 
     intent = ChargeIntent(rpc_url="https://rpc.test")
-    rpc = FakeRpcClient(input_value["receipt"], input_value.get("rpcChainId", 4217))
     intent._http_client = rpc
 
     try:
@@ -450,6 +494,16 @@ async def verify_tempo_receipt(input_value: dict):
         return error(f"fake RPC received {rpc.unexpected_call}", "unknown_error")
 
     return success({"status": receipt.status, "reference": receipt.reference})
+
+
+async def verify_tempo_receipt(input_value: dict):
+    rpc = FakeRpcClient(input_value["receipt"], input_value.get("rpcChainId", 4217))
+    return await verify_with_fake_rpc(input_value["credential"], rpc)
+
+
+async def verify_tempo_proof(input_value: dict):
+    rpc = FakeRpcClient(access_keys=input_value.get("accessKeys") or [])
+    return await verify_with_fake_rpc(input_value["credential"], rpc)
 
 
 # Problem types pympp's server reports, by the server.verify result errorType.
@@ -865,6 +919,9 @@ def run_legacy_command(command: str, input_data: str):
         elif command == "verify-tempo-receipt":
             params = json.loads(input_data)
             print(json.dumps(asyncio.run(verify_tempo_receipt(params))))
+        elif command == "verify-tempo-proof":
+            params = json.loads(input_data)
+            print(json.dumps(asyncio.run(verify_tempo_proof(params))))
         elif command == "tempo-proof-typed-data":
             params = json.loads(input_data)
             result = tempo_proof_typed_data(
