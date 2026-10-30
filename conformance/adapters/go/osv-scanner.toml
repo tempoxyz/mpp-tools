@@ -1,0 +1,17 @@
+# Advisories accepted for this adapter's go.mod. The adapter is a conformance
+# test harness, never shipped.
+
+# echo v4.16.3 is the only v4 release that fixes these two, and it was published
+# on 2026-10-30, so Aegis blocks it as recently published. echo comes in through
+# mpp-go's pkg/server tests and is not linked into the adapter binary. Move to
+# v4.16.3 and drop these entries once it can be downloaded.
+
+[[IgnoredVulns]]
+id = "GHSA-246p-cpwv-v3jq"
+ignoreUntil = 2026-11-13
+reason = "echo rate limiter X-Forwarded-For bypass; fixed only in v4.16.3 (too new for Aegis). The adapter does not use echo's rate limiter."
+
+[[IgnoredVulns]]
+id = "GHSA-99jh-6h7p-pp36"
+ignoreUntil = 2026-11-13
+reason = "echo reverse proxy forwards X-Real-IP; fixed only in v4.16.3 (too new for Aegis). The adapter does not use echo's proxy middleware."

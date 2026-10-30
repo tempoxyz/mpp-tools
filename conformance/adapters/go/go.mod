@@ -18,6 +18,8 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/gowebpki/jcs v1.0.1 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect
+	github.com/klauspost/compress v1.18.7 // indirect
+	github.com/labstack/echo/v4 v4.16.2 // indirect
 	github.com/redis/go-redis/v9 v9.22.0 // indirect
 	github.com/supranational/blst v0.3.16 // indirect
 	github.com/tempoxyz/tempo-go v0.5.0 // indirect
