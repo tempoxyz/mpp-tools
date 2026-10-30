@@ -47,7 +47,7 @@ import {
 	size,
 	zeroAddress,
 } from 'viem'
-import { recoverAddress } from 'viem/utils'
+import { Secp256k1, Signature } from 'ox'
 import { tempo as tempoChain } from 'viem/chains'
 
 const minimumSecretKeyBytes = 32
@@ -306,7 +306,13 @@ async function verifyWithFakeTempoRpc(
 				res.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }))
 				return
 			}
-			const answered = call.method === 'eth_chainId' ? { result: '0x1079' } : answer(call)
+			let answered: JsonRpcAnswer | undefined
+			try {
+				answered = call.method === 'eth_chainId' ? { result: '0x1079' } : answer(call)
+			} catch {
+				// A call the fixture can't decode is unexpected, not a crash.
+				answered = undefined
+			}
 			if (!answered) unexpectedCall ??= `unexpected JSON-RPC method ${String(call.method)}`
 			res.setHeader('Content-Type', 'application/json')
 			res.end(
@@ -417,7 +423,9 @@ async function verifyTempoProof(input: TempoProofVerifyInput): Promise<AdapterRe
 			)
 			if (size(signature) !== 65) return { result: word(false) }
 			try {
-				return { result: word(isAddressEqual(recoverAddress({ hash, signature }) as never, address)) }
+				return {
+					result: word(isAddressEqual(Secp256k1.recoverAddress({ payload: hash, signature: Signature.fromHex(signature) }), address)),
+				}
 			} catch {
 				return { result: word(false) }
 			}

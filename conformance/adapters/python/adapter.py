@@ -407,7 +407,14 @@ async def run_http_payment_request(input_value: dict):
         "content": input_value.get("body"),
         "follow_redirects": True,
     }
-    if ENGINE_API:
+    if mode == "plain":
+        # As the TypeScript golden adapter: a plain request is a bare HTTP client, not a
+        # payment client with no methods (which raises on a 402, as mppx does).
+        import httpx
+
+        async with httpx.AsyncClient() as client:
+            response = await client.request(input_value["method"], input_value["url"], **request)
+    elif ENGINE_API:
         from mpp.client import Mpp
 
         engine = Mpp(methods=[_engine_client_method(method) for method in methods])

@@ -671,6 +671,18 @@ fn answer_fake_rpc(
             let id = call.get("id").cloned().unwrap_or(Value::Null);
             match call.get("method").and_then(Value::as_str) {
                 Some("eth_chainId") => json!({ "jsonrpc": "2.0", "id": id, "result": "0x1079" }),
+                // Proof verification supplies no receipt: a receipt or transaction
+                // lookup there is an SDK bug, not an ordinary rejection.
+                Some(method @ ("eth_getTransactionReceipt" | "eth_getTransactionByHash"))
+                    if receipt.is_null() =>
+                {
+                    record(format!("unexpected JSON-RPC method {method}"));
+                    json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "error": { "code": -32601, "message": format!("unexpected method {method}") },
+                    })
+                }
                 Some("eth_getTransactionReceipt") => {
                     let requested = call.pointer("/params/0").and_then(Value::as_str);
                     let fixture = receipt.get("transactionHash").and_then(Value::as_str);
@@ -829,10 +841,11 @@ fn verify_with_fake_tempo_rpc(
         source: opt_str_field(&credential_value, "source"),
     };
 
-    // Without a receipt fixture, eth_getTransactionReceipt finds no transaction.
+    // Without a receipt fixture (proof verification), any receipt or
+    // transaction lookup is recorded as unexpected.
     let receipt = receipt
         .map(|receipt| rpc_receipt_envelope(receipt, credential.source.as_deref()))
-        .unwrap_or(json!({}));
+        .unwrap_or(Value::Null);
     let unexpected = UnexpectedRpcCall::default();
     let rpc_url = serve_fake_tempo_rpc(receipt, access_keys, unexpected.clone())
         .map_err(|e| unknown(e.to_string()))?;
