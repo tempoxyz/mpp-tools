@@ -1,0 +1,21 @@
+{
+  "name": "go",
+  "language": "go",
+  "sdk": "github.com/tempoxyz/tempo-go",
+  "build": [
+    "go",
+    "build",
+    "-o",
+    "adapter",
+    "."
+  ],
+  "command": [
+    "./adapter"
+  ],
+  "cwd": ".",
+  "capabilities": [
+    "tx.sign",
+    "tx.decode",
+    "key_authorization.sign"
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "name": "python",
+  "language": "python",
+  "sdk": {
+    "package": "pytempo",
+    "registry": "pypi",
+    "version": "0.6.2"
+  },
+  "build": [
+    "uv",
+    "sync",
+    "--frozen"
+  ],
+  "command": [
+    "uv",
+    "run",
+    "--frozen",
+    "--no-sync",
+    "python",
+    "adapter.py"
+  ],
+  "cwd": ".",
+  "capabilities": [
+    "tx.sign",
+    "tx.decode",
+    "key_authorization.sign"
+  ]
+}

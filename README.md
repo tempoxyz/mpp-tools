@@ -28,6 +28,7 @@ Open-source monorepo for tooling around the ["Payment" HTTP Authentication Schem
 ## Documentation
 
 - [Conformance suite](./conformance/README.md)
+- [Tempo SDK conformance](./tempo-conformance/README.md): viem/ox, tempo-primitives, tempo-go and pytempo against a local Tempo node
 - [SDK specification](./SPEC.md)
 - [Protocol overview](https://mpp.dev/protocol/)
 - [IETF wire specification](https://paymentauth.org)
@@ -56,6 +57,7 @@ mpp-tools/
 ├── agricola/             # Control plane for SDK change review
 ├── ledger/               # Append-only Agricola decision records
 ├── conformance/          # Cross-SDK conformance test suite
+├── tempo-conformance/    # Core Tempo SDK vectors, run against a local Tempo node
 │   ├── adapters/         # Per-language CLI adapters
 │   ├── flows/            # End-to-end 402 flow tests
 │   ├── golden/           # TypeScript golden adapter

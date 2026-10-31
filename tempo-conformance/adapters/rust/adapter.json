@@ -1,0 +1,1 @@
+{ "name": "rust", "language": "rust", "build": ["cargo", "build", "--release", "--locked"], "command": ["./target/release/adapter"], "cwd": ".", "capabilities": ["tx.sign", "tx.decode", "key_authorization.sign"] }

@@ -1,0 +1,23 @@
+[package]
+name = "tempo-conformance-rust-adapter"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "adapter"
+path = "src/main.rs"
+
+[dependencies]
+# SDK under test: the node's own primitives, latest release on crates.io.
+tempo-primitives = { version = "=1.11.0", default-features = false, features = ["std"] }
+alloy-primitives = { version = "1.6.1", features = ["k256"] }
+alloy-consensus = { version = "2.3.0", features = ["k256"] }
+alloy-eips = "2.3.0"
+alloy-rlp = "0.3.16"
+alloy-signer = "2.3.0"
+alloy-signer-local = "2.3.0"
+serde_json = "1"
+
+[profile.release]
+debug = false

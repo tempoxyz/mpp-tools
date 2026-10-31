@@ -1,0 +1,1184 @@
+{
+  "description": "tx.decode: every signed transaction from transactions.json, plus malformed encodings every SDK and the node must reject.",
+  "generatedBy": "adapters/typescript/generate.ts (ox 0.14.59)",
+  "cases": [
+    {
+      "name": "decode_minimal",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of minimal.",
+      "source": "tx.sign minimal",
+      "input": {
+        "raw": "0x76f8bd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0b8419c7591b4d27edfaa28c23c04e883d86a2f86a728958e9af78423f6b05a28b6ba3b1197c2e7f5cd97828183433f919140c18f8db561db7e343e3d01305405dc091c"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "secp256k1",
+        "sender": "0x0e6fd5d3582d21c6abf24d21987e11d8ceeb6098",
+        "feePayer": null,
+        "hash": "0x1b00458c44cae1b4231552d4dc9cc7e97ce569bd593338dfadaccdee7ff384e6"
+      }
+    },
+    {
+      "name": "decode_second_nonce",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of second_nonce.",
+      "source": "tx.sign second_nonce",
+      "input": {
+        "raw": "0x76f8bd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0800180808080c0b84109f5bee4acbee6789ac2f6e8b711e4a2a7ae644180a4d42944c852fd416867e900d266dac57c5ea9c362e901ab7334a4e11360058d9abf3d768b49e0234646601b"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "1",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "secp256k1",
+        "sender": "0x0e6fd5d3582d21c6abf24d21987e11d8ceeb6098",
+        "feePayer": null,
+        "hash": "0xd86c9a1b6953dcf14d1566152089f45a47423d9d3a04ac6d7efd392772b3023a"
+      }
+    },
+    {
+      "name": "decode_with_fee_token",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of with_fee_token.",
+      "source": "tx.sign with_fee_token",
+      "input": {
+        "raw": "0x76f8d1820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080809420c000000000000000000000000000000000000080c0b84177d5f7138b87e82fe05e20b09b173c8bea8e67554f1714409c4e0d2250408c6d55f07856ac750657d4511fd3155c6cabb0f505db85af9a6cff0a652468cbde0f1c"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": "0x20c0000000000000000000000000000000000000",
+          "keyAuthorization": null
+        },
+        "signatureType": "secp256k1",
+        "sender": "0xc895e7f283f7b7efbc5a22b75553a7d52616c94f",
+        "feePayer": null,
+        "hash": "0x5ca286b79e6135e66439d41e686b38146d08fa6123ebaaece5362fb9e1cb4243"
+      }
+    },
+    {
+      "name": "decode_fee_token_alpha_usd",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of fee_token_alpha_usd.",
+      "source": "tx.sign fee_token_alpha_usd",
+      "input": {
+        "raw": "0x76f8d1820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080809420c000000000000000000000000000000000000180c0b841a9ff33ff5ef2c6032e30d0a3bad4c3a794a6b9283f7804505dffae097d03d46e652a135ab6d4d46458168b3f07c091c01b984ecad8f30fec3ba149b048632b391c"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": "0x20c0000000000000000000000000000000000001",
+          "keyAuthorization": null
+        },
+        "signatureType": "secp256k1",
+        "sender": "0xdd519acee27128fe6302513cdeed70a81a2d53b6",
+        "feePayer": null,
+        "hash": "0x59394ec92210d007941219356fedb66585562f518ec56a6eb578dd40a0744461"
+      }
+    },
+    {
+      "name": "decode_multiple_calls_batch",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of multiple_calls_batch.",
+      "source": "tx.sign multiple_calls_batch",
+      "input": {
+        "raw": "0x76f9017a820539843b9aca00850ba43b7400831e8480f9011af85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001f85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000cafe0000000000000000000000000000000000000000000000000000000000000002f85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000003c0808080808080c0b841f8a3a27020ac72b5baaffddc8fbfe7261c4401021f13c4ace3d069c6af2a1c7351ff025374097963ce0f7577e841f85b1087e2b4956efd07f1c5000bd99348c61b"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            },
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000cafe0000000000000000000000000000000000000000000000000000000000000002"
+            },
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000003"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "secp256k1",
+        "sender": "0x1880a36541d86744c1992455a0f64742027a252f",
+        "feePayer": null,
+        "hash": "0xcda2b7152f99ed1e299c660da01189a3224a807ec449104a829a7ccbeca877a2"
+      }
+    },
+    {
+      "name": "decode_zero_value_empty_data",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of zero_value_empty_data.",
+      "source": "tx.sign zero_value_empty_data",
+      "input": {
+        "raw": "0x76f876820539843b9aca00850ba43b7400831e8480d8d794000000000000000000000000000000000000beef8080c0808080808080c0b84199272584e44b858db96d8ee119663eb86311d4db4d8be7fabafc66f9c940dfc250fbe623ae96cd5ad91a717509f2caa5b2ad4eb66facbefb54dac4afc75524501c"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x000000000000000000000000000000000000beef",
+              "value": "0",
+              "data": "0x"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "secp256k1",
+        "sender": "0xe45c3d12d62de8ac3b2ca36c8ea898ada3531750",
+        "feePayer": null,
+        "hash": "0x70da7dddc4d1d5e1492959897a0d110cc8bbcdea2d1e24884ab52ed9e2ae2805"
+      }
+    },
+    {
+      "name": "decode_call_with_value",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of call_with_value.",
+      "source": "tx.sign call_with_value",
+      "input": {
+        "raw": "0x76f876820539843b9aca00850ba43b7400831e8480d8d794000000000000000000000000000000000000beef0180c0808080808080c0b841bfad623da5811942a70d8acd15c2a982c186392820c0b400520fee2910102165073c2de2bb8f88440d0fbf1edf801dc438405b86fe450dac179c292ecb5fe0ac1c"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x000000000000000000000000000000000000beef",
+              "value": "1",
+              "data": "0x"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "secp256k1",
+        "sender": "0x5bb35331771f9764036592932608f6cede35bba6",
+        "feePayer": null,
+        "hash": "0xee21b7e70f7619fb1030917126ae121cfeb3fd90f2585606b7824c0239107a81"
+      }
+    },
+    {
+      "name": "decode_contract_creation",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of contract_creation.",
+      "source": "tx.sign contract_creation",
+      "input": {
+        "raw": "0x76f9015b820539843b9aca00850ba43b7400832dc6c0f8fcf8fa8080b8f66080604052348015600e575f5ffd5b5060e180601a5f395ff3fe6080604052348015600e575f5ffd5b50600436106030575f3560e01c80638381f58a146034578063d09de08a14604e575b5f5ffd5b603a6056565b604051604591906078565b60405180910390f35b6054605b565b005b5f5481565b5f80549080606883609c565b9190505550565b5f819050919050565b607f81606e565b82525050565b5f6020820190506096825f8301606f5b92915050565b5f60a282606e565b91507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff820360ce5760cd60c0565b5b60018201905091905056c0808080808080c0b841fb5bf3576e31f922ec814a2486c4046ca7490e325c65a1d20359238ffdca4d9f5d1e720e4dadcd37c733d26abc3f000a020cd5baef7b9287c49baa829d3892c11b"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "3000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": null,
+              "value": "0",
+              "data": "0x6080604052348015600e575f5ffd5b5060e180601a5f395ff3fe6080604052348015600e575f5ffd5b50600436106030575f3560e01c80638381f58a146034578063d09de08a14604e575b5f5ffd5b603a6056565b604051604591906078565b60405180910390f35b6054605b565b005b5f5481565b5f80549080606883609c565b9190505550565b5f819050919050565b607f81606e565b82525050565b5f6020820190506096825f8301606f5b92915050565b5f60a282606e565b91507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff820360ce5760cd60c0565b5b60018201905091905056"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "secp256k1",
+        "sender": "0x12e6f0e4ed93e756efa9bfd6c4ad86ac829a622a",
+        "feePayer": null,
+        "hash": "0x8d09fecd1383a64c0cb88fb96d14bf533657b045e97a84064ae5566221e66202"
+      }
+    },
+    {
+      "name": "decode_access_list",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of access_list.",
+      "source": "tx.sign access_list",
+      "input": {
+        "raw": "0x76f8f6820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001f838f79420c0000000000000000000000000000000000000e1a00000000000000000000000000000000000000000000000000000000000000001808080808080c0b8412e5049c05ca1dbdad72416e1f3b2273180a2bed2bda9ecfaea3cc44c5799bed64cc35366b5045f35210aaf9363740dffaf34a1e5e11260c622bd51329da596761c"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [
+            {
+              "address": "0x20c0000000000000000000000000000000000000",
+              "storageKeys": [
+                "0x0000000000000000000000000000000000000000000000000000000000000001"
+              ]
+            }
+          ],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "secp256k1",
+        "sender": "0x38cdeeed34b05435abd725f810a532f2f0d9187b",
+        "feePayer": null,
+        "hash": "0xcaf5a2b4286a6442da3be7a624347fffd1e4f7c9c5c60501d890b2f931e844de"
+      }
+    },
+    {
+      "name": "decode_user_nonce_key_1",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of user_nonce_key_1.",
+      "source": "tx.sign user_nonce_key_1",
+      "input": {
+        "raw": "0x76f8bd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0018080808080c0b8415fcbc2be086ae026d7d4258c2e8465379c1b9dc4d8e67270a0444cf7e7bc254b118a084a6045b4459077adff468e53b31b757a68b0630cd9bcc6d33bdc93da931b"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "1",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "secp256k1",
+        "sender": "0x035b92995f3afd2f295e135013c96bada40e4506",
+        "feePayer": null,
+        "hash": "0xb30139ee03adee7d833d7ada3b599f86b3f999e37f65a801403d002f68e07b7f"
+      }
+    },
+    {
+      "name": "decode_user_nonce_key_large",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of user_nonce_key_large.",
+      "source": "tx.sign user_nonce_key_large",
+      "input": {
+        "raw": "0x76f8cd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c090ffffffffffffffffffffffffffffffff8080808080c0b8419450f4fe901a1708291f27daea1ce9392315b5f4d06740232aca420272fa1cdd63cd103164423bce601c800f4dd8549f1f9ea086a5267b890d4b22cb2ce250461c"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "340282366920938463463374607431768211455",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "secp256k1",
+        "sender": "0xea1565803d53032766c3c7d587109d88a992e322",
+        "feePayer": null,
+        "hash": "0x35fa8236dfa750de7352fd34180a8ba5c3290145c9e029e56a4c0c6952db88dc"
+      }
+    },
+    {
+      "name": "decode_valid_before",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of valid_before.",
+      "source": "tx.sign valid_before",
+      "input": {
+        "raw": "0x76f8c1820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808084f4865700808080c0b841a69dae3f38c9041a568c2dc4d40e41b89b908ff93f78204907f7508d00a4411b176f7f45365ae12be60514287bfaa8f3d6098b69b6b044da76c854f520f3bff61b"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [],
+          "validBefore": "4102444800",
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "secp256k1",
+        "sender": "0x6b84e521fc18cb3251859643fde3fcbaba2d1811",
+        "feePayer": null,
+        "hash": "0xbc115c58aa0d38ec373aed508cb41f2c3f7e2032b9d32e0cd9ffffa13590e5cc"
+      }
+    },
+    {
+      "name": "decode_valid_after",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of valid_after.",
+      "source": "tx.sign valid_after",
+      "input": {
+        "raw": "0x76f8bd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080018080c0b841618369b72965b429a68f4b96c2d40531a54c2e2ad2d713b56d2c844bd346698a4c103fe607f1a1d5b6e64139e06b60488713f8ad9b153756d66da50be8572a701b"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": "1",
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "secp256k1",
+        "sender": "0xc70364ccce6b397d0d6158a5f577dbe4a53b1df1",
+        "feePayer": null,
+        "hash": "0x61bb7de62dde4824c56656861e85ee099ede07970114350919f6b1f0e547defa"
+      }
+    },
+    {
+      "name": "decode_validity_window",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of validity_window.",
+      "source": "tx.sign validity_window",
+      "input": {
+        "raw": "0x76f8c1820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808084f4865700018080c0b841d61a1bc2b04c9796d42c1c54bdd7731600dc818c279b347273c6e0747cc44cbe2d0cc5245bbcc3bea3cbd5f268cb26f5e24e6fb3b0ec571bfc5a14be32b4bef91b"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [],
+          "validBefore": "4102444800",
+          "validAfter": "1",
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "secp256k1",
+        "sender": "0xc9e5866d334947090ee8561738b045feae1cadaa",
+        "feePayer": null,
+        "hash": "0x23494d5879abdd2d90d3bff87bf8ac728965bcbc320fd2cb8a5df32ebe085801"
+      }
+    },
+    {
+      "name": "decode_expired_valid_before",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of expired_valid_before.",
+      "source": "tx.sign expired_valid_before",
+      "input": {
+        "raw": "0x76f8bf820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c080808203e8808080c0b84174b63b349a49ef6ad7ff87f35ed84ad8400c8c7bdb90f06e9a546cf9a849c34e5effa2cce24ec29412714cf0e38347ec4b7782826f52f4edeb590e8cdbee82ec1c"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [],
+          "validBefore": "1000",
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "secp256k1",
+        "sender": "0x64dbd5f7e9dc2ef458d14a8d96128f582ecc0640",
+        "feePayer": null,
+        "hash": "0x71e3eb79a6fdddbf68c74a19ac56fa02c4c4b55516d5c159ff6bcf816311dc20"
+      }
+    },
+    {
+      "name": "decode_wrong_chain_id",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of wrong_chain_id.",
+      "source": "tx.sign wrong_chain_id",
+      "input": {
+        "raw": "0x76f8bb01843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0b841256cd16c00d218c1643e1b60dd4f01e80371ae38016821274faec40c004b72081cbf9c3fee1745829a78b1ca0af24f3bdd5cfffc22b8e920695b0ce9b814a4771c"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "secp256k1",
+        "sender": "0x05b434316cd40616d030e2953d707b4d88301da2",
+        "feePayer": null,
+        "hash": "0x83ec4ae0697a2c215636797b2b2f29f4dd767708a2c9f236726835d119572c6c"
+      }
+    },
+    {
+      "name": "decode_high_gas_prices",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of high_gas_prices.",
+      "source": "tx.sign high_gas_prices",
+      "input": {
+        "raw": "0x76f8be82053985174876e800852e90edd000831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0b8417dc624e7f13dfc15c53ebedf1e0266ab81f967a7aaa15503be4da843765bb0cf640a5f38819a1800825e4878beff54ee3b9d5f05a0780bce053e3ee559ab671b1b"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "200000000000",
+          "maxPriorityFeePerGas": "100000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "secp256k1",
+        "sender": "0x363489e2156ae9c0e5311cada20a184faf3d5caf",
+        "feePayer": null,
+        "hash": "0x83b6f5f60187e3141853eed6e3fc41d9096d06964c7a3840c27ec4cde12fbf8d"
+      }
+    },
+    {
+      "name": "decode_sponsored",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of sponsored.",
+      "source": "tx.sign sponsored",
+      "input": {
+        "raw": "0x76f8ba820539843b9aca00850ba43b7400831e8480d8d794000000000000000000000000000000000000beef8080c08080808080f84301a0e1ea3d475fade860dd2e8f7a783c5dca5ea3dd8982a99a3518dd4ace7779770ea06390d1ea7dcac5ef8e245c78ea9673b48c5d2d2f56ff07dc36c446ec490525abc0b8413126e672148be3bb41c0f543565f1d0fa7bcf46524b094fff12228e08448070d79c51ff27c0f43e2681fad4bafc05a7270b4b342830fc587f769268bd605230d1b"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x000000000000000000000000000000000000beef",
+              "value": "0",
+              "data": "0x"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "secp256k1",
+        "sender": "0x79f632ff4bb7e36f08f571163ced009b202da056",
+        "feePayer": "0x88b6547452b28e09ef47a85e66c6aeba83df81f5",
+        "hash": "0xcb5f1ef4ae1aaa99fa0e89b24e7449c9eaf886e9621a019920e70674ad666082"
+      }
+    },
+    {
+      "name": "decode_sponsored_with_fee_token",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of sponsored_with_fee_token.",
+      "source": "tx.sign sponsored_with_fee_token",
+      "input": {
+        "raw": "0x76f8ce820539843b9aca00850ba43b7400831e8480d8d794000000000000000000000000000000000000beef8080c0808080809420c0000000000000000000000000000000000000f84301a0e1daef3d34f430989fa284ab0deb9710e61fe4a7a4472effc5b011c7978b7cf6a0217b7fa59194620e9b58ec97ece139af79408afe4b594968e71a623a6e42e3dec0b841c2cf0af811920f0351ffea70b0df90c109125b3971e28b14e4c86fcf32c8a58b27831ed2ae2028c5e620e1ae71c25b86165362bf5edd3cba3453eef1c90166db1c"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x000000000000000000000000000000000000beef",
+              "value": "0",
+              "data": "0x"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": "0x20c0000000000000000000000000000000000000",
+          "keyAuthorization": null
+        },
+        "signatureType": "secp256k1",
+        "sender": "0x86130940bb8e27c2f4974b888e40e346c0e20871",
+        "feePayer": "0x0af8583b55a02476a632f3dae7e7617d3d10b3ba",
+        "hash": "0x96a4c8ae630f399e6c3a32837757f89110d99d4f014d804687ffef91aa612095"
+      }
+    },
+    {
+      "name": "decode_key_authorization",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of key_authorization.",
+      "source": "tx.sign key_authorization",
+      "input": {
+        "raw": "0x76f90139820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0f87af68205398094ad50762bd04f759957451cac83950d3b9c245a8b80dbda9420c0000000000000000000000000000000000000843b9aca00b841151c8230cc1098f4831dcd0b72b8d98dc0a3c0f940d58289f0ce75c66ef5fda76c21754a337e7c301a09b950fda2455304761aa39d68d388cc2ab1ccb72835d91bb841512058b71d8eddc06c79858ebed2736c0d579ea874c487693dcc8fb824e7d20b71a175368b7ee7ec3f50805f763d82913e6bb39a02e12b7b4e3fe44cd4ca34e71b"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": {
+            "chainId": "1337",
+            "keyType": "secp256k1",
+            "keyId": "0xad50762bd04f759957451cac83950d3b9c245a8b",
+            "expiry": null,
+            "limits": [
+              {
+                "token": "0x20c0000000000000000000000000000000000000",
+                "limit": "1000000000",
+                "period": "0"
+              }
+            ]
+          }
+        },
+        "signatureType": "secp256k1",
+        "sender": "0x70505783416ca25a9b3bd1334da28240883f3c3b",
+        "feePayer": null,
+        "hash": "0x14fbb785573f3c80d3d65bc0fa106bc7874129091121697c7d5785bf3ad239e6"
+      }
+    },
+    {
+      "name": "decode_keychain_access_key",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of keychain_access_key.",
+      "source": "tx.sign keychain_access_key",
+      "input": {
+        "raw": "0x76f8d2820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0800180808080c0b8560470505783416ca25a9b3bd1334da28240883f3c3bb1f7097d24130dcc5693f92112da92828524e58b7c761e46c2b3f26c33db063a50e06c5600aa18ce4675e3dfdc1a4d27cc060c21aabb25e37c50ffebbc707af91b"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "1",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "keychain",
+        "sender": "0x70505783416ca25a9b3bd1334da28240883f3c3b",
+        "feePayer": null,
+        "hash": "0x2068f675ce25c9c8e242f6295c4e9c64ed14673839d136e06ef659558e9e87e3"
+      }
+    },
+    {
+      "name": "decode_keychain_sponsored",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of keychain_sponsored.",
+      "source": "tx.sign keychain_sponsored",
+      "input": {
+        "raw": "0x76f90116820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c08002808080f84301a0ded00ff03611df11242232dedb01a9b2ec4d2f3444811267c158f1eb64363bd6a041ed588851c691bda6f3736c7cecf50eed487146bddc3b2a964dec921ca40c03c0b8560470505783416ca25a9b3bd1334da28240883f3c3bfc6e5728a566033784f37000d22a747d4f91b58341b368b4fd1ec378b8df8a0806532ad0c6ea4ecf28608df3b26d5f2156afbc727333a7c74fe71c4e0debf6ea1c"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "2",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "keychain",
+        "sender": "0x70505783416ca25a9b3bd1334da28240883f3c3b",
+        "feePayer": "0x1f6b696587342f9b5a6816fa7df990f37719667b",
+        "hash": "0xd066c9314285fa5cc29591999e995220ede1a3a2a23da5c667ee6ac7eb40f11a"
+      }
+    },
+    {
+      "name": "decode_keychain_unauthorized_key",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of keychain_unauthorized_key.",
+      "source": "tx.sign keychain_unauthorized_key",
+      "input": {
+        "raw": "0x76f8d2820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0800380808080c0b8560470505783416ca25a9b3bd1334da28240883f3c3b5fc7c2be40fe73aea61d65829ca713242abe1b20db27024ddec5dcbb8ec505072305bfac0ed0ee1c9db325d234a880210624269384a590a9c4f3a8f456d4e6ef1b"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "3",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "keychain",
+        "sender": "0x70505783416ca25a9b3bd1334da28240883f3c3b",
+        "feePayer": null,
+        "hash": "0x49a9c4b7753b01060cbf221b9a654b770511493e1f146bb875638345e5b3fe56"
+      }
+    },
+    {
+      "name": "decode_key_authorization_expiry_periodic_limit",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of key_authorization_expiry_periodic_limit.",
+      "source": "tx.sign key_authorization_expiry_periodic_limit",
+      "input": {
+        "raw": "0x76f90141820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0f882f83d820539809480abf92f6b72752d3847873a704bdb11c033c9a584f4865700dedd9420c0000000000000000000000000000000000000834c4b4083015180b841650493a5c44f0e6595259a5d7b911ead832a6a2bca31bc4cb4b934017c4194d657b730348fe748153c49eff585e71952d320f09b97f8ecf3734efe2fb2c728b31cb841ea50fa1e7165fbd7ae19861ac01acfea18790aaa5799aafbcb7a16a9134a9d736fbafe21f3f97b35a4d9813ec5a87f93dd7f0ee4ff48db9d4d61ca3bbba9841f1c"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": {
+            "chainId": "1337",
+            "keyType": "secp256k1",
+            "keyId": "0x80abf92f6b72752d3847873a704bdb11c033c9a5",
+            "expiry": "4102444800",
+            "limits": [
+              {
+                "token": "0x20c0000000000000000000000000000000000000",
+                "limit": "5000000",
+                "period": "86400"
+              }
+            ]
+          }
+        },
+        "signatureType": "secp256k1",
+        "sender": "0x123f68c947a95a862624b693981adbc31c804922",
+        "feePayer": null,
+        "hash": "0x8afae595150ebf590188bf7d8562abd5b880909d51c5e5d25416e6557680aee5"
+      }
+    },
+    {
+      "name": "decode_keychain_periodic_key",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of keychain_periodic_key.",
+      "source": "tx.sign keychain_periodic_key",
+      "input": {
+        "raw": "0x76f8d2820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0800180808080c0b85604123f68c947a95a862624b693981adbc31c80492216bad5506d10ee282b9c2467cbb7d135e7fe17bac78d34e4d62ef3f51d8b3024059135fb41cce47e9a008d9167589c86229036f8fa16695560830f10cc83c8a11b"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "1",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "keychain",
+        "sender": "0x123f68c947a95a862624b693981adbc31c804922",
+        "feePayer": null,
+        "hash": "0xbdceb0b83aa88bdc10266f67112052b10a32c61d6e45faf906b96e4ddaffef33"
+      }
+    },
+    {
+      "name": "decode_key_authorization_no_spending",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of key_authorization_no_spending.",
+      "source": "tx.sign key_authorization_no_spending",
+      "input": {
+        "raw": "0x76f9011e820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0f85fdb8205398094b73999ba00a056a736c9cfcfaa627c265db62b6d80c0b841853f5fc8a4ddfbf797f111bdf6e17f3b25b92bfb5bbcd4cb6a60bf7243378e7f617e7c8331718792b5aa8ee9bc34f270d4c19af0e0f08f6c1c25810bd48cb02b1bb8417edf0f6a47617c212414be5acec49d6a632e39404e112f00dd7a54258d5821525f54fdaa41a2d5b6c290972c0526b93b10d58408e5723d8fd11558e253dbad201c"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": {
+            "chainId": "1337",
+            "keyType": "secp256k1",
+            "keyId": "0xb73999ba00a056a736c9cfcfaa627c265db62b6d",
+            "expiry": null,
+            "limits": []
+          }
+        },
+        "signatureType": "secp256k1",
+        "sender": "0x832aabd426240a24ec5635cffdffac0c2243257a",
+        "feePayer": null,
+        "hash": "0x7b1909bde181891b1b7b12080064e8edc519e2e659ebf7fedfe9a67cf91ca476"
+      }
+    },
+    {
+      "name": "decode_keychain_no_spending_transfer",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of keychain_no_spending_transfer.",
+      "source": "tx.sign keychain_no_spending_transfer",
+      "input": {
+        "raw": "0x76f8d2820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0800180808080c0b85604832aabd426240a24ec5635cffdffac0c2243257abbe8de131c0567a785ff6abc0c489d3eea5bc8dd3eed2038c39119c8d7ca3daa416dcb3280cd36c4ba550b1420df30a6d347f474d0271c90cea1cc496b3dcb4a1c"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "1",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "keychain",
+        "sender": "0x832aabd426240a24ec5635cffdffac0c2243257a",
+        "feePayer": null,
+        "hash": "0xb923434a00dea483f42c2a71b5bf4d49a2a65a22107dd920ae64a38bfafb6b23"
+      }
+    },
+    {
+      "name": "decode_tempo_go_minimal_transaction",
+      "op": "tx.decode",
+      "description": "Decode the raw transaction of tempo_go_minimal_transaction.",
+      "source": "tx.sign tempo_go_minimal_transaction",
+      "input": {
+        "raw": "0x76f87201843b9aca008477359400825208d8d79470997970c51812dc3a010c7d01b50e0d17dc79c88080c0808080808080c0b8415699d8feb5ace056f1c1e93c420f53942e7b9f31058cb2a2bb26550e5930ef1a55f6bdd3a27105268536dfe17f386d79f6c8b949698d105838455a20a857c3381c"
+      },
+      "expected": {
+        "tx": {
+          "chainId": "1",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "21000",
+          "maxFeePerGas": "2000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+              "value": "0",
+              "data": "0x"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "secp256k1",
+        "sender": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+        "feePayer": null,
+        "hash": "0x9f514e29772ad0997e6a96ed1f8e1eab5df0afa8b4668997789528ddfb5219d7"
+      }
+    },
+    {
+      "name": "decode_reject_truncated",
+      "description": "Last byte cut off.",
+      "source": "new",
+      "op": "tx.decode",
+      "input": {
+        "raw": "0x76f8bd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0b841bb47971138f80da17f445839cc9d01210118c833381ffeb7b921299277018f3242c60db6f661e22ba8ea7e6a923c42825b94baa7a52dfb315aaa83d4c90a6e62"
+      },
+      "expectedError": "decode_error",
+      "node": {
+        "expect": "reject",
+        "fund": [
+          "0x7a1c798f4f5f3739fb825e1af3c28fea73fd0431"
+        ]
+      }
+    },
+    {
+      "name": "decode_reject_trailing_byte",
+      "description": "An extra 0x00 after the RLP list.",
+      "source": "new",
+      "op": "tx.decode",
+      "input": {
+        "raw": "0x76f8bd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0b841376513849b68155e156ebcc4042cfcec2e7a3a04ccd5d74adb2672aca31fec15034fb1eeafad5718b006c9431ad3532818f7bfbf558374fb925918f7265715001b00"
+      },
+      "expectedError": "decode_error",
+      "node": {
+        "expect": "reject",
+        "fund": [
+          "0xe689a558c986d21600d746fae1839c864b76ade7"
+        ]
+      }
+    },
+    {
+      "name": "decode_reject_wrong_type",
+      "description": "Type byte 0x77 instead of 0x76.",
+      "source": "new",
+      "op": "tx.decode",
+      "input": {
+        "raw": "0x77f8bd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0b841a6b1fdc74c16cfce5c87d5d96a5ffe9f5839ec489da0ea30d847b248432c18af69c814ba5a3be4b3ad2b86ac17ee718346bb6d0d3a0358e1004420eecebef05a1b"
+      },
+      "expectedError": "decode_error",
+      "node": {
+        "expect": "reject",
+        "fund": [
+          "0xdd0d2d19abcbea69ee265febf87182c9d971b73a"
+        ]
+      }
+    },
+    {
+      "name": "decode_reject_empty",
+      "description": "Type byte only.",
+      "source": "new",
+      "op": "tx.decode",
+      "input": {
+        "raw": "0x76"
+      },
+      "expectedError": "decode_error",
+      "node": {
+        "expect": "reject",
+        "fund": [
+          "0xfd39a6ed4b1d8986254536aeac1ae0f447aab6b7"
+        ]
+      }
+    },
+    {
+      "name": "decode_reject_high_s",
+      "description": "Sender signature with s > n/2 (the malleable twin).",
+      "source": "new",
+      "op": "tx.decode",
+      "input": {
+        "raw": "0x76f8bd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0b841404f29f1afb6301915c13860b121af076187fe80026aabd437c5ae855612cd74b81c742e9ec8ddf132a9c3818437678298c400a167f49f3dcee22155468396f31c"
+      },
+      "expectedError": "decode_error",
+      "node": {
+        "expect": "reject",
+        "fund": [
+          "0xc02bc1d50226e082b4a608b4b03e6a046f38ae83"
+        ]
+      }
+    },
+    {
+      "name": "decode_reject_bad_v",
+      "description": "Sender signature with v = 0x1d.",
+      "source": "new",
+      "op": "tx.decode",
+      "input": {
+        "raw": "0x76f8bd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0b84184de2bfda0eb1923f2a0a617fca5b656788f9027871657bb2df204be12dafeb7344993a35caad930fc3243915abfdff1aa2ce215dfd93c0600b9615ff5ee73a41d"
+      },
+      "expectedError": "decode_error",
+      "node": {
+        "expect": "reject",
+        "fund": [
+          "0xe6a805473af4b81fdc53fec7d0c33661ab38b4c0"
+        ]
+      }
+    },
+    {
+      "name": "decode_reject_tempo_ts_fee_payer_trailer",
+      "op": "tx.decode",
+      "expectedError": "decode_error",
+      "node": {
+        "expect": "reject"
+      },
+      "description": "Legacy tempo.ts fee payer format: RLP + sender + feefeefeefee trailer.",
+      "source": "tempo-go pkg/transaction/golden_test.go TestTempoGoldenFormat",
+      "input": {
+        "raw": "0x76f87582a5bd808502cb417800825dc2dcdb9400000000000000000000000000000000000000008084deadbeefc0800b80808000c0b8417607a2e7bea757dc38093db971a7ec7537a690a698119d629b2eb6bb433315767a20aeb717b10285986bc22f0cbb7e9254a2a1f35d5c29ad5119e8b46e202ec401d47b37bbc34fa57e9a67ae7d0a1496edc88f04bbfeefeefeefee"
+      }
+    },
+    {
+      "name": "decode_yparity_0_1",
+      "op": "tx.decode",
+      "input": {
+        "raw": "0x76f8bd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0b8412b8da5cc7a2ccc9970785dbba42944b9abf2f757ba26f378e7a325386126a15e4450526ca3a6d8eb38add49104e7a85fbb43c771b29af274d6350b4d9fe31d9b01"
+      },
+      "description": "Sender signature v byte as 0/1 instead of 27/28. The node accepts it.",
+      "source": "tempo-go pkg/transaction/transaction_vectors_test.go (v = 0x01)",
+      "expected": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "accessList": [],
+          "validBefore": null,
+          "validAfter": null,
+          "feeToken": null,
+          "keyAuthorization": null
+        },
+        "signatureType": "secp256k1",
+        "sender": "0xf4e16faabccd10a5ea1800ff9659a199ec9a4ee4",
+        "feePayer": null,
+        "hash": "0x344e4fa52d3f64c09a9f88c0240df0728e8ca50b5556398a8e3c2b0cbd04a6fe"
+      },
+      "node": {
+        "expect": "success",
+        "fund": [
+          "0xf4e16faabccd10a5ea1800ff9659a199ec9a4ee4"
+        ],
+        "knownIssue": "The node accepts v = 0/1 but re-encodes it as 27/28 and reports the hash of that re-encoding, so keccak256 of the bytes the client sent (what every SDK returns as the hash) is a hash the node never knows."
+      }
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "tempo-conformance-adapter-typescript",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "dependencies": {
+    "ox": "0.14.59",
+    "viem": "2.57.13"
+  }
+}

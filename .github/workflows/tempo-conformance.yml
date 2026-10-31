@@ -1,0 +1,80 @@
+name: Tempo SDK Conformance
+
+on:
+  pull_request:
+    paths:
+      - tempo-conformance/**
+      - .github/workflows/tempo-conformance.yml
+  push:
+    branches:
+      - main
+    paths:
+      - tempo-conformance/**
+      - .github/workflows/tempo-conformance.yml
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  tempo-conformance:
+    name: Tempo SDK conformance
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+        with:
+          version: "0.12.11"
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: tempo-conformance/adapters/python/uv.lock
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "24.22.1"
+          cache: npm
+          cache-dependency-path: tempo-conformance/adapters/typescript/package-lock.json
+
+      - name: Setup Rust
+        uses: tempoxyz/gh-actions/vendor/dtolnay/rust-toolchain@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+
+      - name: Cache Rust dependencies
+        uses: tempoxyz/gh-actions/vendor/Swatinem/rust-cache@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+        with:
+          workspaces: tempo-conformance/adapters/rust -> target
+
+      - name: Setup Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26.10"
+          cache-dependency-path: tempo-conformance/adapters/go/go.sum
+
+      - name: Run conformance against a local Tempo node
+        working-directory: tempo-conformance
+        run: make all REPORT=report.json
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tempo-conformance-report
+          path: tempo-conformance/report.json
+          if-no-files-found: ignore
+

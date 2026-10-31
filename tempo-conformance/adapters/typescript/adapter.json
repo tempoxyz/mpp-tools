@@ -1,0 +1,20 @@
+{
+  "name": "typescript",
+  "language": "typescript",
+  "reference": true,
+  "build": [
+    "npm",
+    "ci",
+    "--silent"
+  ],
+  "command": [
+    "node",
+    "adapter.ts"
+  ],
+  "cwd": ".",
+  "capabilities": [
+    "tx.sign",
+    "tx.decode",
+    "key_authorization.sign"
+  ]
+}
