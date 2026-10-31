@@ -413,6 +413,9 @@ def op_tx_decode(inp: dict) -> dict:
         tx = TempoTransaction.decode(raw)
         fee_payer = tx.recover_fee_payer()
         h = tx.hash()
+        # Sender recovery (P256/WebAuthn verify lazily here) belongs inside the
+        # guard, so a signature that fails to verify is a decode_error.
+        sender = tx.sender_address
     except NotImplementedError as e:
         # pytempo decodes and recovers secp256k1 and secp256k1 keychain senders
         # only (P256/WebAuthn recovery: pytempo#133).
@@ -477,7 +480,7 @@ def op_tx_decode(inp: dict) -> dict:
             "keyAuthorization": ka,
         },
         "signatureType": _signature_type(tx.sender_signature),
-        "sender": hx(tx.sender_address),
+        "sender": hx(sender),
         "feePayer": None if fee_payer is None else fee_payer.lower(),
         "hash": hx(h),
     }
