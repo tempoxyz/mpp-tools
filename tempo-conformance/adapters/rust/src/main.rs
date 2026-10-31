@@ -31,6 +31,9 @@ fn invalid(msg: impl Into<String>) -> Err {
 fn decode_err(msg: impl Into<String>) -> Err {
     Err { ty: "decode_error", msg: msg.into() }
 }
+fn verification(msg: impl Into<String>) -> Err {
+    Err { ty: "verification_error", msg: msg.into() }
+}
 fn unknown(msg: impl Into<String>) -> Err {
     Err { ty: "unknown_error", msg: msg.into() }
 }
@@ -399,13 +402,24 @@ fn op_key_authorization_sign(input: &Value) -> R<Value> {
     let signing_hash = auth.signature_hash();
     let signed = sign_key_authorization(auth, &key)?;
     // The SDK's own 65-byte encoding (PrimitiveSignature::to_bytes), the same bytes that appear
-    // inside serialized. v is 27/28 here (alloy Signature::as_bytes); SPEC.md says 0/1.
+    // inside serialized. v is 27/28 (alloy Signature::as_bytes), as SPEC.md specifies.
     let sig65 = signed.signature.to_bytes();
     Ok(json!({
         "signingHash": hx(signing_hash),
         "signature": hx(&sig65),
         "serialized": hx(alloy_rlp::encode(&signed)),
     }))
+}
+
+/// signature.recover: the account a Tempo signature envelope signs for, through
+/// tempo-primitives' TempoSignature::from_bytes and recover_signer (the node's path).
+fn op_signature_recover(input: &Value) -> R<Value> {
+    let o = obj(input, "input")?;
+    let hash = parse_b256(req(o, "hash")?, "hash")?;
+    let bytes = parse_bytes(req(o, "signature")?, "signature")?;
+    let sig = TempoSignature::from_bytes(&bytes).map_err(|e| verification(format!("TempoSignature::from_bytes: {e}")))?;
+    let signer = sig.recover_signer(&hash).map_err(|e| verification(format!("recover_signer: {e:?}")))?;
+    Ok(json!({ "signer": hx(signer) }))
 }
 
 fn handle(line: &str) -> Value {
@@ -417,6 +431,7 @@ fn handle(line: &str) -> Value {
             "tx.sign" => op_tx_sign(&input),
             "tx.decode" => op_tx_decode(&input),
             "key_authorization.sign" => op_key_authorization_sign(&input),
+            "signature.recover" => op_signature_recover(&input),
             other => Err(Err { ty: "unsupported", msg: format!("unknown op {other}") }),
         }
     })();

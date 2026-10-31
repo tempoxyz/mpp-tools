@@ -15,6 +15,7 @@
   "capabilities": [
     "tx.sign",
     "tx.decode",
-    "key_authorization.sign"
+    "key_authorization.sign",
+    "signature.recover"
   ]
 }

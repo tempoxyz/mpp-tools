@@ -1,6 +1,8 @@
 // Generates ../../vectors/*.json from the case inputs below, with expected
 // outputs from the TypeScript reference adapter. Run: node generate.ts
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { Account as TempoAccount } from 'viem/tempo'
+import { SignatureEnvelope, TxEnvelopeTempo } from 'ox/tempo'
 import { Hash, Hex, Secp256k1, Address, AbiFunction } from 'ox'
 import { handle } from './adapter.ts'
 
@@ -27,20 +29,20 @@ const base = (over: Record<string, unknown> = {}) => ({
   ...over,
 })
 
-type Case = { name: string; op: string; input: any; expected?: any; expectedError?: string; node?: { expect: string; fund?: string[]; knownIssue?: string }; source?: string; description?: string; knownIssue?: string }
+type Case = { name: string; op: string; input: any; expected?: any; expectedError?: string; node?: { expect: string; fund?: string[]; feePayer?: string; requires?: string[]; knownIssue?: { reason: string; problems: string[] } }; source?: string; description?: string; knownIssue?: string }
 const signCases: Case[] = []
-const sign = (name: string, description: string, source: string, tx: any, opts: { signer?: any; feePayer?: boolean; node?: string } = {}) => {
+const sign = (name: string, description: string, source: string, tx: any, opts: { signer?: any; feePayer?: boolean; node?: string; requires?: string } = {}) => {
   const signer = opts.signer ?? { type: 'secp256k1', privateKey: key(name + '/sender') }
   signCases.push({
     name, description, source, op: 'tx.sign',
     input: { tx, signer, ...(opts.feePayer ? { feePayerPrivateKey: key(name + '/fee-payer') } : {}) },
-    ...(opts.node === 'none' ? {} : { node: { expect: opts.node ?? 'success' } }),
+    ...(opts.node === 'none' ? {} : { node: { expect: opts.node ?? 'success', ...(opts.requires ? { requires: [opts.requires] } : {}) } }),
   })
 }
 
 // --- transactions, all submitted to the local node -------------------------
 sign('minimal', 'One TIP-20 transfer call, protocol nonce, no fee token.', 'tempo-go transaction_vectors_test.go minimal_transaction; ox TxEnvelopeTempo.test.ts serialize minimal', base())
-sign('second_nonce', 'Nonce 1 for the same sender as a prior case in this file (runner sends nonce 0 first).', 'tempo-go transaction_vectors_test.go', base({ nonce: '1' }), { signer: { type: 'secp256k1', privateKey: key('minimal/sender') } })
+sign('second_nonce', 'Nonce 1 for the same sender as a prior case in this file (runner sends nonce 0 first).', 'tempo-go transaction_vectors_test.go', base({ nonce: '1' }), { signer: { type: 'secp256k1', privateKey: key('minimal/sender') } , requires: 'minimal' })
 sign('with_fee_token', 'Explicit fee token preference (pathUSD).', 'tempo-go with_fee_token; ox serialize feeToken', base({ feeToken: PATH_USD }))
 sign('fee_token_alpha_usd', 'Fee token set to a second TIP-20 (AlphaUSD); the sender holds none, so the node rejects it.', 'new', base({ feeToken: ALPHA_USD }), { node: 'reject' })
 sign('multiple_calls_batch', 'Three calls executed atomically.', 'tempo-go multiple_calls_batch; ox serialize multiple calls', base({ calls: [transferCall(1n), transferCall(2n, '0x000000000000000000000000000000000000cafe'), transferCall(3n)] }))
@@ -67,11 +69,11 @@ sign('key_authorization', 'Root signs a tx that also authorizes a secp256k1 acce
   base({ keyAuthorization: { privateKey: root, authorization: { chainId: CHAIN, keyType: 'secp256k1', keyId: addr(accessKey), expiry: null, limits: [{ token: PATH_USD, limit: '1000000000' }] } } }),
   { signer: { type: 'secp256k1', privateKey: root } })
 sign('keychain_access_key', 'The access key authorized above signs for the root account (V2 keychain signature).', 'tempo-go keychain SignWithAccessKey; ox SignatureEnvelope keychain',
-  base({ nonce: '1' }), { signer: { type: 'keychain', accessKeyPrivateKey: accessKey, rootAccount: addr(root) } })
+  base({ nonce: '1' }), { signer: { type: 'keychain', accessKeyPrivateKey: accessKey, rootAccount: addr(root) } , requires: 'key_authorization' })
 sign('keychain_sponsored', 'Access key signs, fee payer co-signs.', 'new',
-  base({ nonce: '2' }), { signer: { type: 'keychain', accessKeyPrivateKey: accessKey, rootAccount: addr(root) }, feePayer: true })
+  base({ nonce: '2' }), { signer: { type: 'keychain', accessKeyPrivateKey: accessKey, rootAccount: addr(root) }, feePayer: true , requires: 'keychain_access_key' })
 sign('keychain_unauthorized_key', 'A key the root never authorized signs for it; the node rejects it.', 'new',
-  base({ nonce: '3' }), { signer: { type: 'keychain', accessKeyPrivateKey: key('keychain/stranger'), rootAccount: addr(root) }, node: 'reject' })
+  base({ nonce: '3' }), { signer: { type: 'keychain', accessKeyPrivateKey: key('keychain/stranger'), rootAccount: addr(root) }, node: 'reject' , requires: 'keychain_sponsored' })
 
 const accessKey2 = key('keychain2/access-key')
 const root2 = key('keychain2/root')
@@ -79,7 +81,7 @@ sign('key_authorization_expiry_periodic_limit', 'Access key with an expiry and a
   base({ keyAuthorization: { privateKey: root2, authorization: { chainId: CHAIN, keyType: 'secp256k1', keyId: addr(accessKey2), expiry: '4102444800', limits: [{ token: PATH_USD, limit: '5000000', period: '86400' }] } } }),
   { signer: { type: 'secp256k1', privateKey: root2 } })
 sign('keychain_periodic_key', 'The periodic-limit access key signs for its root.', 'new',
-  base({ nonce: '1' }), { signer: { type: 'keychain', accessKeyPrivateKey: accessKey2, rootAccount: addr(root2) } })
+  base({ nonce: '1' }), { signer: { type: 'keychain', accessKeyPrivateKey: accessKey2, rootAccount: addr(root2) } , requires: 'key_authorization_expiry_periodic_limit' })
 
 const accessKey3 = key('keychain3/access-key')
 const root3 = key('keychain3/root')
@@ -87,7 +89,7 @@ sign('key_authorization_no_spending', 'Access key with limits = [] (no spending 
   base({ keyAuthorization: { privateKey: root3, authorization: { chainId: CHAIN, keyType: 'secp256k1', keyId: addr(accessKey3), expiry: null, limits: [] } } }),
   { signer: { type: 'secp256k1', privateKey: root3 } })
 sign('keychain_no_spending_transfer', 'The no-spending key tries a pathUSD transfer: the pool rejects it (SpendingLimitExceeded).', 'new',
-  base({ nonce: '1' }), { signer: { type: 'keychain', accessKeyPrivateKey: accessKey3, rootAccount: addr(root3) }, node: 'reject' })
+  base({ nonce: '1' }), { signer: { type: 'keychain', accessKeyPrivateKey: accessKey3, rootAccount: addr(root3) }, node: 'reject' , requires: 'key_authorization_no_spending' })
 
 // --- static cross-checks against vectors published in the SDK repos ---------
 signCases.push({
@@ -119,6 +121,8 @@ for (const c of signCases) {
   if (!c.node || !c.expected) continue
   const fund = c.input.feePayerPrivateKey ? [addr(c.input.feePayerPrivateKey)] : [c.expected.sender]
   c.node.fund = fund
+  // Who the receipt must name as fee payer: the sponsor, or the sender itself.
+  c.node.feePayer = c.input.feePayerPrivateKey ? addr(c.input.feePayerPrivateKey) : c.expected.sender
 }
 
 // --- decode: every signed transaction, plus malformed ones -----------------
@@ -167,7 +171,7 @@ decodeCases.push({
     name: 'decode_yparity_0_1', op: 'tx.decode', input: { raw }, description: 'Sender signature v byte as 0/1 instead of 27/28. The node accepts it.',
     source: 'tempo-go pkg/transaction/transaction_vectors_test.go (v = 0x01)',
     ...(res.ok ? { expected: res.value } : { expectedError: 'decode_error' }),
-    node: { expect: 'success', fund: [f.sender], knownIssue: 'The node accepts v = 0/1 but re-encodes it as 27/28 and reports the hash of that re-encoding, so keccak256 of the bytes the client sent (what every SDK returns as the hash) is a hash the node never knows.' },
+    node: { expect: 'success', fund: [f.sender], knownIssue: { reason: 'The node accepts v = 0/1 but re-encodes it as 27/28 and reports the hash of that re-encoding, so keccak256 of the bytes the client sent (what every SDK returns as the hash) is a hash the node never knows.', problems: ['hash'] } },
   })
 }
 
@@ -191,10 +195,83 @@ ka('ka_webauthn_key', 'Authorizes a WebAuthn key.', 'ox KeyAuthorization.test.ts
 ka('ka_max_limit', 'uint256 max limit.', 'new', { chainId: CHAIN, keyType: 'secp256k1', keyId: kid, limits: [{ token: PATH_USD, limit: (2n ** 256n - 1n).toString() }] })
 ka('ka_mainnet_chain', 'Chain 4217 (mainnet).', 'new', { chainId: '4217', keyType: 'secp256k1', keyId: kid })
 
+
+// --- P256 / WebAuthn / access-key signatures -------------------------------
+// Bootstrapped from tempo-go/pytempo testdata/viem (viem 2.57.13, ox 0.14.59).
+// Expected signers and accept/reject verdicts are the ones tempo-primitives
+// 1.11.0 TempoSignature::recover_signer gives, recorded in those files.
+const viemVectors = JSON.parse(readFileSync(new URL('../../vectors/sources/viem/vectors.json', import.meta.url), 'utf8'))
+const clientData = JSON.parse(readFileSync(new URL('../../vectors/sources/viem/webauthn_client_data.json', import.meta.url), 'utf8'))
+const sigCases: Case[] = []
+const viemSource = 'tempo-go/pytempo testdata/viem/vectors.json (viem 2.57.13, ox 0.14.59)'
+for (const [name, field, addrField, description] of [
+  ['sig_p256', 'p256Signature', 'p256Address', 'P256 root signature (Account.fromP256, RFC 6979, low-s).'],
+  ['sig_webauthn', 'webAuthnSignature', 'webAuthnAddress', 'Headless WebAuthn signature, rpId localhost.'],
+  ['sig_p256_access_key_v2', 'p256AccessKeySignature', 'rootAddress', 'P256 access key, keychain V2 envelope: signs for the root.'],
+  ['sig_webauthn_access_key_v2', 'webAuthnAccessKeySignature', 'rootAddress', 'WebAuthn access key, keychain V2 envelope.'],
+  ['sig_p256_keychain_v1', 'p256KeychainV1Signature', 'rootAddress', 'Legacy keychain V1 envelope wrapping a P256 signature.'],
+] as const)
+  sigCases.push({ name, description, source: viemSource, op: 'signature.recover', input: { hash: viemVectors.hash, signature: viemVectors[field] }, expected: { signer: viemVectors[addrField].toLowerCase() } })
+for (const c of clientData.cases)
+  sigCases.push({
+    name: 'webauthn_client_data_' + c.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''),
+    description: 'WebAuthn signature over an unusual clientDataJSON encoding: ' + c.name + '.',
+    source: 'tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer',
+    op: 'signature.recover',
+    input: { hash: clientData.hash, signature: c.envelope },
+    ...(c.accept ? { expected: { signer: clientData.address.toLowerCase() } } : { expectedError: 'verification_error' }),
+  })
+
+// viem's signed transactions (chain 42431): decode only.
+for (const [name, field] of [['decode_viem_p256_root_tx', 'p256RootTransaction'], ['decode_viem_webauthn_root_tx', 'webAuthnRootTransaction'], ['decode_viem_p256_access_key_tx', 'p256AccessKeyTransaction']] as const) {
+  const raw = viemVectors[field].serialized
+  const res: any = handle({ op: 'tx.decode', input: { raw } })
+  if (!res.ok) throw new Error(name + ': ' + JSON.stringify(res.error))
+  if (res.value.sender !== viemVectors[field].sender.toLowerCase()) throw new Error(name + ': sender ' + res.value.sender)
+  decodeCases.push({ name, op: 'tx.decode', description: 'Decode viem\'s ' + field + '.', source: viemSource, input: { raw }, expected: res.value })
+}
+
+// P256 and WebAuthn transactions on the dev chain, signed with viem's tempo
+// accounts, decoded by every SDK and submitted to the node.
+{
+  const p256Pk = key('p256-root/key')
+  const waPk = key('webauthn-root/key')
+  const accessRootPk = key('p256-access/root')
+  const accessRoot = TempoAccount.fromSecp256k1(accessRootPk)
+  const waAccessRootPk = key('webauthn-access/root')
+  const waAccessRoot = TempoAccount.fromSecp256k1(waAccessRootPk)
+  const rpId = 'localhost', origin = 'http://localhost'
+  const p256Acct = TempoAccount.fromP256(p256Pk)
+  const waAcct = TempoAccount.fromHeadlessWebAuthn(waPk, { rpId, origin })
+  const p256Access = TempoAccount.fromP256(key('p256-access/key'), { access: accessRoot })
+  const waAccess = TempoAccount.fromHeadlessWebAuthn(key('webauthn-access/key'), { rpId, origin, access: waAccessRoot })
+  const envBase = { chainId: 1337, calls: [{ to: PATH_USD, data: transferCall().data, value: 0n }], gas: 2000000n, maxFeePerGas: 50000000000n, maxPriorityFeePerGas: 1000000000n, nonce: 0n, nonceKey: 0n }
+  const txs: [string, string, any, any, string][] = [
+    ['decode_p256_root_tx', 'P256 root account sends a pathUSD transfer.', p256Acct, {}, p256Acct.address],
+    ['decode_webauthn_root_tx', 'WebAuthn root account sends a pathUSD transfer.', waAcct, {}, waAcct.address],
+    ['decode_p256_access_key_tx', 'P256 access key, authorized in the same transaction by its secp256k1 root, signs for the root (keychain V2).', p256Access,
+      { keyAuthorization: await TempoAccount.signKeyAuthorization(accessRoot, { key: p256Access, chainId: 1337n }) }, accessRoot.address],
+    ['decode_webauthn_access_key_tx', 'WebAuthn access key, authorized in the same transaction, signs for its root (keychain V2).', waAccess,
+      { keyAuthorization: await TempoAccount.signKeyAuthorization(waAccessRoot, { key: waAccess, chainId: 1337n }) }, waAccessRoot.address],
+  ]
+  for (const [name, description, acct, extra, sender] of txs) {
+    const env = TxEnvelopeTempo.from({ ...envBase, ...extra } as any)
+    const signature = await acct.sign({ hash: TxEnvelopeTempo.getSignPayload(env) })
+    const raw = TxEnvelopeTempo.serialize(env, { signature: SignatureEnvelope.from(signature) })
+    const res: any = handle({ op: 'tx.decode', input: { raw } })
+    if (!res.ok) throw new Error(name + ': ' + JSON.stringify(res.error))
+    if (res.value.sender !== sender.toLowerCase()) throw new Error(name + ': sender ' + res.value.sender + ' want ' + sender)
+    decodeCases.push({ name, op: 'tx.decode', description, source: 'viem/tempo Account (fromP256, fromHeadlessWebAuthn, access keys) as in testdata/viem/gen.mjs', input: { raw }, expected: res.value,
+      node: { expect: 'success', fund: [sender.toLowerCase()], feePayer: sender.toLowerCase() } })
+  }
+}
+
+
 const write = (file: string, cases: Case[], description: string) =>
   writeFileSync(new URL('../../vectors/' + file, import.meta.url), JSON.stringify({ description, generatedBy: 'adapters/typescript/generate.ts (ox 0.14.59)', cases }, null, 2) + '\n')
 write('transactions.json', signCases, 'tx.sign: signing, sponsorship, key authorizations and keychain access keys. Cases with node run in order on one fresh dev node.')
 write('decode.json', decodeCases, 'tx.decode: every signed transaction from transactions.json, plus malformed encodings every SDK and the node must reject.')
+write('signatures.json', sigCases, 'signature.recover: P256, WebAuthn and access-key (keychain V1/V2) envelopes, and WebAuthn clientDataJSON edge cases, with tempo-primitives verdicts.')
 write('key-authorizations.json', kaCases, 'key_authorization.sign: signing hash, signature envelope and RLP of signed key authorizations.')
-console.log('transactions', signCases.length, 'decode', decodeCases.length, 'key-authorizations', kaCases.length)
+console.log('signatures', sigCases.length, 'transactions', signCases.length, 'decode', decodeCases.length, 'key-authorizations', kaCases.length)
 

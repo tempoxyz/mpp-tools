@@ -30,8 +30,8 @@ Request: `{"op": "<operation>", "input": {...}}`
 
 Response: `{"ok": true, "value": {...}}` or
 `{"ok": false, "error": {"type": "<type>", "message": "..."}}`, where type is
-one of `invalid_input`, `decode_error`, `unsupported` (the SDK has no API for
-this input), `unknown_error`.
+one of `invalid_input`, `decode_error`, `verification_error`, `unsupported`
+(the SDK has no API for this input), `unknown_error`.
 
 An adapter must never crash on bad input: catch, and answer with an error.
 
@@ -135,6 +135,19 @@ Output: `{ signingHash: Hash, signature: Hex, serialized: Hex }` where
 signed authorization (secp256k1: 65 bytes `r || s || v`, v = 27/28, the form the
 node uses) and `serialized` is the RLP of the signed authorization, as it
 appears in a transaction's key authorization field.
+
+### `signature.recover`
+
+Input: `{ hash: Hash, signature: Hex }`, where `signature` is a serialized Tempo
+signature envelope: secp256k1 (65 bytes), P256 (`0x01`), WebAuthn (`0x02`), or a
+keychain envelope (`0x03` V1, `0x04` V2) wrapping one of those.
+
+Output: `{ signer: Address }`: the account the signature signs `hash` for, as the
+node's `TempoSignature::recover_signer` decides it. For keychain envelopes that is
+the root (`userAddress`); the inner signature must verify over `hash` (V1) or
+`keccak256(0x04 || hash || userAddress)` (V2). Any envelope that does not yield a
+valid signer (malformed, wrong key, a WebAuthn clientDataJSON the node rejects)
+answers `verification_error`.
 
 ## Vectors
 

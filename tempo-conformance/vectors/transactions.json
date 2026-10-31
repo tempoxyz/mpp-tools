@@ -32,7 +32,8 @@
         "expect": "success",
         "fund": [
           "0x0e6fd5d3582d21c6abf24d21987e11d8ceeb6098"
-        ]
+        ],
+        "feePayer": "0x0e6fd5d3582d21c6abf24d21987e11d8ceeb6098"
       },
       "expected": {
         "senderSigningHash": "0x7ae038e93cc26068b833b71677b550593d4f1f5e769fb9ce8281e7afc2ad76fc",
@@ -70,9 +71,13 @@
       },
       "node": {
         "expect": "success",
+        "requires": [
+          "minimal"
+        ],
         "fund": [
           "0x0e6fd5d3582d21c6abf24d21987e11d8ceeb6098"
-        ]
+        ],
+        "feePayer": "0x0e6fd5d3582d21c6abf24d21987e11d8ceeb6098"
       },
       "expected": {
         "senderSigningHash": "0x1851b043377955e37ee7874ece7e2afabda8860b14fce42667fbda19c43f091f",
@@ -113,7 +118,8 @@
         "expect": "success",
         "fund": [
           "0xc895e7f283f7b7efbc5a22b75553a7d52616c94f"
-        ]
+        ],
+        "feePayer": "0xc895e7f283f7b7efbc5a22b75553a7d52616c94f"
       },
       "expected": {
         "senderSigningHash": "0x8f5d600ec525879c1a0bf039b27ff976311a318136f2663b96a95e504e616ca3",
@@ -154,7 +160,8 @@
         "expect": "reject",
         "fund": [
           "0xdd519acee27128fe6302513cdeed70a81a2d53b6"
-        ]
+        ],
+        "feePayer": "0xdd519acee27128fe6302513cdeed70a81a2d53b6"
       },
       "expected": {
         "senderSigningHash": "0x405b5171a5c3196e9964e2c1258da8cec52d8a4a80361cce7f4e36d539838289",
@@ -204,7 +211,8 @@
         "expect": "success",
         "fund": [
           "0x1880a36541d86744c1992455a0f64742027a252f"
-        ]
+        ],
+        "feePayer": "0x1880a36541d86744c1992455a0f64742027a252f"
       },
       "expected": {
         "senderSigningHash": "0xc53a395077ace31c118b7b019673897d7baf25532bbab662a817bfb31a848081",
@@ -244,7 +252,8 @@
         "expect": "success",
         "fund": [
           "0xe45c3d12d62de8ac3b2ca36c8ea898ada3531750"
-        ]
+        ],
+        "feePayer": "0xe45c3d12d62de8ac3b2ca36c8ea898ada3531750"
       },
       "expected": {
         "senderSigningHash": "0xed3cb51725a7ce2471d2ba1e21283fc5df1e19846515979fda4a278cc4ad29b3",
@@ -284,7 +293,8 @@
         "expect": "reject",
         "fund": [
           "0x5bb35331771f9764036592932608f6cede35bba6"
-        ]
+        ],
+        "feePayer": "0x5bb35331771f9764036592932608f6cede35bba6"
       },
       "expected": {
         "senderSigningHash": "0xd956db81aa39f10e9af79dc241b0ebe9643e1aa09114b1902065ac6cda601b23",
@@ -324,7 +334,8 @@
         "expect": "success",
         "fund": [
           "0x12e6f0e4ed93e756efa9bfd6c4ad86ac829a622a"
-        ]
+        ],
+        "feePayer": "0x12e6f0e4ed93e756efa9bfd6c4ad86ac829a622a"
       },
       "expected": {
         "senderSigningHash": "0x3b8f350d9d75cfe79a6685606c9c59c691e2a2e46c4b4dfdcc1b82125e231984",
@@ -372,7 +383,8 @@
         "expect": "success",
         "fund": [
           "0x38cdeeed34b05435abd725f810a532f2f0d9187b"
-        ]
+        ],
+        "feePayer": "0x38cdeeed34b05435abd725f810a532f2f0d9187b"
       },
       "expected": {
         "senderSigningHash": "0x1fbbfd57240f384d9dd31eec61aea10677135293f810b1a42405393c0a1e6795",
@@ -412,7 +424,8 @@
         "expect": "success",
         "fund": [
           "0x035b92995f3afd2f295e135013c96bada40e4506"
-        ]
+        ],
+        "feePayer": "0x035b92995f3afd2f295e135013c96bada40e4506"
       },
       "expected": {
         "senderSigningHash": "0xc08821b74ebfba4b20b0b71f0546df5ab246ac87776e74eabf20401a45de4372",
@@ -452,7 +465,8 @@
         "expect": "success",
         "fund": [
           "0xea1565803d53032766c3c7d587109d88a992e322"
-        ]
+        ],
+        "feePayer": "0xea1565803d53032766c3c7d587109d88a992e322"
       },
       "expected": {
         "senderSigningHash": "0x8768c184e0ac0687346db714d93d84d3614f827647c16320a76bb1f4be4d5539",
@@ -493,7 +507,8 @@
         "expect": "success",
         "fund": [
           "0x6b84e521fc18cb3251859643fde3fcbaba2d1811"
-        ]
+        ],
+        "feePayer": "0x6b84e521fc18cb3251859643fde3fcbaba2d1811"
       },
       "expected": {
         "senderSigningHash": "0x776b25d5420d836914a1358afa14c6d7ef84d2dcf20c0620cfd8cd02ed9bb17d",
@@ -534,7 +549,8 @@
         "expect": "success",
         "fund": [
           "0xc70364ccce6b397d0d6158a5f577dbe4a53b1df1"
-        ]
+        ],
+        "feePayer": "0xc70364ccce6b397d0d6158a5f577dbe4a53b1df1"
       },
       "expected": {
         "senderSigningHash": "0x3bdc979474f9297c3680899a20193f7af068866fe601c1edd75ebe6333cbc2c2",
@@ -576,7 +592,8 @@
         "expect": "success",
         "fund": [
           "0xc9e5866d334947090ee8561738b045feae1cadaa"
-        ]
+        ],
+        "feePayer": "0xc9e5866d334947090ee8561738b045feae1cadaa"
       },
       "expected": {
         "senderSigningHash": "0x90052ea37d7600155d8f50f36ab2aa0061603878255a2dd41e2ea30c9866ac59",
@@ -617,7 +634,8 @@
         "expect": "reject",
         "fund": [
           "0x64dbd5f7e9dc2ef458d14a8d96128f582ecc0640"
-        ]
+        ],
+        "feePayer": "0x64dbd5f7e9dc2ef458d14a8d96128f582ecc0640"
       },
       "expected": {
         "senderSigningHash": "0xa661060b32fa95e4eb4a12e202ab784f8eee163e8d27c89e52a9bd26d946e1a3",
@@ -657,7 +675,8 @@
         "expect": "reject",
         "fund": [
           "0x05b434316cd40616d030e2953d707b4d88301da2"
-        ]
+        ],
+        "feePayer": "0x05b434316cd40616d030e2953d707b4d88301da2"
       },
       "expected": {
         "senderSigningHash": "0xb37cc75b9e6e4818fc8ab8b63df8a4c87f32179b28b6023af8cb2e27110a1855",
@@ -697,7 +716,8 @@
         "expect": "success",
         "fund": [
           "0x363489e2156ae9c0e5311cada20a184faf3d5caf"
-        ]
+        ],
+        "feePayer": "0x363489e2156ae9c0e5311cada20a184faf3d5caf"
       },
       "expected": {
         "senderSigningHash": "0x7163a629c5736137cfe0fdf7288924fdf978c1dce1df973439e170017d6039de",
@@ -738,7 +758,8 @@
         "expect": "success",
         "fund": [
           "0x88b6547452b28e09ef47a85e66c6aeba83df81f5"
-        ]
+        ],
+        "feePayer": "0x88b6547452b28e09ef47a85e66c6aeba83df81f5"
       },
       "expected": {
         "senderSigningHash": "0xb5724f5c4d2620a923194424f582004dcd17cf3d01944b18fe302aab4d1a70f2",
@@ -780,7 +801,8 @@
         "expect": "success",
         "fund": [
           "0x0af8583b55a02476a632f3dae7e7617d3d10b3ba"
-        ]
+        ],
+        "feePayer": "0x0af8583b55a02476a632f3dae7e7617d3d10b3ba"
       },
       "expected": {
         "senderSigningHash": "0xb5724f5c4d2620a923194424f582004dcd17cf3d01944b18fe302aab4d1a70f2",
@@ -835,7 +857,8 @@
         "expect": "success",
         "fund": [
           "0x70505783416ca25a9b3bd1334da28240883f3c3b"
-        ]
+        ],
+        "feePayer": "0x70505783416ca25a9b3bd1334da28240883f3c3b"
       },
       "expected": {
         "senderSigningHash": "0x47c8cd8e756fef7c883957bf06c3c36179f36ebe5cffbb2666b585ca7effde72",
@@ -874,9 +897,13 @@
       },
       "node": {
         "expect": "success",
+        "requires": [
+          "key_authorization"
+        ],
         "fund": [
           "0x70505783416ca25a9b3bd1334da28240883f3c3b"
-        ]
+        ],
+        "feePayer": "0x70505783416ca25a9b3bd1334da28240883f3c3b"
       },
       "expected": {
         "senderSigningHash": "0x1851b043377955e37ee7874ece7e2afabda8860b14fce42667fbda19c43f091f",
@@ -916,9 +943,13 @@
       },
       "node": {
         "expect": "success",
+        "requires": [
+          "keychain_access_key"
+        ],
         "fund": [
           "0x1f6b696587342f9b5a6816fa7df990f37719667b"
-        ]
+        ],
+        "feePayer": "0x1f6b696587342f9b5a6816fa7df990f37719667b"
       },
       "expected": {
         "senderSigningHash": "0xa087e8541ef3a67b7e82107d4e99447b7981fb3f62a000d5ca45cefdc435a7d4",
@@ -957,9 +988,13 @@
       },
       "node": {
         "expect": "reject",
+        "requires": [
+          "keychain_sponsored"
+        ],
         "fund": [
           "0x70505783416ca25a9b3bd1334da28240883f3c3b"
-        ]
+        ],
+        "feePayer": "0x70505783416ca25a9b3bd1334da28240883f3c3b"
       },
       "expected": {
         "senderSigningHash": "0x923934067553f5f940a0423009e1aa6ee8f9d53a5f92b11c481a5581412b9214",
@@ -1015,7 +1050,8 @@
         "expect": "success",
         "fund": [
           "0x123f68c947a95a862624b693981adbc31c804922"
-        ]
+        ],
+        "feePayer": "0x123f68c947a95a862624b693981adbc31c804922"
       },
       "expected": {
         "senderSigningHash": "0x176f5ad199ea7297b0044955d9594155ba6c8a5ae6f579cd2c51dfde7e225b7f",
@@ -1054,9 +1090,13 @@
       },
       "node": {
         "expect": "success",
+        "requires": [
+          "key_authorization_expiry_periodic_limit"
+        ],
         "fund": [
           "0x123f68c947a95a862624b693981adbc31c804922"
-        ]
+        ],
+        "feePayer": "0x123f68c947a95a862624b693981adbc31c804922"
       },
       "expected": {
         "senderSigningHash": "0x1851b043377955e37ee7874ece7e2afabda8860b14fce42667fbda19c43f091f",
@@ -1106,7 +1146,8 @@
         "expect": "success",
         "fund": [
           "0x832aabd426240a24ec5635cffdffac0c2243257a"
-        ]
+        ],
+        "feePayer": "0x832aabd426240a24ec5635cffdffac0c2243257a"
       },
       "expected": {
         "senderSigningHash": "0xcdf28a328c9362baa2ff4e77e4d9c2b110a0bee53227affe885821a9792fd7f7",
@@ -1145,9 +1186,13 @@
       },
       "node": {
         "expect": "reject",
+        "requires": [
+          "key_authorization_no_spending"
+        ],
         "fund": [
           "0x832aabd426240a24ec5635cffdffac0c2243257a"
-        ]
+        ],
+        "feePayer": "0x832aabd426240a24ec5635cffdffac0c2243257a"
       },
       "expected": {
         "senderSigningHash": "0x1851b043377955e37ee7874ece7e2afabda8860b14fce42667fbda19c43f091f",

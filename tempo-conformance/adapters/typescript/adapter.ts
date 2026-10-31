@@ -1,7 +1,8 @@
 // TypeScript reference adapter: viem's ox/tempo.
 // JSON lines on stdin -> JSON lines on stdout. See ../../SPEC.md.
 import { createInterface } from 'node:readline'
-import { Hash, Hex, Secp256k1, Address } from 'ox'
+import { fileURLToPath } from 'node:url'
+import { Hash, Hex, Secp256k1, Address, P256, WebAuthnP256 } from 'ox'
 import { KeyAuthorization, SignatureEnvelope, TxEnvelopeTempo } from 'ox/tempo'
 
 class AdapterError extends Error {
@@ -80,7 +81,14 @@ function toEnvelope(tx: any) {
 
 function txSign(input: any) {
   const sponsored = input.feePayerPrivateKey != null
-  const envelope = TxEnvelopeTempo.from({ ...toEnvelope(input.tx), ...(sponsored ? { feePayerSignature: null } : {}) })
+  let envelope: any
+  try {
+    envelope = TxEnvelopeTempo.from({ ...toEnvelope(input.tx), ...(sponsored ? { feePayerSignature: null } : {}) })
+    TxEnvelopeTempo.assert(envelope)
+  } catch (e: any) {
+    if (e instanceof AdapterError) throw e
+    throw new AdapterError('invalid_input', e?.shortMessage ?? e?.message ?? String(e))
+  }
   const senderSigningHash = TxEnvelopeTempo.getSignPayload(envelope)
   let signature: any
   let sender: string
@@ -175,7 +183,40 @@ function keyAuthSign(input: any) {
   return { signingHash, signature, serialized: KeyAuthorization.serialize(signed) }
 }
 
+// signature.recover: the account a Tempo signature envelope signs for. Keychain
+// envelopes sign for userAddress; V2 inner signatures cover
+// keccak256(0x04 || hash || userAddress), V1 the hash itself.
+function signatureRecover(input: any) {
+  const hash = input.hash as Hex.Hex
+  let env: any
+  try {
+    env = SignatureEnvelope.deserialize(input.signature)
+  } catch (e: any) {
+    throw new AdapterError('verification_error', 'deserialize: ' + (e?.shortMessage ?? e?.message ?? e))
+  }
+  let signer: string
+  let payload: Hex.Hex = hash
+  let inner = env
+  if (env.type === 'keychain') {
+    signer = env.userAddress
+    if (env.version === 'v2') payload = Hash.keccak256(Hex.concat('0x04', hash, env.userAddress))
+    inner = env.inner
+  }
+  let innerSigner: string
+  try {
+    if (inner.type === 'secp256k1') innerSigner = Secp256k1.recoverAddress({ payload, signature: inner.signature })
+    else if (inner.type === 'p256' || inner.type === 'webAuthn') {
+      innerSigner = Address.fromPublicKey(inner.publicKey)
+      if (!SignatureEnvelope.verify(inner, { payload, publicKey: inner.publicKey })) throw new Error('signature does not verify')
+    } else throw new Error('unsupported inner type ' + inner.type)
+  } catch (e: any) {
+    throw new AdapterError('verification_error', e?.shortMessage ?? e?.message ?? String(e))
+  }
+  return { signer: (env.type === 'keychain' ? signer! : innerSigner).toLowerCase() }
+}
+
 const ops: Record<string, (input: any) => unknown> = {
+  'signature.recover': signatureRecover,
   'tx.sign': txSign,
   'tx.decode': txDecode,
   'key_authorization.sign': keyAuthSign,
@@ -188,11 +229,12 @@ export function handle(req: any) {
     return { ok: true, value: fn(req.input) }
   } catch (e: any) {
     if (e instanceof AdapterError) return { ok: false, error: { type: e.type, message: e.message } }
-    return { ok: false, error: { type: 'invalid_input', message: e?.shortMessage ?? e?.message ?? String(e) } }
+    return { ok: false, error: { type: 'unknown_error', message: e?.shortMessage ?? e?.message ?? String(e) } }
   }
 }
 
-if (import.meta.main) {
+// Not import.meta.main: Node added it only in 24.2. generate.ts imports handle() without starting the loop.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const rl = createInterface({ input: process.stdin, crlfDelay: Infinity })
   for await (const line of rl) {
     if (!line.trim()) continue

@@ -34,18 +34,28 @@ starting `ghcr.io/tempoxyz/tempo:1.17.0`.
   nonces, validity windows, fee tokens, fee payer sponsorship, key
   authorizations (expiry, one-off, periodic and no-spending limits), V2
   keychain access-key signing, and inputs every SDK must refuse to sign.
-- `tx.decode` (36 cases): every signed transaction above, plus malformed and
+- `tx.decode` (43 cases): every signed transaction above, plus malformed and
   malleable encodings (truncated, trailing byte, wrong type, high-s, bad v,
   legacy tempo.ts fee payer trailer, v = 0/1).
 - `key_authorization.sign` (10 cases): signing hash, signature and RLP.
+- `signature.recover` (40 cases): P256, WebAuthn and access-key (keychain V1
+  and V2) envelopes from viem, and 35 WebAuthn clientDataJSON edge cases (key
+  case, duplicates, escapes, invalid UTF-8, lone surrogates, arrays, nesting)
+  with the verdicts tempo-primitives gives. `tx.decode` also covers viem's
+  signed P256/WebAuthn transactions, and four P256/WebAuthn transactions (root
+  and access key) that the node executes.
 
 Every case with `node` is submitted, in order, to one fresh dev node. Each
 sender is its own deterministic key, so nonces are fixed from genesis and the
 expected hashes are the hashes the node reports. The node agrees with every
-expectation, and the Rust adapter (the node's own encoding) matches the
-TypeScript reference on every case but one, a known node bug.
+expectation. Signature verdicts come from tempo-primitives, the node's own
+code, and the Rust adapter matches every vector except two known gaps; ox, the
+TypeScript reference, disagrees with the node on 9 WebAuthn clientDataJSON
+cases (see known-issues.json).
 
-Vectors were bootstrapped from tempo-go's `transaction_vectors_test.go` and
+`vectors/sources/viem/` holds the P256/WebAuthn source files (moved from
+tempo-go and pytempo `testdata/viem`, with `gen.mjs` to regenerate them);
+`generate.ts` reads them. Vectors were bootstrapped from tempo-go's `transaction_vectors_test.go` and
 golden tempo.ts transaction, ox's `TxEnvelopeTempo` and `KeyAuthorization`
 tests, and pytempo's keychain tests; each case names its `source`.
 

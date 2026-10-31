@@ -379,8 +379,7 @@ func keyAuthSign(input map[string]any) (any, error) {
 		return nil, errf("unknown_error", "rlp encode signed authorization: %v", err)
 	}
 	// Report the signature exactly as tempo-go embeds it: r || s || v with
-	// v = 27 + yParity (key_authorization.go:210), matching the vectors.
-	// SPEC.md asks for yParity 0/1 here; that conflict is reported to the lead.
+	// v = 27 + yParity (key_authorization.go:210), as SPEC.md specifies.
 	sig, ok := signed[1].([]byte)
 	if !ok || len(sig) != 65 {
 		return nil, errf("unknown_error", "unexpected signed authorization shape")
