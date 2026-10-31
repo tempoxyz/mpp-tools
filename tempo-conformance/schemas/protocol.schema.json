@@ -1,0 +1,796 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tempo.xyz/mpp-tools/tempo-conformance/schemas/protocol.schema.json",
+  "title": "Tempo SDK Conformance Protocol Types",
+  "$defs": {
+    "Operation": {
+      "type": "string",
+      "enum": [
+        "tx.sign",
+        "tx.decode",
+        "key_authorization.sign",
+        "signature.recover"
+      ]
+    },
+    "ErrorType": {
+      "type": "string",
+      "enum": [
+        "invalid_input",
+        "decode_error",
+        "verification_error",
+        "unsupported",
+        "unknown_error"
+      ]
+    },
+    "Int": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$",
+      "description": "Unsigned integer as a decimal string."
+    },
+    "Hex": {
+      "type": "string",
+      "pattern": "^0x([0-9a-fA-F]{2})*$",
+      "description": "0x hex bytes; empty bytes are 0x. Outputs are lowercase."
+    },
+    "Address": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{40}$"
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "Selector": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{8}$"
+    },
+    "Call": {
+      "type": "object",
+      "required": [
+        "to",
+        "value",
+        "data"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "to": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Address"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null = contract creation"
+        },
+        "value": {
+          "$ref": "#/$defs/Int"
+        },
+        "data": {
+          "$ref": "#/$defs/Hex"
+        }
+      }
+    },
+    "AccessListItem": {
+      "type": "object",
+      "required": [
+        "address",
+        "storageKeys"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "$ref": "#/$defs/Address"
+        },
+        "storageKeys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Hash"
+          }
+        }
+      }
+    },
+    "TokenLimitInput": {
+      "type": "object",
+      "required": [
+        "token",
+        "limit"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "token": {
+          "$ref": "#/$defs/Address"
+        },
+        "limit": {
+          "$ref": "#/$defs/Int"
+        },
+        "period": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Int"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "TokenLimit": {
+      "type": "object",
+      "required": [
+        "token",
+        "limit",
+        "period"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "token": {
+          "$ref": "#/$defs/Address"
+        },
+        "limit": {
+          "$ref": "#/$defs/Int"
+        },
+        "period": {
+          "$ref": "#/$defs/Int"
+        }
+      }
+    },
+    "SelectorRuleInput": {
+      "type": "object",
+      "required": [
+        "selector"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "selector": {
+          "$ref": "#/$defs/Selector"
+        },
+        "recipients": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Address"
+          }
+        }
+      }
+    },
+    "CallScopeInput": {
+      "type": "object",
+      "required": [
+        "target"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/Address"
+        },
+        "selectorRules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SelectorRuleInput"
+          }
+        }
+      }
+    },
+    "SelectorRule": {
+      "type": "object",
+      "required": [
+        "selector",
+        "recipients"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "selector": {
+          "$ref": "#/$defs/Selector"
+        },
+        "recipients": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Address"
+          }
+        }
+      }
+    },
+    "CallScope": {
+      "type": "object",
+      "required": [
+        "target",
+        "selectorRules"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/Address"
+        },
+        "selectorRules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SelectorRule"
+          }
+        }
+      }
+    },
+    "KeyType": {
+      "type": "string",
+      "enum": [
+        "secp256k1",
+        "p256",
+        "webauthn"
+      ]
+    },
+    "KeyAuthorization": {
+      "type": "object",
+      "required": [
+        "chainId",
+        "keyType",
+        "keyId"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "chainId": {
+          "$ref": "#/$defs/Int"
+        },
+        "keyType": {
+          "$ref": "#/$defs/KeyType"
+        },
+        "keyId": {
+          "$ref": "#/$defs/Address"
+        },
+        "expiry": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Int"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null = never expires"
+        },
+        "limits": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/TokenLimitInput"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null = unlimited, [] = no spending"
+        },
+        "allowedCalls": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CallScopeInput"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "TIP-1011 call scopes: null = unrestricted, [] = no calls allowed"
+        },
+        "witness": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Hash"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "TIP-1053 witness; null = none"
+        },
+        "isAdmin": {
+          "type": "boolean",
+          "description": "TIP-1049 admin access key"
+        },
+        "account": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Address"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "TIP-1049 account binding"
+        }
+      }
+    },
+    "DecodedKeyAuthorization": {
+      "type": "object",
+      "required": [
+        "chainId",
+        "keyType",
+        "keyId",
+        "expiry",
+        "limits",
+        "allowedCalls",
+        "witness",
+        "isAdmin",
+        "account"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "chainId": {
+          "$ref": "#/$defs/Int"
+        },
+        "keyType": {
+          "$ref": "#/$defs/KeyType"
+        },
+        "keyId": {
+          "$ref": "#/$defs/Address"
+        },
+        "expiry": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Int"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limits": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/TokenLimit"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "allowedCalls": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CallScope"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "witness": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "isAdmin": {
+          "type": "boolean"
+        },
+        "account": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Address"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "SignedKeyAuthorizationInput": {
+      "type": "object",
+      "required": [
+        "authorization",
+        "privateKey"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "authorization": {
+          "$ref": "#/$defs/KeyAuthorization"
+        },
+        "privateKey": {
+          "$ref": "#/$defs/Hash",
+          "description": "root secp256k1 key that signs the authorization"
+        }
+      }
+    },
+    "Signer": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "privateKey"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "secp256k1"
+            },
+            "privateKey": {
+              "$ref": "#/$defs/Hash"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "accessKeyPrivateKey",
+            "rootAccount"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "keychain"
+            },
+            "accessKeyPrivateKey": {
+              "$ref": "#/$defs/Hash"
+            },
+            "rootAccount": {
+              "$ref": "#/$defs/Address"
+            },
+            "version": {
+              "enum": [
+                "v1",
+                "v2"
+              ],
+              "description": "keychain envelope version, default v2"
+            }
+          }
+        }
+      ]
+    },
+    "Tx": {
+      "type": "object",
+      "required": [
+        "chainId",
+        "nonce",
+        "nonceKey",
+        "gas",
+        "maxFeePerGas",
+        "maxPriorityFeePerGas",
+        "calls"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "chainId": {
+          "$ref": "#/$defs/Int"
+        },
+        "nonce": {
+          "$ref": "#/$defs/Int"
+        },
+        "nonceKey": {
+          "$ref": "#/$defs/Int"
+        },
+        "gas": {
+          "$ref": "#/$defs/Int"
+        },
+        "maxFeePerGas": {
+          "$ref": "#/$defs/Int"
+        },
+        "maxPriorityFeePerGas": {
+          "$ref": "#/$defs/Int"
+        },
+        "calls": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Call"
+          }
+        },
+        "accessList": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AccessListItem"
+          }
+        },
+        "validBefore": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Int"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "validAfter": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Int"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "feeToken": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Address"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "keyAuthorization": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SignedKeyAuthorizationInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "TxSignInput": {
+      "type": "object",
+      "required": [
+        "tx",
+        "signer"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "tx": {
+          "$ref": "#/$defs/Tx"
+        },
+        "signer": {
+          "$ref": "#/$defs/Signer"
+        },
+        "feePayerPrivateKey": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "TxSignOutput": {
+      "type": "object",
+      "required": [
+        "senderSigningHash",
+        "feePayerSigningHash",
+        "raw",
+        "hash",
+        "sender"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "senderSigningHash": {
+          "$ref": "#/$defs/Hash"
+        },
+        "feePayerSigningHash": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "raw": {
+          "$ref": "#/$defs/Hex"
+        },
+        "hash": {
+          "$ref": "#/$defs/Hash"
+        },
+        "sender": {
+          "$ref": "#/$defs/Address"
+        }
+      }
+    },
+    "TxDecodeInput": {
+      "type": "object",
+      "required": [
+        "raw"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "raw": {
+          "$ref": "#/$defs/Hex"
+        }
+      }
+    },
+    "DecodedTx": {
+      "type": "object",
+      "required": [
+        "chainId",
+        "nonce",
+        "nonceKey",
+        "gas",
+        "maxFeePerGas",
+        "maxPriorityFeePerGas",
+        "calls",
+        "accessList",
+        "validBefore",
+        "validAfter",
+        "feeToken",
+        "keyAuthorization"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "chainId": {
+          "$ref": "#/$defs/Int"
+        },
+        "nonce": {
+          "$ref": "#/$defs/Int"
+        },
+        "nonceKey": {
+          "$ref": "#/$defs/Int"
+        },
+        "gas": {
+          "$ref": "#/$defs/Int"
+        },
+        "maxFeePerGas": {
+          "$ref": "#/$defs/Int"
+        },
+        "maxPriorityFeePerGas": {
+          "$ref": "#/$defs/Int"
+        },
+        "calls": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Call"
+          }
+        },
+        "accessList": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AccessListItem"
+          }
+        },
+        "validBefore": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Int"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "validAfter": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Int"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "feeToken": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Address"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "keyAuthorization": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/DecodedKeyAuthorization"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "TxDecodeOutput": {
+      "type": "object",
+      "required": [
+        "tx",
+        "signatureType",
+        "sender",
+        "feePayer",
+        "hash"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "tx": {
+          "$ref": "#/$defs/DecodedTx"
+        },
+        "signatureType": {
+          "enum": [
+            "secp256k1",
+            "p256",
+            "webauthn",
+            "keychain"
+          ]
+        },
+        "sender": {
+          "$ref": "#/$defs/Address"
+        },
+        "feePayer": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Address"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hash": {
+          "$ref": "#/$defs/Hash"
+        }
+      }
+    },
+    "KeyAuthorizationSignInput": {
+      "$ref": "#/$defs/SignedKeyAuthorizationInput"
+    },
+    "KeyAuthorizationSignOutput": {
+      "type": "object",
+      "required": [
+        "signingHash",
+        "signature",
+        "serialized"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "signingHash": {
+          "$ref": "#/$defs/Hash"
+        },
+        "signature": {
+          "$ref": "#/$defs/Hex"
+        },
+        "serialized": {
+          "$ref": "#/$defs/Hex"
+        }
+      }
+    },
+    "SignatureRecoverInput": {
+      "type": "object",
+      "required": [
+        "hash",
+        "signature"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "hash": {
+          "$ref": "#/$defs/Hash"
+        },
+        "signature": {
+          "$ref": "#/$defs/Hex"
+        }
+      }
+    },
+    "SignatureRecoverOutput": {
+      "type": "object",
+      "required": [
+        "signer"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "signer": {
+          "$ref": "#/$defs/Address"
+        }
+      }
+    }
+  }
+}

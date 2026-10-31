@@ -1,6 +1,13 @@
 {
+  "$schema": "../../schemas/adapter-manifest.schema.json",
+  "schema": 1,
   "name": "rust",
   "language": "rust",
+  "sdk": {
+    "package": "tempo-primitives",
+    "manifest": "Cargo.toml",
+    "lockfile": "Cargo.lock"
+  },
   "build": [
     "cargo",
     "build",

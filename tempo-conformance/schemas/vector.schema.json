@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tempo.xyz/mpp-tools/tempo-conformance/schemas/vector.schema.json",
+  "title": "Tempo SDK Conformance Vector",
+  "description": "The MPP conformance vector format (conformance/schemas/vector.schema.json, operation form) plus two Tempo fields per scenario: node (submit the scenario's transaction to a local dev node) and skipReasons (why each sdkVersions constraint or adapters exclusion exists).",
+  "type": "object",
+  "required": [
+    "version",
+    "description",
+    "spec_ref",
+    "commands",
+    "scenarios"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "spec_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generatedBy": {
+      "type": "string"
+    },
+    "commands": {
+      "type": "object",
+      "required": [
+        "operation"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "operation": {
+          "$ref": "protocol.schema.json#/$defs/Operation"
+        }
+      }
+    },
+    "scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/Scenario"
+      }
+    }
+  },
+  "$defs": {
+    "Expected": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "ok",
+            "value"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "value": true
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "ok",
+            "error"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "ok": {
+              "const": false
+            },
+            "error": {
+              "type": "object",
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "$ref": "protocol.schema.json#/$defs/ErrorType"
+                },
+                "messageContains": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Node": {
+      "type": "object",
+      "required": [
+        "expect"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "expect": {
+          "enum": [
+            "success",
+            "revert",
+            "reject"
+          ]
+        },
+        "fund": {
+          "type": "array",
+          "items": {
+            "$ref": "protocol.schema.json#/$defs/Address"
+          }
+        },
+        "feePayer": {
+          "$ref": "protocol.schema.json#/$defs/Address"
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "knownIssue": {
+          "type": "object",
+          "required": [
+            "reason",
+            "problems"
+          ],
+          "additionalProperties": false,
+          "description": "A known node bug: the node case reports KNOWN only when its problems are exactly these; it fails when they change or disappear.",
+          "properties": {
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            },
+            "problems": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "enum": [
+                  "verdict",
+                  "hash",
+                  "sender",
+                  "feePayer",
+                  "storedRaw",
+                  "noReceipt"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "Scenario": {
+      "type": "object",
+      "required": [
+        "name",
+        "description",
+        "tags",
+        "input",
+        "expected"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "adapters": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "sdkVersions": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "skipReasons": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "input": true,
+        "expected": {
+          "$ref": "#/$defs/Expected"
+        },
+        "node": {
+          "$ref": "#/$defs/Node"
+        }
+      }
+    }
+  }
+}
