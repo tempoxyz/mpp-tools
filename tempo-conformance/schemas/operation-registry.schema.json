@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tempo.xyz/mpp-tools/tempo-conformance/schemas/operation-registry.schema.json",
+  "title": "Tempo SDK Conformance Operation Registry",
+  "type": "object",
+  "required": [
+    "schema",
+    "operations"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schema": {
+      "const": 1
+    },
+    "operations": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "$ref": "protocol.schema.json#/$defs/Operation"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "category",
+          "inputRef",
+          "successRef",
+          "errorTypes",
+          "comparison",
+          "description"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "vector"
+            ]
+          },
+          "inputRef": {
+            "type": "string",
+            "pattern": "^protocol\\.schema\\.json#/"
+          },
+          "successRef": {
+            "type": "string",
+            "pattern": "^protocol\\.schema\\.json#/"
+          },
+          "errorTypes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "protocol.schema.json#/$defs/ErrorType"
+            }
+          },
+          "comparison": {
+            "type": "string",
+            "enum": [
+              "exact"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

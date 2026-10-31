@@ -17,11 +17,26 @@ node's own encoding.
 
 ## Adapter ABI
 
-Each adapter lives in `adapters/<name>/` with an `adapter.json` manifest:
+Each adapter lives in `adapters/<name>/` with an `adapter.json` manifest
+(`schemas/adapter-manifest.schema.json`, the MPP manifest plus `sdk` and
+`capabilityGaps`):
 
 ```json
-{ "name": "go", "language": "go", "build": ["go", "build", "-o", "adapter", "."], "command": ["./adapter"], "cwd": ".", "capabilities": ["tx.sign", "tx.decode", "key_authorization.sign"] }
+{
+  "schema": 1, "name": "go", "language": "go",
+  "sdk": { "package": "github.com/tempoxyz/tempo-go", "manifest": "go.mod", "lockfile": "go.mod" },
+  "build": ["sh", "build.sh"], "command": ["./adapter"], "cwd": ".",
+  "capabilities": ["tx.sign", "tx.decode", "key_authorization.sign"],
+  "capabilityGaps": { "signature.recover": "why, with file:line and the issue or PR" }
+}
 ```
+
+`sdk` names the package under test and the lockfile that pins it;
+`scripts/sdk_version.py` reads the version `sdkVersions` constraints are
+evaluated against from there. Every operation in `operations.json` that an
+adapter does not advertise needs a `capabilityGaps` reason. The adapter
+translates JSON to and from SDK types only: encoding, hashing and signing come
+from the SDK, and an input the SDK has no API for answers `unsupported`.
 
 `command` reads one JSON request per stdin line and writes one JSON response
 line per request, in order, until stdin closes. stderr is for logs.
@@ -64,18 +79,26 @@ type Tx = {
 }
 
 type TokenLimit = { token: Address; limit: Int; period?: Int }  // period "0" (default) = one-off limit, >0 = resets every period seconds
+type SelectorRule = { selector: Hex /* 4 bytes */; recipients?: Address[] }  // absent or [] = any recipient
+type CallScope = { target: Address; selectorRules?: SelectorRule[] }        // absent or [] = any selector on target
 type KeyAuthorization = {
   chainId: Int
   keyType: "secp256k1" | "p256" | "webauthn"
   keyId: Address
   expiry?: Int | null            // null = never expires
   limits?: TokenLimit[] | null   // null = unlimited, [] = no spending
+  allowedCalls?: CallScope[] | null  // TIP-1011 call scopes: null = unrestricted, [] = no call allowed
+  witness?: Hash | null          // TIP-1053: null = none; the all-zero hash is a present witness
+  isAdmin?: boolean              // TIP-1049 admin access key (default false)
+  account?: Address | null       // TIP-1049 account the authorization is bound to
 }
 type SignedKeyAuthorizationInput = { authorization: KeyAuthorization; privateKey: Hex }  // root key signs
 
 type Signer =
   | { type: "secp256k1"; privateKey: Hex }
-  | { type: "keychain"; accessKeyPrivateKey: Hex; rootAccount: Address }  // secp256k1 access key, V2 keychain envelope (0x04)
+  | { type: "keychain"; accessKeyPrivateKey: Hex; rootAccount: Address; version?: "v1" | "v2" }
+    // secp256k1 access key. v2 (default): envelope 0x04 || root || inner, inner over keccak256(0x04 || hash || root).
+    // v1 (legacy, deprecated at T1C): envelope 0x03 || root || inner, inner over the signing hash itself.
 ```
 
 ### `tx.sign`
@@ -114,7 +137,11 @@ Output:
     chainId, nonce, nonceKey, gas, maxFeePerGas, maxPriorityFeePerGas: Int
     calls: Call[]; accessList: AccessListItem[]
     validBefore: Int | null; validAfter: Int | null; feeToken: Address | null
-    keyAuthorization: { chainId: Int; keyType: string; keyId: Address; expiry: Int | null; limits: TokenLimit[] | null } | null
+    keyAuthorization: {
+      chainId: Int; keyType: string; keyId: Address; expiry: Int | null; limits: TokenLimit[] | null
+      allowedCalls: CallScope[] | null   // every scope with selectorRules, every rule with recipients, as arrays
+      witness: Hash | null; isAdmin: boolean; account: Address | null
+    } | null
   }
   signatureType: "secp256k1" | "p256" | "webauthn" | "keychain"
   sender: Address               // recovered (rootAccount for keychain)
@@ -151,25 +178,46 @@ answers `verification_error`.
 
 ## Vectors
 
-`vectors/*.json` hold `{ "cases": [Case] }`:
+`operations.json` registers each operation with its input and output schema
+(`schemas/protocol.schema.json`) and error types. `vectors/*.json` use the MPP
+vector format (`schemas/vector.schema.json`), one operation per file:
 
 ```ts
-type Case = {
-  name: string
-  op: string
-  input: object
-  expected?: object              // exact output
-  expectedError?: string         // error type
+type VectorFile = {
+  version: string                // SemVer of the file format and content
+  description: string
+  spec_ref: string
+  generatedBy?: string
+  commands: { operation: Operation }
+  scenarios: Scenario[]
+}
+type Scenario = {
+  name: string                   // unique across all files
+  description: string
+  tags: string[]
+  adapters?: string[]            // run only on these adapters
+  sdkVersions?: { [adapter: string]: string }  // run on that adapter only when its pinned SDK satisfies the constraint
+  skipReasons?: { [adapter: string]: string }  // required: exactly one per adapter that sdkVersions constrains or adapters leaves out
+  source: string                 // where the scenario was bootstrapped from
+  input: object                  // validated against the operation's input schema
+  expected: { ok: true; value: object }        // exact output, validated against the operation's output schema
+          | { ok: false; error: { type: ErrorType; messageContains?: string } }
   node?: {
-    expect: "success" | "revert" | "reject"  // submit expected.raw (or input.raw) to the local node
+    expect: "success" | "revert" | "reject"  // submit the adapter's raw (tx.sign) or input.raw (tx.decode) to the local node
     fund?: Address[]             // faucet-fund these first
-    knownIssue?: string          // a known node bug: a mismatch is reported as KNOWN, not a failure
+    feePayer?: Address           // who the receipt must name as fee payer
+    requires?: string[]          // node scenarios that must pass first (earlier in file order)
+    knownIssue?: { reason: string; problems: string[] }  // a known node bug: KNOWN only when the problems match exactly
   }
-  source?: string                // where the case was bootstrapped from
 }
 ```
 
-Cases with `node` run in file order on one fresh dev node. The runner funds each
-sender and fee payer with the faucet before submitting. Each case uses its own
-sender key, so nonces are fixed from genesis.
+Constraints are npm-style SemVer (`=`, `<`, `<=`, `>`, `>=`, whitespace-separated
+comparators combined with AND), evaluated by the MPP suite's
+`version_constraints.py`. Unknown adapter names, invalid constraints and missing
+or extra `skipReasons` are runner errors, not skips.
 
+Scenarios with `node` run in file order on one fresh dev node per adapter. The
+runner funds each sender or fee payer with the faucet before submitting. Each
+scenario uses its own sender key, so nonces are fixed from genesis. A `tx.sign`
+scenario an adapter skipped or could not sign is skipped on its node too.

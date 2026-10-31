@@ -30,7 +30,42 @@ const keyType = (t: string) => {
 }
 const keyTypeOut = (t: string) => (t === 'webAuthn' ? 'webauthn' : t)
 
+// allowedCalls (node form, nested by target) -> ox's flat scopes.
+function toScopes(calls: any) {
+  if (!Array.isArray(calls)) throw new AdapterError('invalid_input', 'allowedCalls must be an array or null')
+  return calls.flatMap((c: any) => {
+    const rules = c.selectorRules ?? []
+    if (rules.length === 0) return [{ address: c.target }]
+    return rules.map((r: any) => ({
+      address: c.target,
+      selector: r.selector,
+      ...(r.recipients && r.recipients.length > 0 ? { recipients: r.recipients } : {}),
+    }))
+  })
+}
+
+// ox's flat scopes -> allowedCalls (node form): one entry per target, in first-seen order.
+function fromScopes(scopes: any[] | undefined) {
+  if (scopes === undefined) return null
+  const out: any[] = []
+  for (const s of scopes) {
+    let entry = out.find((e) => e.target === s.address.toLowerCase())
+    if (!entry) out.push((entry = { target: s.address.toLowerCase(), selectorRules: [] }))
+    if (s.selector !== undefined)
+      entry.selectorRules.push({ selector: s.selector.toLowerCase(), recipients: (s.recipients ?? []).map((r: string) => r.toLowerCase()) })
+  }
+  return out
+}
+
+const hexOf = (v: unknown, bytes: number, field: string) => {
+  if (typeof v !== 'string' || !new RegExp('^0x[0-9a-fA-F]{' + bytes * 2 + '}$').test(v)) throw new AdapterError('invalid_input', field + ' must be ' + bytes + ' bytes of hex')
+  return v
+}
+
 function toAuth(a: any) {
+  if (a.isAdmin !== undefined && a.isAdmin !== null && typeof a.isAdmin !== 'boolean') throw new AdapterError('invalid_input', 'isAdmin must be a boolean')
+  if (a.witness !== undefined && a.witness !== null) hexOf(a.witness, 32, 'witness')
+  for (const c of a.allowedCalls ?? []) for (const r of c.selectorRules ?? []) hexOf(r.selector, 4, 'selector')
   return {
     address: a.keyId,
     chainId: big(a.chainId, 'authorization.chainId'),
@@ -45,6 +80,10 @@ function toAuth(a: any) {
           })),
         }
       : {}),
+    ...(a.allowedCalls !== undefined && a.allowedCalls !== null ? { scopes: toScopes(a.allowedCalls) } : {}),
+    ...(a.witness !== undefined && a.witness !== null ? { witness: a.witness } : {}),
+    ...(a.isAdmin ? { isAdmin: true } : {}),
+    ...(a.account !== undefined && a.account !== null ? { account: a.account } : {}),
   } as any
 }
 
@@ -98,9 +137,12 @@ function txSign(input: any) {
     sender = Address.fromPublicKey(Secp256k1.getPublicKey({ privateKey: input.signer.privateKey }))
   } else if (input.signer.type === 'keychain') {
     const root = input.signer.rootAccount
-    const payload = TxEnvelopeTempo.getSignPayload(envelope, { from: root })
+    const version = input.signer.version ?? 'v2'
+    if (version !== 'v1' && version !== 'v2') throw new AdapterError('invalid_input', 'signer.version must be v1 or v2')
+    // V2 binds the root: the access key signs keccak256(0x04 || sigHash || root). V1 signs sigHash.
+    const payload = TxEnvelopeTempo.getSignPayload(envelope, version === 'v2' ? { from: root } : {})
     const inner = Secp256k1.sign({ payload, privateKey: input.signer.accessKeyPrivateKey })
-    signature = SignatureEnvelope.from({ type: 'keychain', version: 'v2', userAddress: root, inner: SignatureEnvelope.from(inner) } as any)
+    signature = SignatureEnvelope.from({ type: 'keychain', version, userAddress: root, inner: SignatureEnvelope.from(inner) } as any)
     sender = root
   } else throw new AdapterError('unsupported', 'signer type ' + input.signer.type)
 
@@ -167,6 +209,10 @@ function txDecode(input: any) {
             keyId: ka.address.toLowerCase(),
             expiry: dec(ka.expiry),
             limits: ka.limits ? ka.limits.map((l: any) => ({ token: l.token.toLowerCase(), limit: dec(l.limit), period: dec(l.period ?? 0) })) : null,
+            allowedCalls: fromScopes(ka.scopes),
+            witness: lower(ka.witness),
+            isAdmin: ka.isAdmin === true,
+            account: lower(ka.account),
           }
         : null,
     },

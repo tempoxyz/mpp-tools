@@ -1,12 +1,18 @@
 {
-  "description": "key_authorization.sign: signing hash, signature envelope and RLP of signed key authorizations.",
+  "$schema": "../schemas/vector.schema.json",
+  "version": "2.0.0",
+  "description": "key_authorization.sign: signing hash, signature envelope and RLP of signed key authorizations, including TIP-1011 call scopes, TIP-1053 witnesses and TIP-1049 admin keys and account binding.",
+  "spec_ref": "Access keys: https://docs.tempo.xyz/protocol/transactions/spec-tempo-transaction#access-keys; TIP-1011, TIP-1049, TIP-1053; tempo-primitives crates/primitives/src/transaction/key_authorization.rs",
   "generatedBy": "adapters/typescript/generate.ts (ox 0.14.59)",
-  "cases": [
+  "commands": {
+    "operation": "key_authorization.sign"
+  },
+  "scenarios": [
     {
       "name": "ka_unlimited_no_expiry",
       "description": "No expiry, no limits.",
+      "tags": [],
       "source": "tempo-go key_authorization_test.go; ox KeyAuthorization.test.ts",
-      "op": "key_authorization.sign",
       "input": {
         "authorization": {
           "chainId": "1337",
@@ -16,16 +22,21 @@
         "privateKey": "0x2605c916d373901a9a32c1c4d128ef36162f30d092246b3eefb5a70c0d93328e"
       },
       "expected": {
-        "signingHash": "0xc13ec9b9dc638d4d1c1b603b8fd73af7bd93b63935b88455f87e153d4be5e3d3",
-        "signature": "0xfd1fe655ce0113aab2b9115b15201e28d4bede10ac0612571f008a71684089043a3fe48ca82b2140018d09d6302f4ef684f6550593f26e392512e071302f9f9a1b",
-        "serialized": "0xf85dd982053980947ae29539d1b7e18bb5919e2b7686c7173fdddda6b841fd1fe655ce0113aab2b9115b15201e28d4bede10ac0612571f008a71684089043a3fe48ca82b2140018d09d6302f4ef684f6550593f26e392512e071302f9f9a1b"
+        "ok": true,
+        "value": {
+          "signingHash": "0xc13ec9b9dc638d4d1c1b603b8fd73af7bd93b63935b88455f87e153d4be5e3d3",
+          "signature": "0xfd1fe655ce0113aab2b9115b15201e28d4bede10ac0612571f008a71684089043a3fe48ca82b2140018d09d6302f4ef684f6550593f26e392512e071302f9f9a1b",
+          "serialized": "0xf85dd982053980947ae29539d1b7e18bb5919e2b7686c7173fdddda6b841fd1fe655ce0113aab2b9115b15201e28d4bede10ac0612571f008a71684089043a3fe48ca82b2140018d09d6302f4ef684f6550593f26e392512e071302f9f9a1b"
+        }
       }
     },
     {
       "name": "ka_expiry",
       "description": "Expiry only.",
+      "tags": [
+        "expiry"
+      ],
       "source": "ox KeyAuthorization.test.ts",
-      "op": "key_authorization.sign",
       "input": {
         "authorization": {
           "chainId": "1337",
@@ -36,16 +47,19 @@
         "privateKey": "0xb88d94bffcd71f9159133daed8ddd24638eb6e22d38a9820417271d8dfe34a00"
       },
       "expected": {
-        "signingHash": "0xdfb401caa2649efd1a303b756b5b9693c1731bd148d742b200ed929f1e291187",
-        "signature": "0xcaf9df6ca8db753e480f4be7bd541ce19c0bea9193867000ddf2004d2e2ef7bc4d6459081a04e8d9e1d50ad9a740c7225a35c6f6e865c3cdd70e4af9fe4464691b",
-        "serialized": "0xf862de82053980947ae29539d1b7e18bb5919e2b7686c7173fdddda68470dbd880b841caf9df6ca8db753e480f4be7bd541ce19c0bea9193867000ddf2004d2e2ef7bc4d6459081a04e8d9e1d50ad9a740c7225a35c6f6e865c3cdd70e4af9fe4464691b"
+        "ok": true,
+        "value": {
+          "signingHash": "0xdfb401caa2649efd1a303b756b5b9693c1731bd148d742b200ed929f1e291187",
+          "signature": "0xcaf9df6ca8db753e480f4be7bd541ce19c0bea9193867000ddf2004d2e2ef7bc4d6459081a04e8d9e1d50ad9a740c7225a35c6f6e865c3cdd70e4af9fe4464691b",
+          "serialized": "0xf862de82053980947ae29539d1b7e18bb5919e2b7686c7173fdddda68470dbd880b841caf9df6ca8db753e480f4be7bd541ce19c0bea9193867000ddf2004d2e2ef7bc4d6459081a04e8d9e1d50ad9a740c7225a35c6f6e865c3cdd70e4af9fe4464691b"
+        }
       }
     },
     {
       "name": "ka_one_limit",
       "description": "One one-off limit.",
+      "tags": [],
       "source": "ox KeyAuthorization.test.ts",
-      "op": "key_authorization.sign",
       "input": {
         "authorization": {
           "chainId": "1337",
@@ -61,16 +75,21 @@
         "privateKey": "0x781d9c5e8631999f3a8b7c4dfbdbc1a61fbae19d2825e34533f91c496afe7fae"
       },
       "expected": {
-        "signingHash": "0x88989e2dbca6a65367611c239af5662d7751c23f6d342de70927810eb093d533",
-        "signature": "0x160e5d0e24677f92fde825b134d18f421040211cfd26198f5599003af40d4c926ad27c08a7ab2b31481b51dd1552c3bc20640ad65d376d2903273c6629300d8d1c",
-        "serialized": "0xf879f582053980947ae29539d1b7e18bb5919e2b7686c7173fdddda680dad99420c000000000000000000000000000000000000083989680b841160e5d0e24677f92fde825b134d18f421040211cfd26198f5599003af40d4c926ad27c08a7ab2b31481b51dd1552c3bc20640ad65d376d2903273c6629300d8d1c"
+        "ok": true,
+        "value": {
+          "signingHash": "0x88989e2dbca6a65367611c239af5662d7751c23f6d342de70927810eb093d533",
+          "signature": "0x160e5d0e24677f92fde825b134d18f421040211cfd26198f5599003af40d4c926ad27c08a7ab2b31481b51dd1552c3bc20640ad65d376d2903273c6629300d8d1c",
+          "serialized": "0xf879f582053980947ae29539d1b7e18bb5919e2b7686c7173fdddda680dad99420c000000000000000000000000000000000000083989680b841160e5d0e24677f92fde825b134d18f421040211cfd26198f5599003af40d4c926ad27c08a7ab2b31481b51dd1552c3bc20640ad65d376d2903273c6629300d8d1c"
+        }
       }
     },
     {
       "name": "ka_two_limits",
       "description": "Two tokens.",
+      "tags": [
+        "expiry"
+      ],
       "source": "pytempo test_keychain.py",
-      "op": "key_authorization.sign",
       "input": {
         "authorization": {
           "chainId": "1337",
@@ -91,16 +110,21 @@
         "privateKey": "0xfdfd388a6dff12c10383bc5e9db7a40346b0fe895ec3aed104a412b732603f3d"
       },
       "expected": {
-        "signingHash": "0xe11ba1447dd460ac07b2d8e12a969a2d5cce1da7469a8e8d658d9a26055e05eb",
-        "signature": "0xae9ca8953cd07139e27c97de602651cb470855723cf185cf614e7d7f3e45344716d2c2545e70cea9e60706ab4785d5894d82d9155ef982c916e8f2cf8349c4a81c",
-        "serialized": "0xf895f85082053980947ae29539d1b7e18bb5919e2b7686c7173fdddda68470dbd880f1d99420c000000000000000000000000000000000000083989680d69420c000000000000000000000000000000000000101b841ae9ca8953cd07139e27c97de602651cb470855723cf185cf614e7d7f3e45344716d2c2545e70cea9e60706ab4785d5894d82d9155ef982c916e8f2cf8349c4a81c"
+        "ok": true,
+        "value": {
+          "signingHash": "0xe11ba1447dd460ac07b2d8e12a969a2d5cce1da7469a8e8d658d9a26055e05eb",
+          "signature": "0xae9ca8953cd07139e27c97de602651cb470855723cf185cf614e7d7f3e45344716d2c2545e70cea9e60706ab4785d5894d82d9155ef982c916e8f2cf8349c4a81c",
+          "serialized": "0xf895f85082053980947ae29539d1b7e18bb5919e2b7686c7173fdddda68470dbd880f1d99420c000000000000000000000000000000000000083989680d69420c000000000000000000000000000000000000101b841ae9ca8953cd07139e27c97de602651cb470855723cf185cf614e7d7f3e45344716d2c2545e70cea9e60706ab4785d5894d82d9155ef982c916e8f2cf8349c4a81c"
+        }
       }
     },
     {
       "name": "ka_no_spending",
       "description": "limits = [].",
+      "tags": [
+        "no-spending"
+      ],
       "source": "tempo-primitives",
-      "op": "key_authorization.sign",
       "input": {
         "authorization": {
           "chainId": "1337",
@@ -111,16 +135,27 @@
         "privateKey": "0x8dd597aff37cba8cb2e9681cae8d24b6167e2679c120698d25d45b021f5dadbc"
       },
       "expected": {
-        "signingHash": "0x92ce711ba0d5add780cea7d3fe8cd06ea7b99835c7b43e513aec1ba463182605",
-        "signature": "0x283aa29d9f358cae471c924e935616d0370eaa7231a8d64ec32c73d4dde812b3377c81b96666428dca002c81eeab8380194ac7e1cd28ac83d700f8c7c96ae0cb1b",
-        "serialized": "0xf85fdb82053980947ae29539d1b7e18bb5919e2b7686c7173fdddda680c0b841283aa29d9f358cae471c924e935616d0370eaa7231a8d64ec32c73d4dde812b3377c81b96666428dca002c81eeab8380194ac7e1cd28ac83d700f8c7c96ae0cb1b"
+        "ok": true,
+        "value": {
+          "signingHash": "0x92ce711ba0d5add780cea7d3fe8cd06ea7b99835c7b43e513aec1ba463182605",
+          "signature": "0x283aa29d9f358cae471c924e935616d0370eaa7231a8d64ec32c73d4dde812b3377c81b96666428dca002c81eeab8380194ac7e1cd28ac83d700f8c7c96ae0cb1b",
+          "serialized": "0xf85fdb82053980947ae29539d1b7e18bb5919e2b7686c7173fdddda680c0b841283aa29d9f358cae471c924e935616d0370eaa7231a8d64ec32c73d4dde812b3377c81b96666428dca002c81eeab8380194ac7e1cd28ac83d700f8c7c96ae0cb1b"
+        }
       }
     },
     {
       "name": "ka_periodic_limit",
       "description": "Limit resetting every 86400 s.",
+      "tags": [
+        "periodic-limit"
+      ],
+      "sdkVersions": {
+        "python": ">0.6.2"
+      },
+      "skipReasons": {
+        "python": "pytempo rejects periodic token limits in key authorizations (pytempo/keychain.py:126-130, :570), which tempo-primitives and the node support. Fixed by pytempo#134 (https://github.com/tempoxyz/pytempo/pull/134), merged but not yet released (release PR pytempo#135, 0.7.0)."
+      },
       "source": "tempo-primitives TokenLimit.period",
-      "op": "key_authorization.sign",
       "input": {
         "authorization": {
           "chainId": "1337",
@@ -137,16 +172,91 @@
         "privateKey": "0xce1fd7bb97584bc031bb1bb795e841ea458b0da96373013719d6d5621b56c092"
       },
       "expected": {
-        "signingHash": "0xcca1282b0eca15c3408d1ca9a4a29b981e49cfc9b13eac87b9303234e01f85ff",
-        "signature": "0xbb9a6f78dd6970b84fc8fee530a78c409007f3e1e19708adff60b44929ae81f15ad3211a3a8266b8a7f69d627a3f05b459cc6407911ed7bcc2ca3dca808f86a81c",
-        "serialized": "0xf87ef83982053980947ae29539d1b7e18bb5919e2b7686c7173fdddda680dedd9420c0000000000000000000000000000000000000834c4b4083015180b841bb9a6f78dd6970b84fc8fee530a78c409007f3e1e19708adff60b44929ae81f15ad3211a3a8266b8a7f69d627a3f05b459cc6407911ed7bcc2ca3dca808f86a81c"
+        "ok": true,
+        "value": {
+          "signingHash": "0xcca1282b0eca15c3408d1ca9a4a29b981e49cfc9b13eac87b9303234e01f85ff",
+          "signature": "0xbb9a6f78dd6970b84fc8fee530a78c409007f3e1e19708adff60b44929ae81f15ad3211a3a8266b8a7f69d627a3f05b459cc6407911ed7bcc2ca3dca808f86a81c",
+          "serialized": "0xf87ef83982053980947ae29539d1b7e18bb5919e2b7686c7173fdddda680dedd9420c0000000000000000000000000000000000000834c4b4083015180b841bb9a6f78dd6970b84fc8fee530a78c409007f3e1e19708adff60b44929ae81f15ad3211a3a8266b8a7f69d627a3f05b459cc6407911ed7bcc2ca3dca808f86a81c"
+        }
+      }
+    },
+    {
+      "name": "ka_zero_period_limit",
+      "description": "Explicit period \"0\": a one-off limit, encoded with the period omitted.",
+      "tags": [],
+      "source": "tempo-primitives TokenLimitWire (period 0 = omitted)",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "secp256k1",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6",
+          "limits": [
+            {
+              "token": "0x20c0000000000000000000000000000000000000",
+              "limit": "5000000",
+              "period": "0"
+            }
+          ]
+        },
+        "privateKey": "0x0fa44e7c81fade8987bd0097a73f2cbfe05385ea7ff65b0716bba1d6c8cbad6a"
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "signingHash": "0x2dadff9ecd1e6848692f7cfda046124c393d6ac28ddc35dacc6d2af03ab68908",
+          "signature": "0xf9b163c84ebdd6423780b2cba2999735c3efe44ec89672a4c182d62a996034b170d4b49aba3c9a0f4e4cd8789690525c53f4c012726632a794b1c7b927dd8da31c",
+          "serialized": "0xf879f582053980947ae29539d1b7e18bb5919e2b7686c7173fdddda680dad99420c0000000000000000000000000000000000000834c4b40b841f9b163c84ebdd6423780b2cba2999735c3efe44ec89672a4c182d62a996034b170d4b49aba3c9a0f4e4cd8789690525c53f4c012726632a794b1c7b927dd8da31c"
+        }
+      }
+    },
+    {
+      "name": "ka_mixed_limits",
+      "description": "One one-off and one periodic limit.",
+      "tags": [
+        "periodic-limit"
+      ],
+      "sdkVersions": {
+        "python": ">0.6.2"
+      },
+      "skipReasons": {
+        "python": "pytempo 0.6.2 rejects periodic token limits in key authorizations (pytempo/keychain.py:570) and TokenLimit.to_rlp drops period (keychain.py:126-130). Fixed by pytempo#134 (https://github.com/tempoxyz/pytempo/pull/134), merged but not yet released (release PR pytempo#135, 0.7.0)."
+      },
+      "source": "tempo-primitives TokenLimit.period",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "secp256k1",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6",
+          "limits": [
+            {
+              "token": "0x20c0000000000000000000000000000000000000",
+              "limit": "1000000"
+            },
+            {
+              "token": "0x20c0000000000000000000000000000000000001",
+              "limit": "5000000",
+              "period": "3600"
+            }
+          ]
+        },
+        "privateKey": "0x00166995667443d0e556275e97452af98b60b7ed3f1e3ea19228aa2fda80240a"
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "signingHash": "0x6042b13e885a2aed0762e864fc4f3cbb0bc77e6638fbe79d2b5cf158b5692a92",
+          "signature": "0x674a087af0bd2f35d612235e342d0020e1f794b19e2f8c9a62541649164a3b21716d391f05efd5b2b02de1acd3dc9ec4fe87475226a9b855765afc06762b97911b",
+          "serialized": "0xf897f85282053980947ae29539d1b7e18bb5919e2b7686c7173fdddda680f7d99420c0000000000000000000000000000000000000830f4240dc9420c0000000000000000000000000000000000001834c4b40820e10b841674a087af0bd2f35d612235e342d0020e1f794b19e2f8c9a62541649164a3b21716d391f05efd5b2b02de1acd3dc9ec4fe87475226a9b855765afc06762b97911b"
+        }
       }
     },
     {
       "name": "ka_p256_key",
       "description": "Authorizes a P256 key (keyId is the P256 address).",
+      "tags": [
+        "p256"
+      ],
       "source": "ox KeyAuthorization.test.ts p256",
-      "op": "key_authorization.sign",
       "input": {
         "authorization": {
           "chainId": "1337",
@@ -156,16 +266,21 @@
         "privateKey": "0xeb30d8cc279e4739a18ecb12c69d31c9c6da2333a502ee0e4c7474ad8b64dc60"
       },
       "expected": {
-        "signingHash": "0xd70d962627860d43b0a02a7800d80ff00da9bfad20355d97d504ea280a57406e",
-        "signature": "0x0628e153ea0268296a640baef8f2f894f428110946b6fd948c2495048e665af61efdf8dd6577e9b26ddfdd6efb557ebcea4fa8dd22215fc1ab6db5c7079103261b",
-        "serialized": "0xf85dd982053901947ae29539d1b7e18bb5919e2b7686c7173fdddda6b8410628e153ea0268296a640baef8f2f894f428110946b6fd948c2495048e665af61efdf8dd6577e9b26ddfdd6efb557ebcea4fa8dd22215fc1ab6db5c7079103261b"
+        "ok": true,
+        "value": {
+          "signingHash": "0xd70d962627860d43b0a02a7800d80ff00da9bfad20355d97d504ea280a57406e",
+          "signature": "0x0628e153ea0268296a640baef8f2f894f428110946b6fd948c2495048e665af61efdf8dd6577e9b26ddfdd6efb557ebcea4fa8dd22215fc1ab6db5c7079103261b",
+          "serialized": "0xf85dd982053901947ae29539d1b7e18bb5919e2b7686c7173fdddda6b8410628e153ea0268296a640baef8f2f894f428110946b6fd948c2495048e665af61efdf8dd6577e9b26ddfdd6efb557ebcea4fa8dd22215fc1ab6db5c7079103261b"
+        }
       }
     },
     {
       "name": "ka_webauthn_key",
       "description": "Authorizes a WebAuthn key.",
+      "tags": [
+        "webauthn"
+      ],
       "source": "ox KeyAuthorization.test.ts webAuthn",
-      "op": "key_authorization.sign",
       "input": {
         "authorization": {
           "chainId": "1337",
@@ -175,16 +290,19 @@
         "privateKey": "0x19d400147904f7089985fb7d8dbf3691dba7d6af157076a921a8392e82e39aad"
       },
       "expected": {
-        "signingHash": "0x353332bb40edc5ac83fff31ef880094af6c68b8d0ad6d7f0f4dc1dd62e0b3256",
-        "signature": "0xdd31898ecfe7d7e8f396aa7741e7bb1c75c9609db6750334f833597a7e71e18e2bfebc262d4119425c864eeca1da4389333dc080a49a30f2b1203116093f60611b",
-        "serialized": "0xf85dd982053902947ae29539d1b7e18bb5919e2b7686c7173fdddda6b841dd31898ecfe7d7e8f396aa7741e7bb1c75c9609db6750334f833597a7e71e18e2bfebc262d4119425c864eeca1da4389333dc080a49a30f2b1203116093f60611b"
+        "ok": true,
+        "value": {
+          "signingHash": "0x353332bb40edc5ac83fff31ef880094af6c68b8d0ad6d7f0f4dc1dd62e0b3256",
+          "signature": "0xdd31898ecfe7d7e8f396aa7741e7bb1c75c9609db6750334f833597a7e71e18e2bfebc262d4119425c864eeca1da4389333dc080a49a30f2b1203116093f60611b",
+          "serialized": "0xf85dd982053902947ae29539d1b7e18bb5919e2b7686c7173fdddda6b841dd31898ecfe7d7e8f396aa7741e7bb1c75c9609db6750334f833597a7e71e18e2bfebc262d4119425c864eeca1da4389333dc080a49a30f2b1203116093f60611b"
+        }
       }
     },
     {
       "name": "ka_max_limit",
       "description": "uint256 max limit.",
+      "tags": [],
       "source": "new",
-      "op": "key_authorization.sign",
       "input": {
         "authorization": {
           "chainId": "1337",
@@ -200,16 +318,19 @@
         "privateKey": "0x57265e9bd95ce7dce03008a6409fdd57288d0b8c626c84f26615688ec6ae4d19"
       },
       "expected": {
-        "signingHash": "0xd1726310929bdb48d4ded000a4c8ad11705d541bccab70d30448c6152263582c",
-        "signature": "0x54bee6d4e5ec0f70d20995607bd3eec81197302fe4f219a88364b862736486da74897b55b45fae1ef18eb35c57a47ab2bd088ed9a865e629867812fa0c78c1411c",
-        "serialized": "0xf897f85282053980947ae29539d1b7e18bb5919e2b7686c7173fdddda680f7f69420c0000000000000000000000000000000000000a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb84154bee6d4e5ec0f70d20995607bd3eec81197302fe4f219a88364b862736486da74897b55b45fae1ef18eb35c57a47ab2bd088ed9a865e629867812fa0c78c1411c"
+        "ok": true,
+        "value": {
+          "signingHash": "0xd1726310929bdb48d4ded000a4c8ad11705d541bccab70d30448c6152263582c",
+          "signature": "0x54bee6d4e5ec0f70d20995607bd3eec81197302fe4f219a88364b862736486da74897b55b45fae1ef18eb35c57a47ab2bd088ed9a865e629867812fa0c78c1411c",
+          "serialized": "0xf897f85282053980947ae29539d1b7e18bb5919e2b7686c7173fdddda680f7f69420c0000000000000000000000000000000000000a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb84154bee6d4e5ec0f70d20995607bd3eec81197302fe4f219a88364b862736486da74897b55b45fae1ef18eb35c57a47ab2bd088ed9a865e629867812fa0c78c1411c"
+        }
       }
     },
     {
       "name": "ka_mainnet_chain",
       "description": "Chain 4217 (mainnet).",
+      "tags": [],
       "source": "new",
-      "op": "key_authorization.sign",
       "input": {
         "authorization": {
           "chainId": "4217",
@@ -219,9 +340,414 @@
         "privateKey": "0xbb64366c30e64beba16ead9251bf39f5e0e788d6b7d6a211a778fe675020572d"
       },
       "expected": {
-        "signingHash": "0xa515ef915eab9d6292739e99ce855e402c99044ef68f1e70d132fba3bb6812be",
-        "signature": "0xdcbe2e35fe69310a3dc871d43408b7999eea1719fe1ce9a7ce8fe026bc1ed8775cb49f93f1970e65f95b9074bb6a337d51b5569c3db04af7a32302929fcb047c1c",
-        "serialized": "0xf85dd982107980947ae29539d1b7e18bb5919e2b7686c7173fdddda6b841dcbe2e35fe69310a3dc871d43408b7999eea1719fe1ce9a7ce8fe026bc1ed8775cb49f93f1970e65f95b9074bb6a337d51b5569c3db04af7a32302929fcb047c1c"
+        "ok": true,
+        "value": {
+          "signingHash": "0xa515ef915eab9d6292739e99ce855e402c99044ef68f1e70d132fba3bb6812be",
+          "signature": "0xdcbe2e35fe69310a3dc871d43408b7999eea1719fe1ce9a7ce8fe026bc1ed8775cb49f93f1970e65f95b9074bb6a337d51b5569c3db04af7a32302929fcb047c1c",
+          "serialized": "0xf85dd982107980947ae29539d1b7e18bb5919e2b7686c7173fdddda6b841dcbe2e35fe69310a3dc871d43408b7999eea1719fe1ce9a7ce8fe026bc1ed8775cb49f93f1970e65f95b9074bb6a337d51b5569c3db04af7a32302929fcb047c1c"
+        }
+      }
+    },
+    {
+      "name": "ka_call_scope_target_only",
+      "description": "TIP-1011 call scope: any selector on one target.",
+      "tags": [
+        "call-scopes"
+      ],
+      "sdkVersions": {
+        "python": ">0.6.2"
+      },
+      "skipReasons": {
+        "python": "pytempo has no inline key authorization call scopes (TIP-1011 allowed_calls): KeyAuthorization always writes the field absent (pytempo/keychain.py:596 in 0.6.2, :590 on main). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump."
+      },
+      "source": "ox KeyAuthorization.test.ts scopes; tempo-primitives CallScope",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "secp256k1",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6",
+          "allowedCalls": [
+            {
+              "target": "0x20c0000000000000000000000000000000000000"
+            }
+          ]
+        },
+        "privateKey": "0x4faafd6922333ecbe31a9ea6fd105698adfc5463083c43abd2e1844525a1863f"
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "signingHash": "0x925c9b463659a55a0def0577901d45e4e38ed4e4a2371a99d547cef1d49477d8",
+          "signature": "0xaf20bb21dd279511e656a4a516e75c64c210f7c3fc2a9a8acab02bc58af7895b0fcd4b83623a60aec8f807ae01521074ea708ca017f82c659b98f4bdf2534fbf1c",
+          "serialized": "0xf877f382053980947ae29539d1b7e18bb5919e2b7686c7173fdddda68080d7d69420c0000000000000000000000000000000000000c0b841af20bb21dd279511e656a4a516e75c64c210f7c3fc2a9a8acab02bc58af7895b0fcd4b83623a60aec8f807ae01521074ea708ca017f82c659b98f4bdf2534fbf1c"
+        }
+      }
+    },
+    {
+      "name": "ka_call_scope_selector",
+      "description": "Call scope: transfer() on pathUSD, any recipient.",
+      "tags": [
+        "call-scopes"
+      ],
+      "sdkVersions": {
+        "python": ">0.6.2"
+      },
+      "skipReasons": {
+        "python": "pytempo has no inline key authorization call scopes (TIP-1011 allowed_calls): KeyAuthorization always writes the field absent (pytempo/keychain.py:596 in 0.6.2, :590 on main). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump."
+      },
+      "source": "ox KeyAuthorization.test.ts scopes",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "secp256k1",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6",
+          "allowedCalls": [
+            {
+              "target": "0x20c0000000000000000000000000000000000000",
+              "selectorRules": [
+                {
+                  "selector": "0xa9059cbb"
+                }
+              ]
+            }
+          ]
+        },
+        "privateKey": "0xdd9ebe59d23275e949d0d68b08e4c4380e064e3be487ba9b8d4bee6ba5368569"
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "signingHash": "0xfeab426a5bc2e8afc99c3587834c07f3f353086eac6034bcf504636aa3917d26",
+          "signature": "0x5902a6404d5c3d6cc6a66f45d52bebe07ac7742efc3080b7b25e1310d7108a897a98985144a1e05ee0ea465fb322401e725d96e415bd56692ea48928422859a91b",
+          "serialized": "0xf87ff83a82053980947ae29539d1b7e18bb5919e2b7686c7173fdddda68080dedd9420c0000000000000000000000000000000000000c7c684a9059cbbc0b8415902a6404d5c3d6cc6a66f45d52bebe07ac7742efc3080b7b25e1310d7108a897a98985144a1e05ee0ea465fb322401e725d96e415bd56692ea48928422859a91b"
+        }
+      }
+    },
+    {
+      "name": "ka_call_scope_recipients",
+      "description": "Call scope: transfer() on pathUSD to two allowed recipients.",
+      "tags": [
+        "call-scopes"
+      ],
+      "sdkVersions": {
+        "python": ">0.6.2"
+      },
+      "skipReasons": {
+        "python": "pytempo has no inline key authorization call scopes (TIP-1011 allowed_calls): KeyAuthorization always writes the field absent (pytempo/keychain.py:596 in 0.6.2, :590 on main). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump."
+      },
+      "source": "ox KeyAuthorization.test.ts scopes recipients",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "secp256k1",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6",
+          "allowedCalls": [
+            {
+              "target": "0x20c0000000000000000000000000000000000000",
+              "selectorRules": [
+                {
+                  "selector": "0xa9059cbb",
+                  "recipients": [
+                    "0x000000000000000000000000000000000000beef",
+                    "0x000000000000000000000000000000000000cafe"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "privateKey": "0x4e586e64ee1950e60b71b913364f635ef34182fd280a3d4d2436e5a92051b5b0"
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "signingHash": "0xd1ab650e68bd9d98208027db74d165ec9986e5894d78469bce265ca227938c5f",
+          "signature": "0x6dd965cb74d05f547a5e9ef06c031c712d266624e283e6005b1538b8e2e5ff797f9c8aa4368ed4d45d618943e0bda9cb5de4df9a79e4a9837c2cbcf259fe27321c",
+          "serialized": "0xf8abf86682053980947ae29539d1b7e18bb5919e2b7686c7173fdddda68080f849f8479420c0000000000000000000000000000000000000f1f084a9059cbbea94000000000000000000000000000000000000beef94000000000000000000000000000000000000cafeb8416dd965cb74d05f547a5e9ef06c031c712d266624e283e6005b1538b8e2e5ff797f9c8aa4368ed4d45d618943e0bda9cb5de4df9a79e4a9837c2cbcf259fe27321c"
+        }
+      }
+    },
+    {
+      "name": "ka_call_scopes_multiple",
+      "description": "Two targets: transfer() and approve() on pathUSD (one restricted to a recipient), and any call to AlphaUSD.",
+      "tags": [
+        "call-scopes"
+      ],
+      "sdkVersions": {
+        "python": ">0.6.2"
+      },
+      "skipReasons": {
+        "python": "pytempo has no inline key authorization call scopes (TIP-1011 allowed_calls): KeyAuthorization always writes the field absent (pytempo/keychain.py:596 in 0.6.2, :590 on main). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump."
+      },
+      "source": "tempo-primitives CallScope",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "secp256k1",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6",
+          "allowedCalls": [
+            {
+              "target": "0x20c0000000000000000000000000000000000000",
+              "selectorRules": [
+                {
+                  "selector": "0xa9059cbb",
+                  "recipients": [
+                    "0x000000000000000000000000000000000000beef"
+                  ]
+                },
+                {
+                  "selector": "0x095ea7b3"
+                }
+              ]
+            },
+            {
+              "target": "0x20c0000000000000000000000000000000000001"
+            }
+          ]
+        },
+        "privateKey": "0xb317592c17ac0ef3ba6362f5a7dcfc7417c04d36b4fde0940d4ddfc3d4df81db"
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "signingHash": "0x20158915a6a5cfb26d87bb466e6276e64509cd32c0aa720792a0d54045281386",
+          "signature": "0x6748be9a25ef6fbc8c71782723c0aa940b0e97204f134ec5d9c143890150cd5462e428c03215589f472b1a8e7c292a795b18bf4407f14c50e30934058fb421111c",
+          "serialized": "0xf8b4f86f82053980947ae29539d1b7e18bb5919e2b7686c7173fdddda68080f852f8399420c0000000000000000000000000000000000000e3db84a9059cbbd594000000000000000000000000000000000000beefc684095ea7b3c0d69420c0000000000000000000000000000000000001c0b8416748be9a25ef6fbc8c71782723c0aa940b0e97204f134ec5d9c143890150cd5462e428c03215589f472b1a8e7c292a795b18bf4407f14c50e30934058fb421111c"
+        }
+      }
+    },
+    {
+      "name": "ka_call_scopes_empty",
+      "description": "allowedCalls = []: scoped mode with no call allowed.",
+      "tags": [
+        "call-scopes"
+      ],
+      "sdkVersions": {
+        "python": ">0.6.2"
+      },
+      "skipReasons": {
+        "python": "pytempo has no inline key authorization call scopes (TIP-1011 allowed_calls): KeyAuthorization always writes the field absent (pytempo/keychain.py:596 in 0.6.2, :590 on main). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump."
+      },
+      "source": "tempo-primitives test_key_authorization_decode_accepts_explicit_deny_all_allowed_calls_field",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "secp256k1",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6",
+          "allowedCalls": []
+        },
+        "privateKey": "0x15a90e82ba56e89a7d390c2e7824ea617cc59149071617b0157d72d3e82f8c23"
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "signingHash": "0x283ff136e696d4e49dccf759a797efb6f66ce53ad3e471c5e3f3f7f16870d510",
+          "signature": "0xa31e44579b4d2814d98d9e8decd19e5379a208bb7e7e937667f7d4a2082713562056f9dcfa86b2dbbc2142c0cf1c0f56ba517eb1c28865fd35779b8eb4ac0e431c",
+          "serialized": "0xf860dc82053980947ae29539d1b7e18bb5919e2b7686c7173fdddda68080c0b841a31e44579b4d2814d98d9e8decd19e5379a208bb7e7e937667f7d4a2082713562056f9dcfa86b2dbbc2142c0cf1c0f56ba517eb1c28865fd35779b8eb4ac0e431c"
+        }
+      }
+    },
+    {
+      "name": "ka_witness",
+      "description": "TIP-1053 witness; the absent expiry, limits and allowedCalls before it are written as 0x80.",
+      "tags": [
+        "witness"
+      ],
+      "source": "ox KeyAuthorization witness; tempo-primitives witness placeholders test",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "secp256k1",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6",
+          "witness": "0x27da68e66df73123e991c7a3870d40b01b05435167de9044386324bc95bb8452"
+        },
+        "privateKey": "0x612bb429425f11c25692dc3da1814e4f36cb07d78af3db39911e19a5f97c46f2"
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "signingHash": "0x76df30f908b654aadb4bf31bb2365ff28094df2246cd78e773a3e36eaa3f08cd",
+          "signature": "0x6a838d8c7673b2e1a2934ff80d56f91036dde79833cba00c48881fdcc4738b010a735bfcfc8e55f5aa4b4436475f8e180a04f940e02044f49ad4b14554e57c421c",
+          "serialized": "0xf882f83d82053980947ae29539d1b7e18bb5919e2b7686c7173fdddda6808080a027da68e66df73123e991c7a3870d40b01b05435167de9044386324bc95bb8452b8416a838d8c7673b2e1a2934ff80d56f91036dde79833cba00c48881fdcc4738b010a735bfcfc8e55f5aa4b4436475f8e180a04f940e02044f49ad4b14554e57c421c"
+        }
+      }
+    },
+    {
+      "name": "ka_zero_witness",
+      "description": "The all-zero witness is present, not absent.",
+      "tags": [
+        "witness"
+      ],
+      "source": "tempo-primitives test_decode_accepts_explicit_zero_witness",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "secp256k1",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6",
+          "witness": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "privateKey": "0x082d17e70830bd2c0812d03a722e4c4b5debba1175193c9e6fadc849023fc4e6"
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "signingHash": "0xed10f31d170f45c0618fc8af9faa6ff41d432ff9f0893069a56bef7a9011ae99",
+          "signature": "0x5da182d7ac38c66fd95092f41ff5237d8b47fdb8fde2f3c9fe52e36a3971bc620deeda0a449aab5062a4857b91f8fd3bfa63e7b6b7ff0d689f1cf8bdf9deb36e1b",
+          "serialized": "0xf882f83d82053980947ae29539d1b7e18bb5919e2b7686c7173fdddda6808080a00000000000000000000000000000000000000000000000000000000000000000b8415da182d7ac38c66fd95092f41ff5237d8b47fdb8fde2f3c9fe52e36a3971bc620deeda0a449aab5062a4857b91f8fd3bfa63e7b6b7ff0d689f1cf8bdf9deb36e1b"
+        }
+      }
+    },
+    {
+      "name": "ka_admin",
+      "description": "TIP-1049 admin access key bound to an account.",
+      "tags": [
+        "admin-key",
+        "account-binding"
+      ],
+      "source": "ox KeyAuthorization isAdmin",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "secp256k1",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6",
+          "isAdmin": true,
+          "account": "0x1b5f7cbce5b47a780880db29bf6665460de2bc85"
+        },
+        "privateKey": "0x2f6c615d2a93a6621f71094543f69be7df4647908507f1219f3c2e56e8bac531"
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "signingHash": "0xc89d52cc9550707de2cbf1106ae59d8e03118504029c1fa5cb7a0757a8fd47aa",
+          "signature": "0xae22a32afbcb1e243550c828916250179fa68722f3169f6cd3765d7802ae41ca2c872280375ceb78f8cc2abdf51b1eae12024be639485d552191c2391ed96b8a1b",
+          "serialized": "0xf877f382053980947ae29539d1b7e18bb5919e2b7686c7173fdddda68080808001941b5f7cbce5b47a780880db29bf6665460de2bc85b841ae22a32afbcb1e243550c828916250179fa68722f3169f6cd3765d7802ae41ca2c872280375ceb78f8cc2abdf51b1eae12024be639485d552191c2391ed96b8a1b"
+        }
+      }
+    },
+    {
+      "name": "ka_account",
+      "description": "Root-signed authorization bound to an account (TIP-1049 account field) without admin rights.",
+      "tags": [
+        "account-binding"
+      ],
+      "source": "tempo-primitives KeyAuthorization.account",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "secp256k1",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6",
+          "account": "0x3b15b9ca9f49bb6ce05e8fcfe930900eab38455a"
+        },
+        "privateKey": "0x404d8330b0d2f8009ad93bc41cda502dd13575a931d0be751dce208f376032cb"
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "signingHash": "0x20a330e942a3107652c88abc70cec4fac2a489310a2198db301bf5d3e77d498c",
+          "signature": "0x6160c67f64b7ac8382a2a5ba7507ad91b48ae945f3bf5084cf3f158fc7cf048a42ad03d00324146ac1b4e3047c969e56347b2ad980f0f45786357ec0dd0c6dd11b",
+          "serialized": "0xf877f382053980947ae29539d1b7e18bb5919e2b7686c7173fdddda68080808080943b15b9ca9f49bb6ce05e8fcfe930900eab38455ab8416160c67f64b7ac8382a2a5ba7507ad91b48ae945f3bf5084cf3f158fc7cf048a42ad03d00324146ac1b4e3047c969e56347b2ad980f0f45786357ec0dd0c6dd11b"
+        }
+      }
+    },
+    {
+      "name": "ka_all_fields",
+      "description": "Every optional field of a non-admin key: expiry, mixed limits, call scopes, witness and account.",
+      "tags": [
+        "call-scopes",
+        "witness",
+        "account-binding",
+        "periodic-limit",
+        "expiry"
+      ],
+      "sdkVersions": {
+        "python": ">0.6.2"
+      },
+      "skipReasons": {
+        "python": "pytempo 0.6.2 rejects periodic token limits in key authorizations (pytempo/keychain.py:570) and TokenLimit.to_rlp drops period (keychain.py:126-130). Fixed by pytempo#134 (https://github.com/tempoxyz/pytempo/pull/134), merged but not yet released (release PR pytempo#135, 0.7.0)."
+      },
+      "source": "new",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "secp256k1",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6",
+          "expiry": "4102444800",
+          "limits": [
+            {
+              "token": "0x20c0000000000000000000000000000000000000",
+              "limit": "5"
+            },
+            {
+              "token": "0x20c0000000000000000000000000000000000001",
+              "limit": "7",
+              "period": "3600"
+            }
+          ],
+          "allowedCalls": [
+            {
+              "target": "0x20c0000000000000000000000000000000000000",
+              "selectorRules": [
+                {
+                  "selector": "0xa9059cbb",
+                  "recipients": [
+                    "0x000000000000000000000000000000000000beef"
+                  ]
+                }
+              ]
+            }
+          ],
+          "witness": "0x73ca230f0b3d77b39a123ea70859f5ad194c6dc981e1364c57e5011f5143daf7",
+          "account": "0x9ef746639b80f0720ba3ecfbbbf26b983c59d3ac"
+        },
+        "privateKey": "0x993c3806fd6334b747ccff598529d1734f90ad0f1d4f378b1762dc6c362c7721"
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "signingHash": "0xc961eb8b95048dd5d0c50723c369d3d372ad8b8428aba42ad106284a4ee70149",
+          "signature": "0x38c1ce958a6afa214ce845be0e15a91453493f29c7563ec44c3b538ad4c25bdb3bc1caead0aa84715342cac767bd6fd8b0921ea8fc7cf1314ebf4e15e4f320e51b",
+          "serialized": "0xf90100f8bb82053980947ae29539d1b7e18bb5919e2b7686c7173fdddda684f4865700f1d69420c000000000000000000000000000000000000005d99420c000000000000000000000000000000000000107820e10f3f29420c0000000000000000000000000000000000000dcdb84a9059cbbd594000000000000000000000000000000000000beefa073ca230f0b3d77b39a123ea70859f5ad194c6dc981e1364c57e5011f5143daf780949ef746639b80f0720ba3ecfbbbf26b983c59d3acb84138c1ce958a6afa214ce845be0e15a91453493f29c7563ec44c3b538ad4c25bdb3bc1caead0aa84715342cac767bd6fd8b0921ea8fc7cf1314ebf4e15e4f320e51b"
+        }
+      }
+    },
+    {
+      "name": "ka_reject_admin_with_limits",
+      "description": "An admin key (TIP-1049) with a spending limit: admin authorizations cannot carry expiry, limits or call scopes, and the node rejects any transaction carrying one (see decode_admin_key_with_limits).",
+      "tags": [
+        "admin-key",
+        "account-binding",
+        "invalid-input"
+      ],
+      "sdkVersions": {
+        "rust": ">1.11.0",
+        "typescript": ">0.14.59"
+      },
+      "skipReasons": {
+        "rust": "tempo-primitives 1.11.0 encodes an admin key authorization carrying expiry, limits or call scopes; only the node's execution handler rejects it (tempo crates/evm/src/handler.rs:532-539), while tempo-go (key_authorization.go:103-105) and pytempo (keychain.py:562-566) refuse to build it. Not checked in tempo main's primitives either.",
+        "typescript": "ox KeyAuthorization signs an admin key authorization carrying expiry, limits or call scopes; the node rejects any transaction carrying one (tempo crates/evm/src/handler.rs:532-539), and tempo-go (key_authorization.go:103-105) and pytempo (keychain.py:562-566) refuse to build it. Not fixed in ox yet: re-check on the next ox bump."
+      },
+      "source": "tempo crates/evm/src/handler.rs admin key validation; tempo-go key_authorization.go Validate; pytempo keychain.py KeyAuthorization",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "secp256k1",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6",
+          "isAdmin": true,
+          "account": "0xc4059fe0fc4a0056759b16d3b04c911a4e750574",
+          "limits": [
+            {
+              "token": "0x20c0000000000000000000000000000000000000",
+              "limit": "1"
+            }
+          ]
+        },
+        "privateKey": "0x9b9a49db89e3e58a198bfc03932963864fa4c29d43749c2844e6055588c604d6"
+      },
+      "expected": {
+        "ok": false,
+        "error": {
+          "type": "invalid_input"
+        }
       }
     }
   ]

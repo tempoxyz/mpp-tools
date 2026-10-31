@@ -13,8 +13,9 @@ use alloy_signer::SignerSync;
 use alloy_signer_local::PrivateKeySigner;
 use serde_json::{Map, Value, json};
 use tempo_primitives::transaction::{
-    AASigned, Call, KeyAuthorization, KeychainSignature, PrimitiveSignature, SignatureType,
-    SignedKeyAuthorization, TempoSignature, TempoTransaction, TokenLimit,
+    AASigned, Call, CallScope, KeyAuthorization, KeychainSignature, PrimitiveSignature,
+    SelectorRule, SignatureType, SignedKeyAuthorization, TempoSignature, TempoTransaction,
+    TokenLimit,
 };
 
 #[derive(Debug)]
@@ -26,22 +27,35 @@ struct Err {
 type R<T> = Result<T, Err>;
 
 fn invalid(msg: impl Into<String>) -> Err {
-    Err { ty: "invalid_input", msg: msg.into() }
+    Err {
+        ty: "invalid_input",
+        msg: msg.into(),
+    }
 }
 fn decode_err(msg: impl Into<String>) -> Err {
-    Err { ty: "decode_error", msg: msg.into() }
+    Err {
+        ty: "decode_error",
+        msg: msg.into(),
+    }
 }
 fn verification(msg: impl Into<String>) -> Err {
-    Err { ty: "verification_error", msg: msg.into() }
+    Err {
+        ty: "verification_error",
+        msg: msg.into(),
+    }
 }
 fn unknown(msg: impl Into<String>) -> Err {
-    Err { ty: "unknown_error", msg: msg.into() }
+    Err {
+        ty: "unknown_error",
+        msg: msg.into(),
+    }
 }
 
 // ---------- input helpers ----------
 
 fn obj<'a>(v: &'a Value, what: &str) -> R<&'a Map<String, Value>> {
-    v.as_object().ok_or_else(|| invalid(format!("{what}: expected object")))
+    v.as_object()
+        .ok_or_else(|| invalid(format!("{what}: expected object")))
 }
 
 /// Field that may be absent or null.
@@ -83,8 +97,12 @@ fn parse_u128(v: &Value, k: &str) -> R<u128> {
 }
 
 fn parse_bytes(v: &Value, k: &str) -> R<Vec<u8>> {
-    let s = v.as_str().ok_or_else(|| invalid(format!("{k}: expected hex string")))?;
-    let h = s.strip_prefix("0x").ok_or_else(|| invalid(format!("{k}: missing 0x prefix")))?;
+    let s = v
+        .as_str()
+        .ok_or_else(|| invalid(format!("{k}: expected hex string")))?;
+    let h = s
+        .strip_prefix("0x")
+        .ok_or_else(|| invalid(format!("{k}: missing 0x prefix")))?;
     hex::decode(h).map_err(|e| invalid(format!("{k}: {e}")))
 }
 
@@ -110,7 +128,9 @@ fn parse_signer(v: &Value, k: &str) -> R<PrivateKeySigner> {
 }
 
 fn sign(signer: &PrivateKeySigner, hash: &B256) -> R<Signature> {
-    signer.sign_hash_sync(hash).map_err(|e| unknown(format!("signing failed: {e}")))
+    signer
+        .sign_hash_sync(hash)
+        .map_err(|e| unknown(format!("signing failed: {e}")))
 }
 
 fn parse_key_type(v: &Value) -> R<SignatureType> {
@@ -165,10 +185,72 @@ fn parse_key_authorization(v: &Value) -> R<KeyAuthorization> {
         }
         Some(_) => return Err(invalid("limits: expected array or null")),
     };
+    // TIP-1011 call scopes: null/absent = unrestricted, [] = scoped with no allowed calls.
+    auth.allowed_calls = match opt(o, "allowedCalls") {
+        None => None,
+        Some(Value::Array(items)) => {
+            let mut out = Vec::with_capacity(items.len());
+            for it in items {
+                out.push(parse_call_scope(it)?);
+            }
+            Some(out)
+        }
+        Some(_) => return Err(invalid("allowedCalls: expected array or null")),
+    };
+    // TIP-1053 witness: a present 0x00..00 stays Some(B256::ZERO).
+    auth.witness = opt(o, "witness")
+        .map(|w| parse_b256(w, "witness"))
+        .transpose()?;
+    // TIP-1049 admin key and bound account.
+    auth.is_admin = match opt(o, "isAdmin") {
+        None => false,
+        Some(Value::Bool(b)) => *b,
+        Some(_) => return Err(invalid("isAdmin: expected boolean")),
+    };
+    auth.account = opt(o, "account")
+        .map(|a| parse_address(a, "account"))
+        .transpose()?;
     Ok(auth)
 }
 
-fn sign_key_authorization(auth: KeyAuthorization, key: &PrivateKeySigner) -> R<SignedKeyAuthorization> {
+/// Optional array field: absent, null and [] all mean an empty list (no restriction).
+fn opt_array<'a>(o: &'a Map<String, Value>, k: &str) -> R<&'a [Value]> {
+    match opt(o, k) {
+        None => Ok(&[]),
+        Some(Value::Array(a)) => Ok(a),
+        Some(_) => Err(invalid(format!("{k}: expected array"))),
+    }
+}
+
+fn parse_call_scope(v: &Value) -> R<CallScope> {
+    let c = obj(v, "allowedCalls item")?;
+    let mut selector_rules = Vec::new();
+    for r in opt_array(c, "selectorRules")? {
+        let ro = obj(r, "selectorRules item")?;
+        let sel = parse_bytes(req(ro, "selector")?, "selector")?;
+        let selector: [u8; 4] = sel
+            .as_slice()
+            .try_into()
+            .map_err(|_| invalid("selector: expected 4 bytes"))?;
+        let mut recipients = Vec::new();
+        for a in opt_array(ro, "recipients")? {
+            recipients.push(parse_address(a, "recipients")?);
+        }
+        selector_rules.push(SelectorRule {
+            selector,
+            recipients,
+        });
+    }
+    Ok(CallScope {
+        target: parse_address(req(c, "target")?, "target")?,
+        selector_rules,
+    })
+}
+
+fn sign_key_authorization(
+    auth: KeyAuthorization,
+    key: &PrivateKeySigner,
+) -> R<SignedKeyAuthorization> {
     let hash = auth.signature_hash();
     let sig = sign(key, &hash)?;
     Ok(auth.into_signed(PrimitiveSignature::Secp256k1(sig)))
@@ -200,12 +282,17 @@ fn parse_tx(v: &Value) -> R<TempoTransaction> {
     }
     let mut access_list = Vec::new();
     if let Some(al) = opt(o, "accessList") {
-        let items = al.as_array().ok_or_else(|| invalid("accessList: expected array"))?;
+        let items = al
+            .as_array()
+            .ok_or_else(|| invalid("accessList: expected array"))?;
         for it in items {
             let a = obj(it, "accessList item")?;
             let mut keys = Vec::new();
             if let Some(ks) = opt(a, "storageKeys") {
-                for k in ks.as_array().ok_or_else(|| invalid("storageKeys: expected array"))? {
+                for k in ks
+                    .as_array()
+                    .ok_or_else(|| invalid("storageKeys: expected array"))?
+                {
                     keys.push(parse_b256(k, "storageKeys")?);
                 }
             }
@@ -226,8 +313,13 @@ fn parse_tx(v: &Value) -> R<TempoTransaction> {
     };
     Ok(TempoTransaction {
         chain_id: parse_u64(req(o, "chainId")?, "chainId")?,
-        fee_token: opt(o, "feeToken").map(|t| parse_address(t, "feeToken")).transpose()?,
-        max_priority_fee_per_gas: parse_u128(req(o, "maxPriorityFeePerGas")?, "maxPriorityFeePerGas")?,
+        fee_token: opt(o, "feeToken")
+            .map(|t| parse_address(t, "feeToken"))
+            .transpose()?,
+        max_priority_fee_per_gas: parse_u128(
+            req(o, "maxPriorityFeePerGas")?,
+            "maxPriorityFeePerGas",
+        )?,
         max_fee_per_gas: parse_u128(req(o, "maxFeePerGas")?, "maxFeePerGas")?,
         gas_limit: parse_u64(req(o, "gas")?, "gas")?,
         calls,
@@ -262,6 +354,16 @@ fn key_authorization_json(a: &KeyAuthorization) -> Value {
             "limit": dec(l.limit),
             "period": dec(l.period),
         })).collect::<Vec<_>>()),
+        "allowedCalls": a.allowed_calls.as_ref().map(|cs| cs.iter().map(|c| json!({
+            "target": hx(c.target),
+            "selectorRules": c.selector_rules.iter().map(|r| json!({
+                "selector": hx(r.selector),
+                "recipients": r.recipients.iter().map(hx).collect::<Vec<_>>(),
+            })).collect::<Vec<_>>(),
+        })).collect::<Vec<_>>()),
+        "witness": a.witness.map(hx),
+        "isAdmin": a.is_admin,
+        "account": a.account.map(hx),
     })
 }
 
@@ -271,7 +373,8 @@ fn op_tx_sign(input: &Value) -> R<Value> {
     let o = obj(input, "input")?;
     let mut tx = parse_tx(req(o, "tx")?)?;
     // The SDK's structural checks (non-empty calls, CREATE placement, validBefore > validAfter).
-    tx.validate().map_err(|e| invalid(format!("TempoTransaction::validate: {e}")))?;
+    tx.validate()
+        .map_err(|e| invalid(format!("TempoTransaction::validate: {e}")))?;
     let s = obj(req(o, "signer")?, "signer")?;
     let fee_payer = opt(o, "feePayerPrivateKey")
         .map(|k| parse_signer(k, "feePayerPrivateKey"))
@@ -279,13 +382,19 @@ fn op_tx_sign(input: &Value) -> R<Value> {
 
     enum Kind {
         Secp(PrivateKeySigner),
-        Keychain(PrivateKeySigner, Address),
+        /// Access key, root account, legacy V1 (true) or V2 (false).
+        Keychain(PrivateKeySigner, Address, bool),
     }
     let kind = match s.get("type").and_then(Value::as_str) {
         Some("secp256k1") => Kind::Secp(parse_signer(req(s, "privateKey")?, "privateKey")?),
         Some("keychain") => Kind::Keychain(
             parse_signer(req(s, "accessKeyPrivateKey")?, "accessKeyPrivateKey")?,
             parse_address(req(s, "rootAccount")?, "rootAccount")?,
+            match opt(s, "version").map(|v| v.as_str()) {
+                None | Some(Some("v2")) => false,
+                Some(Some("v1")) => true,
+                _ => return Err(invalid("signer.version: expected \"v1\" or \"v2\"")),
+            },
         ),
         other => return Err(invalid(format!("signer.type: unknown {other:?}"))),
     };
@@ -300,13 +409,30 @@ fn op_tx_sign(input: &Value) -> R<Value> {
     let (signature, sender) = match &kind {
         Kind::Secp(k) => {
             let sig = sign(k, &sender_hash)?;
-            (TempoSignature::Primitive(PrimitiveSignature::Secp256k1(sig)), k.address())
+            (
+                TempoSignature::Primitive(PrimitiveSignature::Secp256k1(sig)),
+                k.address(),
+            )
         }
-        Kind::Keychain(k, root) => {
+        Kind::Keychain(k, root, true) => {
+            // Legacy V1 (0x03): the access key signs the sender hash itself.
+            let sig = sign(k, &sender_hash)?;
+            (
+                TempoSignature::Keychain(KeychainSignature::new_v1(
+                    *root,
+                    PrimitiveSignature::Secp256k1(sig),
+                )),
+                *root,
+            )
+        }
+        Kind::Keychain(k, root, false) => {
             let digest = KeychainSignature::signing_hash(sender_hash, *root);
             let sig = sign(k, &digest)?;
             (
-                TempoSignature::Keychain(KeychainSignature::new(*root, PrimitiveSignature::Secp256k1(sig))),
+                TempoSignature::Keychain(KeychainSignature::new(
+                    *root,
+                    PrimitiveSignature::Secp256k1(sig),
+                )),
                 *root,
             )
         }
@@ -335,8 +461,12 @@ fn op_tx_sign(input: &Value) -> R<Value> {
 fn op_tx_decode(input: &Value) -> R<Value> {
     let o = obj(input, "input")?;
     let raw_v = req(o, "raw")?;
-    let s = raw_v.as_str().ok_or_else(|| invalid("raw: expected hex string"))?;
-    let h = s.strip_prefix("0x").ok_or_else(|| decode_err("raw: missing 0x prefix"))?;
+    let s = raw_v
+        .as_str()
+        .ok_or_else(|| invalid("raw: expected hex string"))?;
+    let h = s
+        .strip_prefix("0x")
+        .ok_or_else(|| decode_err("raw: missing 0x prefix"))?;
     let raw = hex::decode(h).map_err(|e| decode_err(format!("raw: {e}")))?;
 
     let signed = AASigned::decode_2718_exact(&raw).map_err(|e| decode_err(format!("{e}")))?;
@@ -358,20 +488,24 @@ fn op_tx_decode(input: &Value) -> R<Value> {
     let calls: Vec<Value> = tx
         .calls
         .iter()
-        .map(|c| json!({
-            "to": match c.to { TxKind::Create => Value::Null, TxKind::Call(a) => hx(a) },
-            "value": dec(c.value),
-            "data": hx(&c.input),
-        }))
+        .map(|c| {
+            json!({
+                "to": match c.to { TxKind::Create => Value::Null, TxKind::Call(a) => hx(a) },
+                "value": dec(c.value),
+                "data": hx(&c.input),
+            })
+        })
         .collect();
     let access_list: Vec<Value> = tx
         .access_list
         .0
         .iter()
-        .map(|i| json!({
-            "address": hx(i.address),
-            "storageKeys": i.storage_keys.iter().map(hx).collect::<Vec<_>>(),
-        }))
+        .map(|i| {
+            json!({
+                "address": hx(i.address),
+                "storageKeys": i.storage_keys.iter().map(hx).collect::<Vec<_>>(),
+            })
+        })
         .collect();
     Ok(json!({
         "tx": {
@@ -417,22 +551,32 @@ fn op_signature_recover(input: &Value) -> R<Value> {
     let o = obj(input, "input")?;
     let hash = parse_b256(req(o, "hash")?, "hash")?;
     let bytes = parse_bytes(req(o, "signature")?, "signature")?;
-    let sig = TempoSignature::from_bytes(&bytes).map_err(|e| verification(format!("TempoSignature::from_bytes: {e}")))?;
-    let signer = sig.recover_signer(&hash).map_err(|e| verification(format!("recover_signer: {e:?}")))?;
+    let sig = TempoSignature::from_bytes(&bytes)
+        .map_err(|e| verification(format!("TempoSignature::from_bytes: {e}")))?;
+    let signer = sig
+        .recover_signer(&hash)
+        .map_err(|e| verification(format!("recover_signer: {e:?}")))?;
     Ok(json!({ "signer": hx(signer) }))
 }
 
 fn handle(line: &str) -> Value {
     let res: R<Value> = (|| {
-        let req: Value = serde_json::from_str(line).map_err(|e| invalid(format!("bad JSON: {e}")))?;
-        let op = req.get("op").and_then(Value::as_str).ok_or_else(|| invalid("missing op"))?;
+        let req: Value =
+            serde_json::from_str(line).map_err(|e| invalid(format!("bad JSON: {e}")))?;
+        let op = req
+            .get("op")
+            .and_then(Value::as_str)
+            .ok_or_else(|| invalid("missing op"))?;
         let input = req.get("input").cloned().unwrap_or(Value::Null);
         match op {
             "tx.sign" => op_tx_sign(&input),
             "tx.decode" => op_tx_decode(&input),
             "key_authorization.sign" => op_key_authorization_sign(&input),
             "signature.recover" => op_signature_recover(&input),
-            other => Err(Err { ty: "unsupported", msg: format!("unknown op {other}") }),
+            other => Err(Err {
+                ty: "unsupported",
+                msg: format!("unknown op {other}"),
+            }),
         }
     })();
     match res {
@@ -463,4 +607,3 @@ fn main() {
         let _ = out.flush();
     }
 }
-

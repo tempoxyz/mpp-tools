@@ -7,19 +7,22 @@ signing goes through pytempo's public API.
 
 from __future__ import annotations
 
+import inspect
 import json
+import os
 import re
 import sys
 import traceback
+from importlib.metadata import version as _dist_version
 
+import attrs
 import rlp
 from eth_utils import keccak
-
-import pytempo
 from pytempo import (
     AccessListItem,
     Call,
     KeyAuthorization,
+    KeychainSignature,
     SignatureType,
     TempoTransaction,
     TokenLimit,
@@ -39,6 +42,89 @@ def invalid(msg: str) -> AdapterError:
 
 def unsupported(msg: str) -> AdapterError:
     return AdapterError("unsupported", msg)
+
+
+# --------------------------------------------------------------------------
+# Feature detection (never version checks): what the installed pytempo can do
+# --------------------------------------------------------------------------
+
+_SDK = "pytempo"
+_SDK_V = f"pytempo {_dist_version('pytempo')}"
+
+
+def _where(obj, needle: str | None = None) -> str:
+    """'pytempo/<file>:<line>' of *obj* in the installed SDK (of *needle* in it)."""
+    try:
+        lines, start = inspect.getsourcelines(obj)
+        rel = "pytempo/" + os.path.basename(inspect.getsourcefile(obj) or "?")
+    except (OSError, TypeError):
+        return "pytempo"
+    for i, line in enumerate(lines):
+        if needle is not None and needle in line:
+            return f"{rel}:{start + i}"
+    return f"{rel}:{start}"
+
+
+def _probe_periodic_limits() -> bool:
+    try:
+        lim = TokenLimit(token=b"\x01" * 20, limit=1, period=1)
+        KeyAuthorization(key_id=b"\x01" * 20, limits=[lim])
+    except (ValueError, TypeError):
+        return False
+    return len(lim.to_rlp()) == 3
+
+
+_HAS_DECODE = callable(getattr(TempoTransaction, "decode", None))
+_HAS_PERIODIC_LIMITS = _probe_periodic_limits()
+_KA_FIELDS = attrs.fields_dict(KeyAuthorization)
+_KEYCHAIN_FIELDS = attrs.fields_dict(KeychainSignature)
+
+
+def _unsupported_decode() -> AdapterError:
+    return unsupported(
+        f"{_SDK_V} has no decoder for signed Tempo transactions "
+        f"({_where(TempoTransaction, 'class TempoTransaction')}: TempoTransaction has encode()/from_dict() "
+        "only); pytempo#134 adds TempoTransaction.decode, unreleased"
+    )
+
+
+def _unsupported_periodic() -> AdapterError:
+    return unsupported(
+        f"{_SDK_V} inline KeyAuthorization rejects periodic token limits "
+        f"({_where(KeyAuthorization.__attrs_post_init__, 'lim.period != 0')}) and "
+        f"TokenLimit.to_rlp never encodes period ({_where(TokenLimit.to_rlp)}); "
+        "pytempo#134 adds them, unreleased"
+    )
+
+
+def _unsupported_allowed_calls() -> AdapterError:
+    return unsupported(
+        f"{_SDK} has no inline KeyAuthorization call scopes (TIP-1011 "
+        "allowed_calls): KeyAuthorization has no allowed_calls field and always "
+        "writes it absent "
+        f"({_where(KeyAuthorization.as_rlp_payload, 'allowed_calls (unsupported')}"
+        f"), and decoding refuses it "
+        f"({_where(KeyAuthorization.from_rlp, 'allowed_calls is not supported')}); "
+        "call scopes exist only via AccountKeychain.authorize_key"
+    )
+
+
+def _unsupported_keychain_v1() -> AdapterError:
+    if "version" not in _KEYCHAIN_FIELDS:
+        return unsupported(
+            f"{_SDK_V} has no keychain V1 envelope: KeychainSignature is V2-only "
+            f"(type byte 0x04, {_where(KeychainSignature, 'TYPE_BYTE: ClassVar')}; "
+            "KeychainSignature.sign always derives the V2 digest, "
+            f"{_where(KeychainSignature.sign, 'signing_hash = keccak')})"
+        )
+    return unsupported(
+        f"{_SDK} models the keychain V1 envelope (KeychainSignature.version, "
+        f"{_where(KeychainSignature, 'version: int')}) but has no API to sign one: "
+        "KeychainSignature.sign always derives the V2 digest "
+        f"({_where(KeychainSignature.sign, 'signing_hash = keccak')}) and "
+        "TempoTransaction.sign_access_key takes no version "
+        f"({_where(TempoTransaction.sign_access_key)})"
+    )
 
 
 # --------------------------------------------------------------------------
@@ -106,6 +192,7 @@ _KEY_TYPES = {
     "p256": SignatureType.P256,
     "webauthn": SignatureType.WEBAUTHN,
 }
+_KEY_TYPE_NAMES = {v: k for k, v in _KEY_TYPES.items()}
 
 
 def build_key_authorization(a: dict) -> KeyAuthorization:
@@ -127,15 +214,39 @@ def build_key_authorization(a: dict) -> KeyAuthorization:
             token = to_addr(req(lim, "token", w), f"{w}.token")
             limit = to_int(req(lim, "limit", w), f"{w}.limit")
             period = to_opt_int(opt(lim, "period"), f"{w}.period") or 0
-            if period != 0:
-                # pytempo/keychain.py KeyAuthorization.__attrs_post_init__ rejects
-                # period != 0 and TokenLimit.to_rlp never encodes period.
-                raise unsupported(
-                    "pytempo inline KeyAuthorization does not support periodic "
-                    "token limits (keychain.py: TokenLimit.to_rlp drops period; "
-                    "KeyAuthorization.__attrs_post_init__ raises for period != 0)"
-                )
-            limits.append(TokenLimit(token=token, limit=limit, period=period))
+            if period != 0 and not _HAS_PERIODIC_LIMITS:
+                raise _unsupported_periodic()
+            try:
+                limits.append(TokenLimit(token=token, limit=limit, period=period))
+            except (ValueError, TypeError) as e:
+                raise invalid(f"pytempo rejected {w}: {e}") from e
+    extra = {}
+    allowed_calls = opt(a, "allowedCalls")
+    if allowed_calls is not None:
+        # null = unrestricted; [] = scoped mode with no allowed calls.
+        if not isinstance(allowed_calls, list):
+            raise invalid(f"{where}.allowedCalls must be an array or null")
+        raise _unsupported_allowed_calls()
+    witness = opt(a, "witness")
+    if witness is not None:
+        # 0x00..00 is a present witness, distinct from null.
+        wb = to_hex_bytes(witness, f"{where}.witness")
+        if len(wb) != 32:
+            raise invalid(f"{where}.witness must be 32 bytes")
+        extra["witness"] = wb
+    is_admin = opt(a, "isAdmin")
+    if is_admin is not None and not isinstance(is_admin, bool):
+        raise invalid(f"{where}.isAdmin must be a boolean")
+    if is_admin:
+        extra["is_admin"] = True
+    account = opt(a, "account")
+    if account is not None:
+        extra["account"] = to_addr(account, f"{where}.account")
+    for field in extra:
+        if field not in _KA_FIELDS:
+            raise unsupported(
+                f"{_SDK} KeyAuthorization has no {field} field ({_where(KeyAuthorization)})"
+            )
     try:
         return KeyAuthorization(
             key_id=key_id,
@@ -143,6 +254,7 @@ def build_key_authorization(a: dict) -> KeyAuthorization:
             key_type=_KEY_TYPES[kt],
             expiry=expiry,
             limits=limits,
+            **extra,
         )
     except (ValueError, TypeError) as e:
         raise invalid(f"pytempo rejected key authorization: {e}") from e
@@ -250,7 +362,14 @@ def op_tx_sign(inp: dict) -> dict:
                 req(signer, "accessKeyPrivateKey", "input.signer"),
                 "signer.accessKeyPrivateKey",
             )
-            root = to_addr(req(signer, "rootAccount", "input.signer"), "signer.rootAccount")
+            root = to_addr(
+                req(signer, "rootAccount", "input.signer"), "signer.rootAccount"
+            )
+            kc_version = opt(signer, "version") or "v2"
+            if kc_version not in ("v1", "v2"):
+                raise invalid("signer.version must be 'v1' or 'v2'")
+            if kc_version == "v1":
+                raise _unsupported_keychain_v1()
             sender_hash = tx.get_signing_hash()
             signed = tx.sign_access_key(ak, hx(root))
         else:
@@ -278,16 +397,92 @@ def op_tx_sign(inp: dict) -> dict:
     }
 
 
+def _opt_str(v):
+    return None if v is None else str(v)
+
+
+def _opt_hex(v):
+    return None if v is None else hx(v)
+
+
 def op_tx_decode(inp: dict) -> dict:
-    to_hex_bytes(req(inp, "raw", "input"), "input.raw")
-    # pytempo 0.6.2 has no API to parse a signed 0x76 transaction:
-    # TempoTransaction (pytempo/models.py) only has encode()/from_dict(), and
-    # no signature recovery for sender or fee payer.
-    raise unsupported(
-        "pytempo has no decoder for signed Tempo transactions "
-        "(models.py TempoTransaction has encode() and from_dict() only; "
-        "no sender/fee payer recovery)"
-    )
+    raw = to_hex_bytes(req(inp, "raw", "input"), "input.raw")
+    if not _HAS_DECODE:
+        raise _unsupported_decode()
+    try:
+        tx = TempoTransaction.decode(raw)
+        fee_payer = tx.recover_fee_payer()
+        h = tx.hash()
+    except NotImplementedError as e:
+        # pytempo decodes and recovers secp256k1 and secp256k1 keychain senders
+        # only (P256/WebAuthn recovery: pytempo#133).
+        raise unsupported(f"pytempo cannot decode this transaction: {e}") from e
+    except (ValueError, TypeError, rlp.exceptions.RLPException) as e:
+        if "allowed_calls is not supported" in str(e):
+            # Well-formed, but pytempo cannot represent call scopes.
+            raise _unsupported_allowed_calls() from e
+        raise AdapterError("decode_error", f"pytempo rejected transaction: {e}") from e
+
+    assert h == keccak(raw)
+    ka = None
+    if tx.key_authorization is not None:
+        auth = tx.key_authorization.authorization
+        ka = {
+            "chainId": str(auth.chain_id),
+            "keyType": _KEY_TYPE_NAMES[auth.key_type],
+            "keyId": hx(auth.key_id),
+            "expiry": _opt_str(auth.expiry),
+            "limits": None
+            if auth.limits is None
+            else [
+                {
+                    "token": hx(lim.token),
+                    "limit": str(lim.limit),
+                    "period": str(lim.period),
+                }
+                for lim in auth.limits
+            ],
+            # pytempo refuses call scopes on decode (unsupported above).
+            "allowedCalls": None,
+            "witness": _opt_hex(getattr(auth, "witness", None)),
+            "isAdmin": bool(getattr(auth, "is_admin", False)),
+            "account": _opt_hex(getattr(auth, "account", None)),
+        }
+    return {
+        "tx": {
+            "chainId": str(tx.chain_id),
+            "nonce": str(tx.nonce),
+            "nonceKey": str(tx.nonce_key),
+            "gas": str(tx.gas_limit),
+            "maxFeePerGas": str(tx.max_fee_per_gas),
+            "maxPriorityFeePerGas": str(tx.max_priority_fee_per_gas),
+            "calls": [
+                {
+                    "to": hx(c.to) if bytes(c.to) else None,
+                    "value": str(c.value),
+                    "data": hx(c.data),
+                }
+                for c in tx.calls
+            ],
+            "accessList": [
+                {
+                    "address": hx(a.address),
+                    "storageKeys": [hx(k) for k in a.storage_keys],
+                }
+                for a in tx.access_list
+            ],
+            "validBefore": _opt_str(tx.valid_before),
+            "validAfter": _opt_str(tx.valid_after),
+            "feeToken": None if tx.fee_token is None else hx(tx.fee_token),
+            "keyAuthorization": ka,
+        },
+        "signatureType": "keychain"
+        if isinstance(tx.sender_signature, KeychainSignature)
+        else "secp256k1",
+        "sender": hx(tx.sender_address),
+        "feePayer": None if fee_payer is None else fee_payer.lower(),
+        "hash": hx(h),
+    }
 
 
 OPS = {
@@ -301,7 +496,7 @@ def handle(line: str) -> dict:
     try:
         try:
             req_obj = json.loads(line)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             raise invalid(f"request is not valid JSON: {e}")
         if not isinstance(req_obj, dict):
             raise invalid("request must be a JSON object")
@@ -315,7 +510,7 @@ def handle(line: str) -> dict:
         return {"ok": True, "value": fn(inp)}
     except AdapterError as e:
         return {"ok": False, "error": {"type": e.type, "message": e.message}}
-    except Exception as e:  # never crash
+    except Exception as e:  # noqa: BLE001  never crash
         traceback.print_exc(file=sys.stderr)
         return {
             "ok": False,

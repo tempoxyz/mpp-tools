@@ -339,10 +339,121 @@ func parseKeyAuthorization(m map[string]any) (*keychain.KeyAuthorization, error)
 		}
 		auth.WithLimits(limits)
 	}
+
+	// TIP-1011 call scopes: null/absent = unrestricted; [] = scoped with no allowed calls.
+	if cv, ok := field(m, "allowedCalls"); ok {
+		arr, err := asArray(cv, "allowedCalls")
+		if err != nil {
+			return nil, err
+		}
+		scopes := make([]keychain.CallScope, 0, len(arr))
+		for i, item := range arr {
+			scope, err := parseCallScope(item, fmt.Sprintf("allowedCalls[%d]", i))
+			if err != nil {
+				return nil, err
+			}
+			scopes = append(scopes, scope)
+		}
+		auth.WithAllowedCalls(scopes)
+	}
+
+	// TIP-1053 witness: null/absent = none; any 32-byte value (including zero) is present.
+	if wv, ok := field(m, "witness"); ok {
+		w, err := parseHash(wv, "witness")
+		if err != nil {
+			return nil, err
+		}
+		auth.WithWitness(w)
+	}
+
+	// TIP-1049 account binding and admin marker.
+	if av, ok := field(m, "account"); ok {
+		a, err := parseAddress(av, "account")
+		if err != nil {
+			return nil, err
+		}
+		auth.WithAccount(a)
+	}
+	if iv, ok := field(m, "isAdmin"); ok {
+		b, isBool := iv.(bool)
+		if !isBool {
+			return nil, invalid("isAdmin must be a boolean")
+		}
+		auth.IsAdmin = b
+	}
+
 	if err := auth.Validate(); err != nil {
+		if auth.IsAdmin && auth.Account == nil {
+			// tempo-primitives lets a root-signed admin authorization omit account;
+			// if binding an account would make it valid, this SDK cannot express it.
+			probe := *auth
+			probe.Account = &common.Address{}
+			if probe.Validate() == nil {
+				return nil, errf("unsupported", "tempo-go cannot express an admin key authorization without account: KeyAuthorization.Validate requires Account when IsAdmin (pkg/keychain/key_authorization.go:106-108 in v0.6.1; dropped on main by tempo-go#135)")
+			}
+		}
 		return nil, invalid("tempo-go KeyAuthorization.Validate: %v", err)
 	}
 	return auth, nil
+}
+
+func parseCallScope(v any, name string) (keychain.CallScope, error) {
+	m, err := asObject(v, name)
+	if err != nil {
+		return keychain.CallScope{}, err
+	}
+	tv, ok := field(m, "target")
+	if !ok {
+		return keychain.CallScope{}, invalid("%s.target missing", name)
+	}
+	target, err := parseAddress(tv, name+".target")
+	if err != nil {
+		return keychain.CallScope{}, err
+	}
+	scope := keychain.CallScope{Target: target, SelectorRules: []keychain.SelectorRule{}}
+	rv, ok := field(m, "selectorRules")
+	if !ok {
+		return scope, nil
+	}
+	rules, err := asArray(rv, name+".selectorRules")
+	if err != nil {
+		return keychain.CallScope{}, err
+	}
+	for j, r := range rules {
+		rname := fmt.Sprintf("%s.selectorRules[%d]", name, j)
+		rm, err := asObject(r, rname)
+		if err != nil {
+			return keychain.CallScope{}, err
+		}
+		sv, ok := field(rm, "selector")
+		if !ok {
+			return keychain.CallScope{}, invalid("%s.selector missing", rname)
+		}
+		sb, err := parseHex(sv, rname+".selector")
+		if err != nil {
+			return keychain.CallScope{}, err
+		}
+		if len(sb) != 4 {
+			return keychain.CallScope{}, invalid("%s.selector must be 4 bytes, got %d", rname, len(sb))
+		}
+		rule := keychain.SelectorRule{Recipients: []common.Address{}}
+		copy(rule.Selector[:], sb)
+		if recv, ok := field(rm, "recipients"); ok {
+			recs, err := asArray(recv, rname+".recipients")
+			if err != nil {
+				return keychain.CallScope{}, err
+			}
+			for k, rec := range recs {
+				a, err := parseAddress(rec, fmt.Sprintf("%s.recipients[%d]", rname, k))
+				if err != nil {
+					return keychain.CallScope{}, err
+				}
+				rule.Recipients = append(rule.Recipients, a)
+			}
+		}
+		scope.SelectorRules = append(scope.SelectorRules, rule)
+	}
+	return scope, nil
 }
 
 func keyAuthSign(input map[string]any) (any, error) {
@@ -558,6 +669,21 @@ func txSign(input map[string]any) (any, error) {
 		return nil, err
 	}
 
+	st, _ := sm["type"].(string)
+	if st == "keychain" {
+		version := "v2"
+		if vv, ok := field(sm, "version"); ok {
+			version, _ = vv.(string)
+		}
+		switch version {
+		case "v2":
+		case "v1":
+			return nil, errf("unsupported", "tempo-go has no keychain V1 signing API: keychain.SignWithAccessKey always writes a V2 envelope (0x04, inner signature over keccak256(0x04 || sigHash || root)), pkg/keychain/keychain.go:14,89-130 in v0.6.1; :14,96-137 on main 542c18e")
+		default:
+			return nil, invalid("signer.version must be \"v1\" or \"v2\"")
+		}
+	}
+
 	var feePayer *signer.Signer
 	if fpv, ok := field(input, "feePayerPrivateKey"); ok {
 		if feePayer, err = newSigner(fpv, "feePayerPrivateKey"); err != nil {
@@ -581,7 +707,6 @@ func txSign(input map[string]any) (any, error) {
 		return nil, invalid("GetSignPayload: %v", err)
 	}
 
-	st, _ := sm["type"].(string)
 	switch st {
 	case "secp256k1":
 		pk, ok := field(sm, "privateKey")
@@ -664,12 +789,18 @@ func txDecode(input map[string]any) (any, error) {
 	}
 	tx, err := transaction.Deserialize(rawStr)
 	if err != nil {
+		if strings.Contains(err.Error(), "unknown signature type prefix: 0x03") {
+			return nil, errf("unsupported", "tempo-go cannot decode keychain V1 (0x03) signatures: Deserialize knows only the V2 0x04 prefix (pkg/transaction/deserialize.go:500-510 in v0.6.1; :530-548 on main 542c18e): %v", err)
+		}
 		return nil, errf("decode_error", "Deserialize: %v", err)
 	}
+	var keyAuth any
 	if tx.KeyAuthorization != nil {
-		// transaction.Tx.KeyAuthorization is the raw RLP list ([]interface{}); tempo-go has no
-		// public decoder from it to keychain.KeyAuthorization.
-		return nil, errf("unsupported", "tempo-go has no API to decode a transaction's key authorization (Tx.KeyAuthorization is raw RLP, transaction.go:28)")
+		ka, err := decodeKeyAuthorization(tx.KeyAuthorization)
+		if err != nil {
+			return nil, err
+		}
+		keyAuth = ka
 	}
 	if tx.Signature == nil {
 		return nil, errf("decode_error", "transaction is unsigned")
@@ -751,7 +882,7 @@ func txDecode(input map[string]any) (any, error) {
 			"validBefore":          validBefore,
 			"validAfter":           validAfter,
 			"feeToken":             feeToken,
-			"keyAuthorization":     nil,
+			"keyAuthorization":     keyAuth,
 		},
 		"signatureType": sigType,
 		"sender":        addr(sender),

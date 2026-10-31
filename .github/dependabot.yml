@@ -51,6 +51,34 @@ updates:
     patterns: ["*"]
     multi-ecosystem-group: "weekly-dependencies"
 
+  - package-ecosystem: "npm"
+    directory: "/tempo-conformance/adapters/typescript"
+    cooldown:
+      default-days: 7
+    patterns: ["*"]
+    multi-ecosystem-group: "weekly-dependencies"
+
+  - package-ecosystem: "cargo"
+    directory: "/tempo-conformance/adapters/rust"
+    cooldown:
+      default-days: 7
+    patterns: ["*"]
+    multi-ecosystem-group: "weekly-dependencies"
+
+  - package-ecosystem: "uv"
+    directory: "/tempo-conformance/adapters/python"
+    cooldown:
+      default-days: 7
+    patterns: ["*"]
+    multi-ecosystem-group: "weekly-dependencies"
+
+  - package-ecosystem: "gomod"
+    directory: "/tempo-conformance/adapters/go"
+    cooldown:
+      default-days: 7
+    patterns: ["*"]
+    multi-ecosystem-group: "weekly-dependencies"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     cooldown:

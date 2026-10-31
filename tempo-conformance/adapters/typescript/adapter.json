@@ -1,7 +1,14 @@
 {
+  "$schema": "../../schemas/adapter-manifest.schema.json",
+  "schema": 1,
   "name": "typescript",
   "language": "typescript",
   "reference": true,
+  "sdk": {
+    "package": "ox",
+    "manifest": "package.json",
+    "lockfile": "package-lock.json"
+  },
   "build": [
     "npm",
     "ci",
