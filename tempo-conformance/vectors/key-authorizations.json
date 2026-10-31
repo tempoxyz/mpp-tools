@@ -1,0 +1,228 @@
+{
+  "description": "key_authorization.sign: signing hash, signature envelope and RLP of signed key authorizations.",
+  "generatedBy": "adapters/typescript/generate.ts (ox 0.14.59)",
+  "cases": [
+    {
+      "name": "ka_unlimited_no_expiry",
+      "description": "No expiry, no limits.",
+      "source": "tempo-go key_authorization_test.go; ox KeyAuthorization.test.ts",
+      "op": "key_authorization.sign",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "secp256k1",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6"
+        },
+        "privateKey": "0x2605c916d373901a9a32c1c4d128ef36162f30d092246b3eefb5a70c0d93328e"
+      },
+      "expected": {
+        "signingHash": "0xc13ec9b9dc638d4d1c1b603b8fd73af7bd93b63935b88455f87e153d4be5e3d3",
+        "signature": "0xfd1fe655ce0113aab2b9115b15201e28d4bede10ac0612571f008a71684089043a3fe48ca82b2140018d09d6302f4ef684f6550593f26e392512e071302f9f9a1b",
+        "serialized": "0xf85dd982053980947ae29539d1b7e18bb5919e2b7686c7173fdddda6b841fd1fe655ce0113aab2b9115b15201e28d4bede10ac0612571f008a71684089043a3fe48ca82b2140018d09d6302f4ef684f6550593f26e392512e071302f9f9a1b"
+      }
+    },
+    {
+      "name": "ka_expiry",
+      "description": "Expiry only.",
+      "source": "ox KeyAuthorization.test.ts",
+      "op": "key_authorization.sign",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "secp256k1",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6",
+          "expiry": "1893456000"
+        },
+        "privateKey": "0xb88d94bffcd71f9159133daed8ddd24638eb6e22d38a9820417271d8dfe34a00"
+      },
+      "expected": {
+        "signingHash": "0xdfb401caa2649efd1a303b756b5b9693c1731bd148d742b200ed929f1e291187",
+        "signature": "0xcaf9df6ca8db753e480f4be7bd541ce19c0bea9193867000ddf2004d2e2ef7bc4d6459081a04e8d9e1d50ad9a740c7225a35c6f6e865c3cdd70e4af9fe4464691b",
+        "serialized": "0xf862de82053980947ae29539d1b7e18bb5919e2b7686c7173fdddda68470dbd880b841caf9df6ca8db753e480f4be7bd541ce19c0bea9193867000ddf2004d2e2ef7bc4d6459081a04e8d9e1d50ad9a740c7225a35c6f6e865c3cdd70e4af9fe4464691b"
+      }
+    },
+    {
+      "name": "ka_one_limit",
+      "description": "One one-off limit.",
+      "source": "ox KeyAuthorization.test.ts",
+      "op": "key_authorization.sign",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "secp256k1",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6",
+          "limits": [
+            {
+              "token": "0x20c0000000000000000000000000000000000000",
+              "limit": "10000000"
+            }
+          ]
+        },
+        "privateKey": "0x781d9c5e8631999f3a8b7c4dfbdbc1a61fbae19d2825e34533f91c496afe7fae"
+      },
+      "expected": {
+        "signingHash": "0x88989e2dbca6a65367611c239af5662d7751c23f6d342de70927810eb093d533",
+        "signature": "0x160e5d0e24677f92fde825b134d18f421040211cfd26198f5599003af40d4c926ad27c08a7ab2b31481b51dd1552c3bc20640ad65d376d2903273c6629300d8d1c",
+        "serialized": "0xf879f582053980947ae29539d1b7e18bb5919e2b7686c7173fdddda680dad99420c000000000000000000000000000000000000083989680b841160e5d0e24677f92fde825b134d18f421040211cfd26198f5599003af40d4c926ad27c08a7ab2b31481b51dd1552c3bc20640ad65d376d2903273c6629300d8d1c"
+      }
+    },
+    {
+      "name": "ka_two_limits",
+      "description": "Two tokens.",
+      "source": "pytempo test_keychain.py",
+      "op": "key_authorization.sign",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "secp256k1",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6",
+          "expiry": "1893456000",
+          "limits": [
+            {
+              "token": "0x20c0000000000000000000000000000000000000",
+              "limit": "10000000"
+            },
+            {
+              "token": "0x20c0000000000000000000000000000000000001",
+              "limit": "1"
+            }
+          ]
+        },
+        "privateKey": "0xfdfd388a6dff12c10383bc5e9db7a40346b0fe895ec3aed104a412b732603f3d"
+      },
+      "expected": {
+        "signingHash": "0xe11ba1447dd460ac07b2d8e12a969a2d5cce1da7469a8e8d658d9a26055e05eb",
+        "signature": "0xae9ca8953cd07139e27c97de602651cb470855723cf185cf614e7d7f3e45344716d2c2545e70cea9e60706ab4785d5894d82d9155ef982c916e8f2cf8349c4a81c",
+        "serialized": "0xf895f85082053980947ae29539d1b7e18bb5919e2b7686c7173fdddda68470dbd880f1d99420c000000000000000000000000000000000000083989680d69420c000000000000000000000000000000000000101b841ae9ca8953cd07139e27c97de602651cb470855723cf185cf614e7d7f3e45344716d2c2545e70cea9e60706ab4785d5894d82d9155ef982c916e8f2cf8349c4a81c"
+      }
+    },
+    {
+      "name": "ka_no_spending",
+      "description": "limits = [].",
+      "source": "tempo-primitives",
+      "op": "key_authorization.sign",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "secp256k1",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6",
+          "limits": []
+        },
+        "privateKey": "0x8dd597aff37cba8cb2e9681cae8d24b6167e2679c120698d25d45b021f5dadbc"
+      },
+      "expected": {
+        "signingHash": "0x92ce711ba0d5add780cea7d3fe8cd06ea7b99835c7b43e513aec1ba463182605",
+        "signature": "0x283aa29d9f358cae471c924e935616d0370eaa7231a8d64ec32c73d4dde812b3377c81b96666428dca002c81eeab8380194ac7e1cd28ac83d700f8c7c96ae0cb1b",
+        "serialized": "0xf85fdb82053980947ae29539d1b7e18bb5919e2b7686c7173fdddda680c0b841283aa29d9f358cae471c924e935616d0370eaa7231a8d64ec32c73d4dde812b3377c81b96666428dca002c81eeab8380194ac7e1cd28ac83d700f8c7c96ae0cb1b"
+      }
+    },
+    {
+      "name": "ka_periodic_limit",
+      "description": "Limit resetting every 86400 s.",
+      "source": "tempo-primitives TokenLimit.period",
+      "op": "key_authorization.sign",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "secp256k1",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6",
+          "limits": [
+            {
+              "token": "0x20c0000000000000000000000000000000000000",
+              "limit": "5000000",
+              "period": "86400"
+            }
+          ]
+        },
+        "privateKey": "0xce1fd7bb97584bc031bb1bb795e841ea458b0da96373013719d6d5621b56c092"
+      },
+      "expected": {
+        "signingHash": "0xcca1282b0eca15c3408d1ca9a4a29b981e49cfc9b13eac87b9303234e01f85ff",
+        "signature": "0xbb9a6f78dd6970b84fc8fee530a78c409007f3e1e19708adff60b44929ae81f15ad3211a3a8266b8a7f69d627a3f05b459cc6407911ed7bcc2ca3dca808f86a81c",
+        "serialized": "0xf87ef83982053980947ae29539d1b7e18bb5919e2b7686c7173fdddda680dedd9420c0000000000000000000000000000000000000834c4b4083015180b841bb9a6f78dd6970b84fc8fee530a78c409007f3e1e19708adff60b44929ae81f15ad3211a3a8266b8a7f69d627a3f05b459cc6407911ed7bcc2ca3dca808f86a81c"
+      }
+    },
+    {
+      "name": "ka_p256_key",
+      "description": "Authorizes a P256 key (keyId is the P256 address).",
+      "source": "ox KeyAuthorization.test.ts p256",
+      "op": "key_authorization.sign",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "p256",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6"
+        },
+        "privateKey": "0xeb30d8cc279e4739a18ecb12c69d31c9c6da2333a502ee0e4c7474ad8b64dc60"
+      },
+      "expected": {
+        "signingHash": "0xd70d962627860d43b0a02a7800d80ff00da9bfad20355d97d504ea280a57406e",
+        "signature": "0x0628e153ea0268296a640baef8f2f894f428110946b6fd948c2495048e665af61efdf8dd6577e9b26ddfdd6efb557ebcea4fa8dd22215fc1ab6db5c7079103261b",
+        "serialized": "0xf85dd982053901947ae29539d1b7e18bb5919e2b7686c7173fdddda6b8410628e153ea0268296a640baef8f2f894f428110946b6fd948c2495048e665af61efdf8dd6577e9b26ddfdd6efb557ebcea4fa8dd22215fc1ab6db5c7079103261b"
+      }
+    },
+    {
+      "name": "ka_webauthn_key",
+      "description": "Authorizes a WebAuthn key.",
+      "source": "ox KeyAuthorization.test.ts webAuthn",
+      "op": "key_authorization.sign",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "webauthn",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6"
+        },
+        "privateKey": "0x19d400147904f7089985fb7d8dbf3691dba7d6af157076a921a8392e82e39aad"
+      },
+      "expected": {
+        "signingHash": "0x353332bb40edc5ac83fff31ef880094af6c68b8d0ad6d7f0f4dc1dd62e0b3256",
+        "signature": "0xdd31898ecfe7d7e8f396aa7741e7bb1c75c9609db6750334f833597a7e71e18e2bfebc262d4119425c864eeca1da4389333dc080a49a30f2b1203116093f60611b",
+        "serialized": "0xf85dd982053902947ae29539d1b7e18bb5919e2b7686c7173fdddda6b841dd31898ecfe7d7e8f396aa7741e7bb1c75c9609db6750334f833597a7e71e18e2bfebc262d4119425c864eeca1da4389333dc080a49a30f2b1203116093f60611b"
+      }
+    },
+    {
+      "name": "ka_max_limit",
+      "description": "uint256 max limit.",
+      "source": "new",
+      "op": "key_authorization.sign",
+      "input": {
+        "authorization": {
+          "chainId": "1337",
+          "keyType": "secp256k1",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6",
+          "limits": [
+            {
+              "token": "0x20c0000000000000000000000000000000000000",
+              "limit": "115792089237316195423570985008687907853269984665640564039457584007913129639935"
+            }
+          ]
+        },
+        "privateKey": "0x57265e9bd95ce7dce03008a6409fdd57288d0b8c626c84f26615688ec6ae4d19"
+      },
+      "expected": {
+        "signingHash": "0xd1726310929bdb48d4ded000a4c8ad11705d541bccab70d30448c6152263582c",
+        "signature": "0x54bee6d4e5ec0f70d20995607bd3eec81197302fe4f219a88364b862736486da74897b55b45fae1ef18eb35c57a47ab2bd088ed9a865e629867812fa0c78c1411c",
+        "serialized": "0xf897f85282053980947ae29539d1b7e18bb5919e2b7686c7173fdddda680f7f69420c0000000000000000000000000000000000000a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb84154bee6d4e5ec0f70d20995607bd3eec81197302fe4f219a88364b862736486da74897b55b45fae1ef18eb35c57a47ab2bd088ed9a865e629867812fa0c78c1411c"
+      }
+    },
+    {
+      "name": "ka_mainnet_chain",
+      "description": "Chain 4217 (mainnet).",
+      "source": "new",
+      "op": "key_authorization.sign",
+      "input": {
+        "authorization": {
+          "chainId": "4217",
+          "keyType": "secp256k1",
+          "keyId": "0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6"
+        },
+        "privateKey": "0xbb64366c30e64beba16ead9251bf39f5e0e788d6b7d6a211a778fe675020572d"
+      },
+      "expected": {
+        "signingHash": "0xa515ef915eab9d6292739e99ce855e402c99044ef68f1e70d132fba3bb6812be",
+        "signature": "0xdcbe2e35fe69310a3dc871d43408b7999eea1719fe1ce9a7ce8fe026bc1ed8775cb49f93f1970e65f95b9074bb6a337d51b5569c3db04af7a32302929fcb047c1c",
+        "serialized": "0xf85dd982107980947ae29539d1b7e18bb5919e2b7686c7173fdddda6b841dcbe2e35fe69310a3dc871d43408b7999eea1719fe1ce9a7ce8fe026bc1ed8775cb49f93f1970e65f95b9074bb6a337d51b5569c3db04af7a32302929fcb047c1c"
+      }
+    }
+  ]
+}

@@ -1,0 +1,480 @@
+{
+  "description": "signature.recover: P256, WebAuthn and access-key (keychain V1/V2) envelopes, and WebAuthn clientDataJSON edge cases, with tempo-primitives verdicts.",
+  "generatedBy": "adapters/typescript/generate.ts (ox 0.14.59)",
+  "cases": [
+    {
+      "name": "sig_p256",
+      "description": "P256 root signature (Account.fromP256, RFC 6979, low-s).",
+      "source": "tempo-go/pytempo testdata/viem/vectors.json (viem 2.57.13, ox 0.14.59)",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0136eb8138f5b6fa113d51b71aced4e702c3ea838aa3a06e626f9fea374a904504798935f3505063e5a3eff76af6b442bb49e66a9819a2963ac1bd75dee6365ede0217e617f0b6443928278f96999e69a23a4f2c152bdf6d6cdf66e5b80282d4ed194a7debcb97712d2dda3ca85aa8765a56f45fc758599652f2897c65306e579400"
+      },
+      "expected": {
+        "signer": "0x9f2e642877a9411849763c250e5bb36cc57fedea"
+      }
+    },
+    {
+      "name": "sig_webauthn",
+      "description": "Headless WebAuthn signature, rpId localhost.",
+      "source": "tempo-go/pytempo testdata/viem/vectors.json (viem 2.57.13, ox 0.14.59)",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959222c226f726967696e223a22687474703a2f2f6c6f63616c686f7374222c2263726f73734f726967696e223a66616c73657d3d330c200606ba1b540d9d16802ab89e7f4df06d0e8908b24a837b5c0e8b4c4c78217ec5634a59167736eeb7e63931f5157774695610594c29474b425f45c255d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expected": {
+        "signer": "0x61c835c32c4bd8f60da77d577e4dfdc2dd5b6f9b"
+      }
+    },
+    {
+      "name": "sig_p256_access_key_v2",
+      "description": "P256 access key, keychain V2 envelope: signs for the root.",
+      "source": "tempo-go/pytempo testdata/viem/vectors.json (viem 2.57.13, ox 0.14.59)",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x04f39Fd6e51aad88F6F4ce6aB8827279cffFb922660142709d49fd7ba5b5ffcda06b40f60342592c931ba3e5446e02c50e18f9f0a7fc1dc89946595834b402a855467df4b337f3b20dd52ef033150056baf2de9464ff0217e617f0b6443928278f96999e69a23a4f2c152bdf6d6cdf66e5b80282d4ed194a7debcb97712d2dda3ca85aa8765a56f45fc758599652f2897c65306e579400"
+      },
+      "expected": {
+        "signer": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+      }
+    },
+    {
+      "name": "sig_webauthn_access_key_v2",
+      "description": "WebAuthn access key, keychain V2 envelope.",
+      "source": "tempo-go/pytempo testdata/viem/vectors.json (viem 2.57.13, ox 0.14.59)",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x04f39Fd6e51aad88F6F4ce6aB8827279cffFb922660249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a2247673363647961687a496c6b4a68513847455575743739314757384e597578366835567a34444f39676a6f222c226f726967696e223a22687474703a2f2f6c6f63616c686f7374222c2263726f73734f726967696e223a66616c73657dd8c48595140306993fcfd4fc54bf4872fa5ecd2c95ae5034fcd6c542b2bb6b1661722ec44bfa3e63037ac3bd85673eac886fd19eba33a25037fdae15f31449d7d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expected": {
+        "signer": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+      }
+    },
+    {
+      "name": "sig_p256_keychain_v1",
+      "description": "Legacy keychain V1 envelope wrapping a P256 signature.",
+      "source": "tempo-go/pytempo testdata/viem/vectors.json (viem 2.57.13, ox 0.14.59)",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x03f39Fd6e51aad88F6F4ce6aB8827279cffFb922660136eb8138f5b6fa113d51b71aced4e702c3ea838aa3a06e626f9fea374a904504798935f3505063e5a3eff76af6b442bb49e66a9819a2963ac1bd75dee6365ede0217e617f0b6443928278f96999e69a23a4f2c152bdf6d6cdf66e5b80282d4ed194a7debcb97712d2dda3ca85aa8765a56f45fc758599652f2897c65306e579400"
+      },
+      "expected": {
+        "signer": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+      }
+    },
+    {
+      "name": "webauthn_client_data_canonical",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: canonical.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959227d433bce095153046913dab8ec2db8fe0650f3ed9c1b339b3671df5a7c3b7e445f6c1265f1f8513e97270775bc1bf7c2c1f7b2bd8926b16d1b44ff08b4ffb5a848d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expected": {
+        "signer": "0x61c835c32c4bd8f60da77d577e4dfdc2dd5b6f9b"
+      }
+    },
+    {
+      "name": "webauthn_client_data_reordered_with_unknown_fields",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: reordered with unknown fields.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b226f726967696e223a2278222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959222c226e223a5b312c7b2261223a327d5d2c2274797065223a22776562617574686e2e676574227d47dacf4c8714bab3ef0aa2880572009cc139f13ee6e9a0c1ceaa0f49f570eb6553369d695dc5abbc79c43de2bff3fa0f088be96f89d391970de9b88f8f9e7e1ad65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expected": {
+        "signer": "0x61c835c32c4bd8f60da77d577e4dfdc2dd5b6f9b"
+      }
+    },
+    {
+      "name": "webauthn_client_data_whitespace",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: whitespace.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b20227479706522203a2022776562617574686e2e67657422202c0a20226368616c6c656e676522203a20226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a37753441795922207d0a1c477a578a11d013a5da82073de1b225391e652e31212b4e14bf26bc3845cd9a41fdc8f7e4b9b167c05982c0c293f576f2dfb427ccfa1e7f31e1f917b978ead3d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expected": {
+        "signer": "0x61c835c32c4bd8f60da77d577e4dfdc2dd5b6f9b"
+      }
+    },
+    {
+      "name": "webauthn_client_data_escaped_unknown_field",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: escaped unknown field.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959222c226f726967696e223a22615c2262227d23f744ca85a77f7053ec0edf21e3ae321d75c34bdb4dab2dc276e54f413b9d5e2806b8936dbe8e21b0962db853ded18bed5e844eb8735591f4b0e02f9e9d945fd65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expected": {
+        "signer": "0x61c835c32c4bd8f60da77d577e4dfdc2dd5b6f9b"
+      }
+    },
+    {
+      "name": "webauthn_client_data_uppercase_type_key",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: uppercase type key.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2254797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959227dcb7ca76fc2230de93f6e64febb90b3f92089d2b00a28d9e937ce6b93b875411805cd3014cfbe997c9cc1e22b634cfc4422131c39e11553447056c292efe6aa07d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_uppercase_challenge_key",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: uppercase challenge key.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c224348414c4c454e4745223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959227df50f424e607251929fd5100ef08bbca410946acb0144a1b3e899372e7bbdebbb72b15708012505d035818b1a27d6fd440b54d14e590804f8d3e1d6576b4d0940d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_duplicate_challenge",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: duplicate challenge.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a2241414141222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959227d1996ba2797471bbdd00d0d143ca7a568881894f41ef663f52a9c5d67f5acd3fc57ab697cc8c1944af4c087a74d8b569c0d49fa5184d2168d239e1321fd5ee08dd65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_duplicate_type",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: duplicate type.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e637265617465222c2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959227d383f7970b073415fd63bf8ff934ec47896398a91b837bca74297adb712324ea02d48448e7746b5ce5aa7de68fd0e5a252ff81a4a0b18dab8e94e97dd03a51466d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_escaped_type_value",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: escaped type value.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e5c7530303265676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959227de19200598fe79e2442aec897ab3e0e945f5443ac9fe8e201d4b3780f38695d777995b499ce97f177cb4aabb920127b0e0498ca9ecbe61f13aa5bf43ac512dc93d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_escaped_challenge_value",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: escaped challenge value.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a225c75303036666a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959227d55134175c5b7a3680250e280ed3938ec8b97b6391561a7713ab595a87e5d3d671265ad7c5cf62e2072e740d22cfb98dcf5edb1d3c46df7006296928d913dcbc1d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_trailing_data",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: trailing data.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959227d780bcf5eae8754cb832101fbf03a6de3ad4eb2b1b4721464d3b6fc72c12288303c02830a51d96323396578135f789d21dc9c3afbfa0dc7d733d561031080bb9a4dd65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_missing_challenge",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: missing challenge.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226f726967696e223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959227d158dba3fb5dd51062bf36f970ddbc0b3b594bff789eef3151695fd8a29c1c64040baac586fb7825ff0d49d955f70c15922ca5a551c263d1a9f020293a8b5ac3ed65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_numeric_type",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: numeric type.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a312c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959227d4f0a0c70a5ba53419966658d6139629fa0c7120908d89bb9400b568367587fea71dfb35abd4baefb1d0c50e3e319183db726ded6783547a87ab1ef50592cf528d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_invalid_utf_8_in_an_ignored_value",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: invalid utf-8 in an ignored value.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959222c226f223a22fffe227dbde706cb6dc517c7ca504eff1531a80c636a148e9e9816a1a6fd35f57ee2fad832eaa1e083908cbaccd5ce4054af37fa5cc10fe5f38b428fafbaef468f9fe2ded65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expected": {
+        "signer": "0x61c835c32c4bd8f60da77d577e4dfdc2dd5b6f9b"
+      }
+    },
+    {
+      "name": "webauthn_client_data_invalid_utf_8_in_a_key",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: invalid utf-8 in a key.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959222c22ff223a317d85b2a76139e3f8d55c60c5195433b10eb9c01e64a5ef5b327a604e98f6f6ebc56996170acff8e7cfa6d8b9ed0587b010fee2aff322f87ef870da9c2796811795d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_control_character_in_ignored_value",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: control character in ignored value.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959222c226f223a22610162227d0759d0a7dfec3cccaa759a467f9cff4fca6ce573854c0b0fd8fbdf585ea2b6c737a1d4fee3dc7b9a5d6cf9144216f91e79537da0607e4e8f2a16451538fa1b29d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_nan_in_ignored_value",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: NaN in ignored value.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959222c226f223a4e614e7dfdb89d1974e99cf1a9de5c059c5037de6f41a40f8301e6a52b158c07fb0f464e29912e617300b32c2318a8bc5d99fe64d656e9a4f582fc7302f94a6c23e2f3acd65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_array_form",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: array form.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000005b22776562617574686e2e676574222c226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959225d12e4dcbb2f72c03fd7bc6617c2d0bceee11d40653e31aae7ec627a0c8441e8ac41f04be28af954df3f6aae940d90b8bdaac404daf37fb1b267311e46ef75d58dd65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expected": {
+        "signer": "0x61c835c32c4bd8f60da77d577e4dfdc2dd5b6f9b"
+      }
+    },
+    {
+      "name": "webauthn_client_data_array_with_extra_element",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: array with extra element.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000005b22776562617574686e2e676574222c226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959222c315d67f6d88097024ee3b4c9e051c01f3fc636e3536bced4dc882466a3b66231ff204f2f58c57cbbf47246a8c8e4a48e6f283fdcda3496d06c1b973426e003d2677ed65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_empty_object",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: empty object.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b7d456e5c78eb80dcbf0989fa10aa419ee5a4505e9e9f99a7e14dcefc57a090f00863123eece90c6ae019f7e2a771db3fe49e57925b1a3fd5282e14637dfaf1a2e3d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_null_type",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: null type.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a6e756c6c2c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959227d920dc632bf4a5bccaa4fdc242a8244b1c04bd67b3a7a5ab8bf76f1a6e7afa01049822ddaba9a297a48a5c4e5755167a595aff6de95918bff9cb81b20b98f44c1d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_escaped_key",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: escaped key.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b22745c75303037397065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959227d01ea0b167bedcc0b1fb7de8fe7917c4d311b7fa73f3509f551cc19396e287cd2059094ce01c30973e96e35fb5bfd5286c3899a9fd34397fa0a218e057e400570d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expected": {
+        "signer": "0x61c835c32c4bd8f60da77d577e4dfdc2dd5b6f9b"
+      }
+    },
+    {
+      "name": "webauthn_client_data_big_number_in_ignored_value",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: big number in ignored value.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959222c226e223a31653430307d7546c7c2bb4e6d757cdeab7a0e2cfb2ecdb59096cc49950a60de0ef71b4ced4a7710ce2b9bf1678aaf816c65fac25c8ad8a690d28bffd086cf0f02204381be16d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expected": {
+        "signer": "0x61c835c32c4bd8f60da77d577e4dfdc2dd5b6f9b"
+      }
+    },
+    {
+      "name": "webauthn_client_data_nested_fields_are_ignored",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: nested fields are ignored.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b226f223a7b2274797065223a22776562617574686e2e637265617465222c226368616c6c656e6765223a2278227d2c2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959227d5bfd6e40acb194d04d6e1ddd3635ba806e1d71466df5a0f41f26dadf7351a76607d8cd9618e538349413832e10656d3263591574bd015dfde8b57aacff1b6c03d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expected": {
+        "signer": "0x61c835c32c4bd8f60da77d577e4dfdc2dd5b6f9b"
+      }
+    },
+    {
+      "name": "webauthn_client_data_fields_only_nested",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: fields only nested.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b226f223a7b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959227d7d74b612f9416dfdb51b3a2e7d0e9e1c36ffffce12f651b3609222b395e47452f12f960c6634dd960e9f515591557b42c2b2c5806c08a71ab6542d5fae1935cd42d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_nested_array",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: nested array.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b226f223a5b7b2274797065223a22776562617574686e2e637265617465227d5d2c2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959227dda8e30bca69085956e35ef1f57fdbaf310728fd9e054bfc5d6792797611bb730735925b458b84b7a41856a85aa6cd32ba55307a59998949834a6157d0846f22dd65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expected": {
+        "signer": "0x61c835c32c4bd8f60da77d577e4dfdc2dd5b6f9b"
+      }
+    },
+    {
+      "name": "webauthn_client_data_non_ascii_digit_in_ignored_number",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: non-ascii digit in ignored number.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959222c226e223a31d9a37db813c57c2f21e56e85908ebd2fbc46599cd8aa0269f696e34a44243692633a1e436a698a19f25858bf6b8fa45130a963304e2151c75533f643d1562a78d91617d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_non_ascii_digit_in_ignored_fraction",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: non-ascii digit in ignored fraction.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959222c226e223a302ed9a37daff693b9f9ea0b4d74b6fe3401b77f8881511b1bc42d9c4ccc6e61ecfd51ffeb2962fc6fd5b8b30224eedc1e1b5a8b7229ede1e64fe82bd69b84239bceb63527d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_lone_surrogate_escaped_key",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: lone surrogate escaped key.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959222c225c7564383030223a317d2d7f7e3937571857216257a22ef182ada2e7ca1ab2af60abde0afa0a927a431f41d3e6f1f9537065ecd14a976f3484aa71d9caa82763a3a0995b49db051cd07dd65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_lone_low_surrogate_escaped_key",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: lone low surrogate escaped key.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959222c225c7564633830223a317d0c7de0254979e82172832c2b174ad751ae3227f0d0da80ed4e629531c52e3e1a031781b714108bf6bf8942663cb0b342f1f461633f3b5fe40dccfd08f519e7d2d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_lone_surrogate_in_ignored_value",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: lone surrogate in ignored value.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959222c226f223a225c7564383030227d53615f24bca23f1a086abe3109e8c5a786ddc4a6201b14301cbf10e366a76bd51b283481a85568948f6371b2e30b79dbda033a5158820311b4287d222f4c27fed65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expected": {
+        "signer": "0x61c835c32c4bd8f60da77d577e4dfdc2dd5b6f9b"
+      }
+    },
+    {
+      "name": "webauthn_client_data_escaped_surrogate_pair_key",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: escaped surrogate pair key.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959222c225c75643833645c7564653030223a317de34bf939e321ff3112721795277af9d98e23c62f4fd24109f84546b4e7ad04a456de281c38aeca36ff1bec1384125b8157a6c847331ec41eb58a78916c2119a3d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expected": {
+        "signer": "0x61c835c32c4bd8f60da77d577e4dfdc2dd5b6f9b"
+      }
+    },
+    {
+      "name": "webauthn_client_data_leading_zero_in_ignored_number",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: leading zero in ignored number.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959222c226e223a30317dcaf09f17d2a2d9dca895ab2c769b6ce91d803e7ba5818375bfb891d5b3fbaf0a631ad3244f23209dc02b8ba633cc1d1bb8955d831469b879b0b0e38c42127235d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_plus_sign_in_ignored_number",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: plus sign in ignored number.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959222c226e223a2b317d3d8153901be66f4ed53ff10ed41e517d18a86bf38124f25177a9043dbe8c070e57cc584dfe88d905ffa7a4594158e2231b1947969341d2445549714e70194cfdd65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    },
+    {
+      "name": "webauthn_client_data_infinity_in_ignored_value",
+      "description": "WebAuthn signature over an unusual clientDataJSON encoding: Infinity in ignored value.",
+      "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
+      "op": "signature.recover",
+      "input": {
+        "hash": "0xa23e3c649f0e2db95a197b12ab60133d57ad905619874c132f9d45cfbbb80326",
+        "signature": "0x0249960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976305000000007b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226f6a34385a4a384f4c626c614758735371324154505665746b46595a683077544c3531467a377534417959222c226e223a496e66696e6974797da9a11d0bda4366e811567a544c9a14f8bbc2282d3384f7fc6223a3a42fa4da272290c1053712dd1f2f1c393480729508b4f6cc1dafff17e671fdadbb4449ad2fd65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf350185e895372df6221ea3a137557e473fddb6755f05bd507c3c533fce9c91285"
+      },
+      "expectedError": "verification_error"
+    }
+  ]
+}
