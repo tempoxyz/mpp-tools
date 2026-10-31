@@ -45,15 +45,20 @@ function toScopes(calls: any) {
 }
 
 // ox's flat scopes -> allowedCalls (node form): one entry per target, in first-seen order.
+// A selector-less scope allows every selector on its target, so it dominates any
+// selector-specific scope for the same target (selectorRules stays []).
 function fromScopes(scopes: any[] | undefined) {
   if (scopes === undefined) return null
   const out: any[] = []
+  const wildcard = new Set<string>()
   for (const s of scopes) {
-    let entry = out.find((e) => e.target === s.address.toLowerCase())
-    if (!entry) out.push((entry = { target: s.address.toLowerCase(), selectorRules: [] }))
-    if (s.selector !== undefined)
-      entry.selectorRules.push({ selector: s.selector.toLowerCase(), recipients: (s.recipients ?? []).map((r: string) => r.toLowerCase()) })
+    const target = s.address.toLowerCase()
+    let entry = out.find((e) => e.target === target)
+    if (!entry) out.push((entry = { target, selectorRules: [] }))
+    if (s.selector === undefined) wildcard.add(target)
+    else entry.selectorRules.push({ selector: s.selector.toLowerCase(), recipients: (s.recipients ?? []).map((r: string) => r.toLowerCase()) })
   }
+  for (const e of out) if (wildcard.has(e.target)) e.selectorRules = []
   return out
 }
 

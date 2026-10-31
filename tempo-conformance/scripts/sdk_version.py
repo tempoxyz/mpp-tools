@@ -40,8 +40,13 @@ def _toml_packages(lockfile: Path, package: str) -> str:
 def _gomod(lockfile: Path, package: str) -> str:
     """go.mod: the required version of the module, refusing local replaces."""
     text = lockfile.read_text()
-    for match in re.finditer(r"^\s*replace\s+(\S+)(?:\s+\S+)?\s+=>\s+(\S+)(?:\s+(\S+))?", text, re.MULTILINE):
-        if match.group(1) == package:
+    # Replace directives, single-line (replace a => b) and block form (replace ( a => b )).
+    directives = re.findall(r"^\s*replace\s+(?!\()(.+?=>.+)$", text, re.MULTILINE)
+    for block in re.findall(r"^\s*replace\s*\((.*?)^\s*\)", text, re.MULTILINE | re.DOTALL):
+        directives += [line.strip() for line in block.splitlines() if "=>" in line]
+    for directive in directives:
+        match = re.match(r"^(\S+)(?:\s+\S+)?\s+=>\s+(\S+)(?:\s+(\S+))?", directive.split("//")[0].strip())
+        if match and match.group(1) == package:
             if match.group(3):
                 return match.group(3)
             raise RuntimeError(f"{package} is replaced by a local path in {lockfile}; its version is unknown")

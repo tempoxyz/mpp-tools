@@ -88,6 +88,17 @@ class SdkVersionTest(unittest.TestCase):
             (p / "go.mod").write_text("module x\nrequire github.com/tempoxyz/tempo-go v0.6.1\nreplace github.com/tempoxyz/tempo-go => ../tempo-go\n")
             with self.assertRaisesRegex(RuntimeError, "local path"):
                 sdk_version.READERS["go.mod"](p / "go.mod", "github.com/tempoxyz/tempo-go")
+            (p / "go.mod").write_text(
+                "module x\nrequire github.com/tempoxyz/tempo-go v0.6.1\n"
+                "replace (\n\tgithub.com/tempoxyz/tempo-go => ../tempo-go\n)\n"
+            )
+            with self.assertRaisesRegex(RuntimeError, "local path"):
+                sdk_version.READERS["go.mod"](p / "go.mod", "github.com/tempoxyz/tempo-go")
+            (p / "go.mod").write_text(
+                "module x\nrequire github.com/tempoxyz/tempo-go v0.6.1\n"
+                "replace (\n\tgithub.com/tempoxyz/tempo-go => github.com/fork/tempo-go v0.7.0\n)\n"
+            )
+            self.assertEqual(sdk_version.READERS["go.mod"](p / "go.mod", "github.com/tempoxyz/tempo-go"), "v0.7.0")
 
     def test_pinned_adapters(self) -> None:
         for name in ADAPTERS:
