@@ -514,18 +514,19 @@ wheels = [
 
 [[package]]
 name = "pytempo"
-version = "0.6.2"
+version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
     { name = "eth-account" },
     { name = "eth-utils" },
+    { name = "pycryptodome" },
     { name = "rlp" },
     { name = "web3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/63/52/306de99106c99629d0ad25466ccef40661619541e1a3abcb28c3f5a2dd28/pytempo-0.6.2.tar.gz", hash = "sha256:41b0bd0a312713a6bdfda82227fe7ade812cf1e570a0aace4bca659b6ac13f26", size = 256479, upload-time = "2026-10-27T05:12:11.484Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a6/f1/a9a9ea543ee8142726e87ab547dfb571d475e3598e3c0827d44a30de6114/pytempo-0.7.0.tar.gz", hash = "sha256:c8e4004a5ba6856ee60dc97b9ec4200c389d9fb8d26386ff369df1f21c51ae98", size = 284706, upload-time = "2026-10-31T22:00:34.566Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/55/f9/a81084b2bce77addd8f2af53b48aad1eebdc2b4d40e3b4c2339fff448fb7/pytempo-0.6.2-py3-none-any.whl", hash = "sha256:1bd87fc44496388568a9b5cc7f7b120d90458fda79ab2223d4b4542197fca66c", size = 57582, upload-time = "2026-10-27T05:12:09.99Z" },
+    { url = "https://files.pythonhosted.org/packages/a8/41/6687905f232d2974609b2f03b35d989428134959bc698f31514e3a9d2d20/pytempo-0.7.0-py3-none-any.whl", hash = "sha256:f67df3c7933dc7c6aeae30c01ab5f67b3de7dc2c0b4d2b2fd39cfbdd2f20d7c0", size = 68660, upload-time = "2026-10-31T22:00:33.381Z" },
 ]
 
 [[package]]
@@ -607,7 +608,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pytempo", specifier = "==0.6.2" }]
+requires-dist = [{ name = "pytempo", specifier = "==0.7.0" }]
 
 [[package]]
 name = "toolz"

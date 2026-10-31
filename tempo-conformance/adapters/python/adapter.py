@@ -476,19 +476,44 @@ def op_tx_decode(inp: dict) -> dict:
             "feeToken": None if tx.fee_token is None else hx(tx.fee_token),
             "keyAuthorization": ka,
         },
-        "signatureType": "keychain"
-        if isinstance(tx.sender_signature, KeychainSignature)
-        else "secp256k1",
+        "signatureType": _signature_type(tx.sender_signature),
         "sender": hx(tx.sender_address),
         "feePayer": None if fee_payer is None else fee_payer.lower(),
         "hash": hx(h),
     }
 
 
+def _signature_type(sig) -> str:
+    from pytempo.signatures import P256Signature, WebAuthnSignature
+
+    if isinstance(sig, KeychainSignature):
+        return "keychain"
+    if isinstance(sig, WebAuthnSignature):
+        return "webauthn"
+    if isinstance(sig, P256Signature):
+        return "p256"
+    return "secp256k1"
+
+
+def op_signature_recover(inp: dict) -> dict:
+    from pytempo.signatures import InvalidSignatureError, recover_signer
+
+    msg_hash = to_hex_bytes(req(inp, "hash", "input"), "hash")
+    if len(msg_hash) != 32:
+        raise invalid("hash must be 32 bytes")
+    sig = to_hex_bytes(req(inp, "signature", "input"), "signature")
+    try:
+        rec = recover_signer(msg_hash, sig)
+    except (InvalidSignatureError, ValueError) as e:
+        raise AdapterError("verification_error", str(e))
+    return {"signer": rec.account.lower()}
+
+
 OPS = {
     "tx.sign": op_tx_sign,
     "tx.decode": op_tx_decode,
     "key_authorization.sign": op_key_authorization_sign,
+    "signature.recover": op_signature_recover,
 }
 
 

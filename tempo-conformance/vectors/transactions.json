@@ -15,12 +15,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-go transaction_vectors_test.go minimal_transaction; ox TxEnvelopeTempo.test.ts serialize minimal",
       "input": {
         "tx": {
@@ -68,12 +62,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-go transaction_vectors_test.go",
       "input": {
         "tx": {
@@ -125,12 +113,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-go with_fee_token; ox serialize feeToken",
       "input": {
         "tx": {
@@ -180,12 +162,6 @@
         "node",
         "node-reject"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "new",
       "input": {
         "tx": {
@@ -235,12 +211,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-go multiple_calls_batch; ox serialize multiple calls",
       "input": {
         "tx": {
@@ -298,12 +268,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-go single_call_zero_value",
       "input": {
         "tx": {
@@ -351,12 +315,6 @@
         "node",
         "node-reject"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-go single_call_with_value",
       "input": {
         "tx": {
@@ -405,12 +363,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-go tests/testdata/Counter.hex",
       "input": {
         "tx": {
@@ -460,12 +412,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-primitives tempo_transaction.rs test_validate_create_first_then_calls_ok",
       "input": {
         "tx": {
@@ -519,12 +465,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-go transaction_with_all_fields; ox deserialize accessList",
       "input": {
         "tx": {
@@ -581,12 +521,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-go user_nonce_key_1; ox deserialize nonceKey",
       "input": {
         "tx": {
@@ -635,12 +569,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-go user_nonce_key_large",
       "input": {
         "tx": {
@@ -689,12 +617,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-go with_valid_before; ox deserialize validBefore",
       "input": {
         "tx": {
@@ -744,12 +666,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-go with_valid_after; ox deserialize validAfter",
       "input": {
         "tx": {
@@ -799,12 +715,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-go with_validity_window",
       "input": {
         "tx": {
@@ -855,12 +765,6 @@
         "node",
         "node-reject"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "new",
       "input": {
         "tx": {
@@ -909,12 +813,6 @@
         "node",
         "node-reject"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-go minimal_transaction (chain 1)",
       "input": {
         "tx": {
@@ -962,12 +860,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-go high_gas_prices",
       "input": {
         "tx": {
@@ -1073,12 +965,6 @@
         "node",
         "node-reject"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-primitives TEMPO_EXPIRING_NONCE_KEY",
       "input": {
         "tx": {
@@ -1128,12 +1014,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-go sponsored_transaction; ox serialize with feePayerSignature",
       "input": {
         "tx": {
@@ -1184,12 +1064,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-go sponsored_with_fee_token",
       "input": {
         "tx": {
@@ -1240,12 +1114,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "ox serialize keyAuthorization (secp256k1); tempo-go keychain SignAndAttach",
       "input": {
         "tx": {
@@ -1310,12 +1178,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-go keychain SignWithAccessKey; ox SignatureEnvelope keychain",
       "input": {
         "tx": {
@@ -1370,12 +1232,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "new",
       "input": {
         "tx": {
@@ -1430,12 +1286,6 @@
         "node",
         "node-reject"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "new",
       "input": {
         "tx": {
@@ -1490,12 +1340,12 @@
         "node-reject"
       ],
       "sdkVersions": {
-        "go": ">0.6.1",
-        "python": ">0.6.2"
+        "go": ">0.7.0",
+        "python": ">0.7.0"
       },
       "skipReasons": {
-        "go": "tempo-go has no keychain V1 signing API: keychain.SignWithAccessKey always writes a V2 envelope (pkg/keychain/keychain.go:14,89-130 in v0.6.1; :14,96-137 on main). Not fixed on tempo-go main (542c18e) either: re-check on the next tempo-go bump.",
-        "python": "pytempo has no keychain V1 signing API: KeychainSignature is V2-only in 0.6.2 (pytempo/keychain.py:847, :903); main parses V1 envelopes but KeychainSignature.sign always derives the V2 digest (pytempo/keychain.py:932) and sign_access_key takes no version (models.py:750-770). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump."
+        "go": "tempo-go has no keychain V1 signing API: keychain.SignWithAccessKey always writes a V2 envelope (pkg/keychain/keychain.go:14,89-130 in v0.6.1; :14,96-137 on main). Not fixed on tempo-go main (542c18e) either: re-check on the next tempo-go bump. Still unfixed in tempo-go v0.7.0.",
+        "python": "pytempo has no keychain V1 signing API: KeychainSignature is V2-only in 0.6.2 (pytempo/keychain.py:847, :903); main parses V1 envelopes but KeychainSignature.sign always derives the V2 digest (pytempo/keychain.py:932) and sign_access_key takes no version (models.py:750-770). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump. Still unfixed in pytempo 0.7.0."
       },
       "source": "ox SignatureEnvelope keychain v1; tempo-primitives KeychainSignature",
       "input": {
@@ -1552,14 +1402,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1",
-        "python": ">0.6.2"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released.",
-        "python": "pytempo rejects periodic token limits in key authorizations (pytempo/keychain.py:126-130, :570), which tempo-primitives and the node support. Fixed by pytempo#134 (https://github.com/tempoxyz/pytempo/pull/134), merged but not yet released (release PR pytempo#135, 0.7.0)."
-      },
       "source": "tempo-primitives TokenLimit.period; ox KeyAuthorization period",
       "input": {
         "tx": {
@@ -1625,12 +1467,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "new",
       "input": {
         "tx": {
@@ -1684,12 +1520,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-primitives KeyAuthorization.limits Some([])",
       "input": {
         "tx": {
@@ -1749,12 +1579,6 @@
         "node",
         "node-reject"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "new",
       "input": {
         "tx": {
@@ -1809,12 +1633,10 @@
         "node-success"
       ],
       "sdkVersions": {
-        "go": ">0.6.1",
-        "python": ">0.6.2"
+        "python": ">0.7.0"
       },
       "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released.",
-        "python": "pytempo has no inline key authorization call scopes (TIP-1011 allowed_calls): KeyAuthorization always writes the field absent (pytempo/keychain.py:596 in 0.6.2, :590 on main). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump."
+        "python": "pytempo has no inline key authorization call scopes (TIP-1011 allowed_calls): KeyAuthorization always writes the field absent (pytempo/keychain.py:596 in 0.6.2, :590 on main). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump. Still unfixed in pytempo 0.7.0."
       },
       "source": "ox KeyAuthorization.test.ts scopes; tempo-primitives CallScope/SelectorRule",
       "input": {
@@ -1893,12 +1715,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "new",
       "input": {
         "tx": {
@@ -1952,12 +1768,6 @@
         "node",
         "node-revert"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "new",
       "input": {
         "tx": {
@@ -2011,12 +1821,6 @@
         "node",
         "node-revert"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "new",
       "input": {
         "tx": {
@@ -2071,12 +1875,10 @@
         "node-success"
       ],
       "sdkVersions": {
-        "go": ">0.6.1",
-        "python": ">0.6.2"
+        "python": ">0.7.0"
       },
       "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released.",
-        "python": "pytempo has no inline key authorization call scopes (TIP-1011 allowed_calls): KeyAuthorization always writes the field absent (pytempo/keychain.py:596 in 0.6.2, :590 on main). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump."
+        "python": "pytempo has no inline key authorization call scopes (TIP-1011 allowed_calls): KeyAuthorization always writes the field absent (pytempo/keychain.py:596 in 0.6.2, :590 on main). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump. Still unfixed in pytempo 0.7.0."
       },
       "source": "tempo-primitives KeyAuthorization.allowed_calls Some([])",
       "input": {
@@ -2138,12 +1940,6 @@
         "node",
         "node-revert"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "new",
       "input": {
         "tx": {
@@ -2197,12 +1993,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "ox KeyAuthorization witness; tempo-primitives KeyAuthorization.witness",
       "input": {
         "tx": {
@@ -2263,12 +2053,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-primitives test_decode_accepts_explicit_zero_witness",
       "input": {
         "tx": {
@@ -2330,12 +2114,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "ox KeyAuthorization isAdmin/account; tempo-primitives KeyAuthorization.is_admin",
       "input": {
         "tx": {
@@ -2397,12 +2175,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-primitives KeyAuthorization.account",
       "input": {
         "tx": {
@@ -2463,12 +2235,6 @@
         "node",
         "node-reject"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-primitives KeyAuthorization.account",
       "input": {
         "tx": {
@@ -2529,14 +2295,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1",
-        "python": ">0.6.2"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released.",
-        "python": "pytempo 0.6.2 rejects periodic token limits in key authorizations (pytempo/keychain.py:570) and TokenLimit.to_rlp drops period (keychain.py:126-130). Fixed by pytempo#134 (https://github.com/tempoxyz/pytempo/pull/134), merged but not yet released (release PR pytempo#135, 0.7.0)."
-      },
       "source": "tempo-primitives TokenLimit.period",
       "input": {
         "tx": {
@@ -2609,12 +2367,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "viem/tempo Account access keys; ox keyAuthorization + keychain",
       "input": {
         "tx": {
@@ -2677,12 +2429,6 @@
         "node",
         "node-success"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "viem/tempo Account access keys",
       "input": {
         "tx": {
@@ -2745,12 +2491,12 @@
         "node-reject"
       ],
       "sdkVersions": {
-        "go": ">0.6.1",
-        "python": ">0.6.2"
+        "go": ">0.7.0",
+        "python": ">0.7.0"
       },
       "skipReasons": {
-        "go": "tempo-go has no keychain V1 signing API: keychain.SignWithAccessKey always writes a V2 envelope (pkg/keychain/keychain.go:14,89-130 in v0.6.1; :14,96-137 on main). Not fixed on tempo-go main (542c18e) either: re-check on the next tempo-go bump.",
-        "python": "pytempo has no keychain V1 signing API: KeychainSignature is V2-only in 0.6.2 (pytempo/keychain.py:847, :903); main parses V1 envelopes but KeychainSignature.sign always derives the V2 digest (pytempo/keychain.py:932) and sign_access_key takes no version (models.py:750-770). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump."
+        "go": "tempo-go has no keychain V1 signing API: keychain.SignWithAccessKey always writes a V2 envelope (pkg/keychain/keychain.go:14,89-130 in v0.6.1; :14,96-137 on main). Not fixed on tempo-go main (542c18e) either: re-check on the next tempo-go bump. Still unfixed in tempo-go v0.7.0.",
+        "python": "pytempo has no keychain V1 signing API: KeychainSignature is V2-only in 0.6.2 (pytempo/keychain.py:847, :903); main parses V1 envelopes but KeychainSignature.sign always derives the V2 digest (pytempo/keychain.py:932) and sign_access_key takes no version (models.py:750-770). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump. Still unfixed in pytempo 0.7.0."
       },
       "source": "ox SignatureEnvelope keychain v1",
       "input": {
@@ -2815,12 +2561,6 @@
         "node",
         "node-reject"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-primitives / node keychain validation",
       "input": {
         "tx": {
@@ -2876,12 +2616,6 @@
       "name": "tempo_go_minimal_transaction",
       "description": "tempo-go golden: chain 1, anvil key 0, no node submission.",
       "tags": [],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "tempo-go pkg/transaction/transaction_vectors_test.go minimal_transaction",
       "input": {
         "tx": {
@@ -2951,12 +2685,6 @@
         "validity-window",
         "invalid-input"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1"
-      },
-      "skipReasons": {
-        "go": "tempo-go Tx.Validate (pkg/transaction/transaction.go:171-208) does not check validAfter < validBefore or maxPriorityFeePerGas <= maxFeePerGas; the node rejects both. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
-      },
       "source": "ox TxEnvelopeTempo.test.ts assert",
       "input": {
         "tx": {
@@ -2995,14 +2723,6 @@
         "validity-window",
         "invalid-input"
       ],
-      "sdkVersions": {
-        "go": ">0.6.1",
-        "python": ">0.6.2"
-      },
-      "skipReasons": {
-        "go": "tempo-go Tx.Validate (pkg/transaction/transaction.go:171-208) does not check validAfter < validBefore or maxPriorityFeePerGas <= maxFeePerGas; the node rejects both. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released.",
-        "python": "pytempo TempoTransaction.validate (pytempo/models.py:377-379) rejects validAfter > validBefore but not equal; tempo-primitives and the node reject equal windows too. Fixed by pytempo#134 (https://github.com/tempoxyz/pytempo/pull/134), merged but not yet released (release PR pytempo#135, 0.7.0)."
-      },
       "source": "ox TxEnvelopeTempo.test.ts assert",
       "input": {
         "tx": {
@@ -3041,11 +2761,9 @@
         "invalid-input"
       ],
       "sdkVersions": {
-        "go": ">0.6.1",
         "rust": ">1.11.0"
       },
       "skipReasons": {
-        "go": "tempo-go Tx.Validate (pkg/transaction/transaction.go:171-208) does not check validAfter < validBefore or maxPriorityFeePerGas <= maxFeePerGas; the node rejects both. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released.",
         "rust": "tempo-primitives 1.11.0 TempoTransaction::validate (crates.io, tempo_transaction.rs) does not check maxPriorityFeePerGas <= maxFeePerGas; ox and the node reject it. tempo main checks it (crates/primitives/src/transaction/tempo_transaction.rs:359-363) but no newer tempo-primitives is on crates.io yet."
       },
       "source": "ox TxEnvelopeTempo.test.ts assert",
@@ -3086,13 +2804,13 @@
         "invalid-input"
       ],
       "sdkVersions": {
-        "go": ">0.6.1",
-        "python": ">0.6.2",
+        "go": ">0.7.0",
+        "python": ">0.7.0",
         "typescript": ">0.14.59"
       },
       "skipReasons": {
-        "go": "tempo-go Tx.Validate (pkg/transaction/transaction.go:171) does not check CREATE placement (only the first call may be a CREATE, and only one), so tempo-go signs batches tempo-primitives refuses (tempo_transaction.rs validate_calls) and the node rejects. Not fixed on tempo-go main (542c18e) either: re-check on the next tempo-go bump.",
-        "python": "pytempo TempoTransaction.validate (pytempo/models.py:352 in 0.6.2, :367 on main) does not check CREATE placement, so pytempo signs batches tempo-primitives refuses and the node rejects. Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump.",
+        "go": "tempo-go Tx.Validate (pkg/transaction/transaction.go:171) does not check CREATE placement (only the first call may be a CREATE, and only one), so tempo-go signs batches tempo-primitives refuses (tempo_transaction.rs validate_calls) and the node rejects. Not fixed on tempo-go main (542c18e) either: re-check on the next tempo-go bump. Still unfixed in tempo-go v0.7.0.",
+        "python": "pytempo TempoTransaction.validate (pytempo/models.py:352 in 0.6.2, :367 on main) does not check CREATE placement, so pytempo signs batches tempo-primitives refuses and the node rejects. Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump. Still unfixed in pytempo 0.7.0.",
         "typescript": "ox TxEnvelopeTempo.assert (ox/tempo/TxEnvelopeTempo.ts:177-226) does not check CREATE placement (only the first call may be a CREATE, and only one), so ox signs batches tempo-primitives refuses (tempo_transaction.rs validate_calls) and the node rejects. Not fixed in ox yet: re-check on the next ox bump."
       },
       "source": "tempo-primitives tempo_transaction.rs validate_calls; test_validate_create_not_first_call_fails",
@@ -3138,13 +2856,13 @@
         "invalid-input"
       ],
       "sdkVersions": {
-        "go": ">0.6.1",
-        "python": ">0.6.2",
+        "go": ">0.7.0",
+        "python": ">0.7.0",
         "typescript": ">0.14.59"
       },
       "skipReasons": {
-        "go": "tempo-go Tx.Validate (pkg/transaction/transaction.go:171) does not check CREATE placement (only the first call may be a CREATE, and only one), so tempo-go signs batches tempo-primitives refuses (tempo_transaction.rs validate_calls) and the node rejects. Not fixed on tempo-go main (542c18e) either: re-check on the next tempo-go bump.",
-        "python": "pytempo TempoTransaction.validate (pytempo/models.py:352 in 0.6.2, :367 on main) does not check CREATE placement, so pytempo signs batches tempo-primitives refuses and the node rejects. Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump.",
+        "go": "tempo-go Tx.Validate (pkg/transaction/transaction.go:171) does not check CREATE placement (only the first call may be a CREATE, and only one), so tempo-go signs batches tempo-primitives refuses (tempo_transaction.rs validate_calls) and the node rejects. Not fixed on tempo-go main (542c18e) either: re-check on the next tempo-go bump. Still unfixed in tempo-go v0.7.0.",
+        "python": "pytempo TempoTransaction.validate (pytempo/models.py:352 in 0.6.2, :367 on main) does not check CREATE placement, so pytempo signs batches tempo-primitives refuses and the node rejects. Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump. Still unfixed in pytempo 0.7.0.",
         "typescript": "ox TxEnvelopeTempo.assert (ox/tempo/TxEnvelopeTempo.ts:177-226) does not check CREATE placement (only the first call may be a CREATE, and only one), so ox signs batches tempo-primitives refuses (tempo_transaction.rs validate_calls) and the node rejects. Not fixed in ox yet: re-check on the next ox bump."
       },
       "source": "tempo-primitives tempo_transaction.rs validate_calls; test_validate_multiple_creates_fails",
