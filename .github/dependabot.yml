@@ -7,6 +7,15 @@ multi-ecosystem-groups:
       day: "monday"
       time: "09:00"
       timezone: "America/Los_Angeles"
+  # Tempo SDK adapters get their own group: a bump can re-run scenarios skipped
+  # with ">pinned" for gaps that are not fixed yet, and a red Tempo SDK
+  # Conformance check should hold back only these bumps.
+  tempo-sdk-dependencies:
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Los_Angeles"
 
 updates:
   - package-ecosystem: "npm"
@@ -56,28 +65,28 @@ updates:
     cooldown:
       default-days: 7
     patterns: ["*"]
-    multi-ecosystem-group: "weekly-dependencies"
+    multi-ecosystem-group: "tempo-sdk-dependencies"
 
   - package-ecosystem: "cargo"
     directory: "/tempo-conformance/adapters/rust"
     cooldown:
       default-days: 7
     patterns: ["*"]
-    multi-ecosystem-group: "weekly-dependencies"
+    multi-ecosystem-group: "tempo-sdk-dependencies"
 
   - package-ecosystem: "uv"
     directory: "/tempo-conformance/adapters/python"
     cooldown:
       default-days: 7
     patterns: ["*"]
-    multi-ecosystem-group: "weekly-dependencies"
+    multi-ecosystem-group: "tempo-sdk-dependencies"
 
   - package-ecosystem: "gomod"
     directory: "/tempo-conformance/adapters/go"
     cooldown:
       default-days: 7
     patterns: ["*"]
-    multi-ecosystem-group: "weekly-dependencies"
+    multi-ecosystem-group: "tempo-sdk-dependencies"
 
   - package-ecosystem: "github-actions"
     directory: "/"
