@@ -1,0 +1,55 @@
+{
+  "$schema": "./schemas/operation-registry.schema.json",
+  "schema": 1,
+  "operations": {
+    "tx.sign": {
+      "category": "vector",
+      "inputRef": "protocol.schema.json#/$defs/TxSignInput",
+      "successRef": "protocol.schema.json#/$defs/TxSignOutput",
+      "errorTypes": [
+        "invalid_input",
+        "unsupported",
+        "unknown_error"
+      ],
+      "comparison": "exact",
+      "description": "Sign a Tempo (0x76) transaction as a secp256k1 sender or a keychain access key, optionally co-signed by a fee payer, and return the signing hashes, raw bytes, hash and sender."
+    },
+    "tx.decode": {
+      "category": "vector",
+      "inputRef": "protocol.schema.json#/$defs/TxDecodeInput",
+      "successRef": "protocol.schema.json#/$defs/TxDecodeOutput",
+      "errorTypes": [
+        "decode_error",
+        "invalid_input",
+        "unsupported",
+        "unknown_error"
+      ],
+      "comparison": "exact",
+      "description": "Decode a signed Tempo transaction, recover its sender (the root account for keychain signatures) and fee payer, and return its fields and hash. Malformed or non-canonical input is a decode_error."
+    },
+    "key_authorization.sign": {
+      "category": "vector",
+      "inputRef": "protocol.schema.json#/$defs/KeyAuthorizationSignInput",
+      "successRef": "protocol.schema.json#/$defs/KeyAuthorizationSignOutput",
+      "errorTypes": [
+        "invalid_input",
+        "unsupported",
+        "unknown_error"
+      ],
+      "comparison": "exact",
+      "description": "Sign a key authorization with a root secp256k1 key and return its signing hash, signature envelope and RLP."
+    },
+    "signature.recover": {
+      "category": "vector",
+      "inputRef": "protocol.schema.json#/$defs/SignatureRecoverInput",
+      "successRef": "protocol.schema.json#/$defs/SignatureRecoverOutput",
+      "errorTypes": [
+        "verification_error",
+        "unsupported",
+        "unknown_error"
+      ],
+      "comparison": "exact",
+      "description": "Return the account a serialized Tempo signature envelope (secp256k1, P256, WebAuthn, keychain V1/V2) signs a hash for, as the node's TempoSignature::recover_signer decides it."
+    }
+  }
+}

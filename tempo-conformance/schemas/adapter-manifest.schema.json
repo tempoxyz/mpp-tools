@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tempo.xyz/mpp-tools/tempo-conformance/schemas/adapter-manifest.schema.json",
+  "title": "Tempo SDK Conformance Adapter Manifest",
+  "type": "object",
+  "required": [
+    "schema",
+    "name",
+    "language",
+    "sdk",
+    "command",
+    "capabilities"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schema": {
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$"
+    },
+    "language": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reference": {
+      "type": "boolean",
+      "description": "The adapter whose outputs generate.ts records as expected values."
+    },
+    "sdk": {
+      "type": "object",
+      "required": [
+        "package",
+        "manifest",
+        "lockfile"
+      ],
+      "additionalProperties": false,
+      "description": "The SDK package under test, pinned in the package manifest and lockfile; scripts/sdk_version.py reads its version from the lockfile for sdkVersions constraints.",
+      "properties": {
+        "package": {
+          "type": "string",
+          "minLength": 1
+        },
+        "manifest": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lockfile": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "command": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "build": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "cwd": {
+      "type": "string",
+      "default": "."
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "protocol.schema.json#/$defs/Operation"
+      }
+    },
+    "capabilityGaps": {
+      "type": "object",
+      "description": "Why each registered operation missing from capabilities is unsupported (SDK, file:line, issue or PR). Required for every such operation.",
+      "propertyNames": {
+        "$ref": "protocol.schema.json#/$defs/Operation"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

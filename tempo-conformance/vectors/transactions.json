@@ -1,12 +1,27 @@
 {
-  "description": "tx.sign: signing, sponsorship, key authorizations and keychain access keys. Cases with node run in order on one fresh dev node.",
+  "$schema": "../schemas/vector.schema.json",
+  "version": "2.0.0",
+  "description": "tx.sign: signing, sponsorship, key authorizations (limits, call scopes, witness, admin keys, account binding), keychain V1/V2 access keys, expiring nonces, and inputs every SDK must refuse to sign. Scenarios with node run in order on one fresh dev node per adapter, with the bytes that adapter produced.",
+  "spec_ref": "Tempo Transaction (type 0x76): https://docs.tempo.xyz/protocol/transactions/spec-tempo-transaction; tempo-primitives crates/primitives/src/transaction/tempo_transaction.rs",
   "generatedBy": "adapters/typescript/generate.ts (ox 0.14.59)",
-  "cases": [
+  "commands": {
+    "operation": "tx.sign"
+  },
+  "scenarios": [
     {
       "name": "minimal",
       "description": "One TIP-20 transfer call, protocol nonce, no fee token.",
+      "tags": [
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "tempo-go transaction_vectors_test.go minimal_transaction; ox TxEnvelopeTempo.test.ts serialize minimal",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -28,26 +43,38 @@
           "privateKey": "0xea6f3d5f25cdd6da508e1461531afb9b0eb58a04fe46e50e3ee6b19b2945a38a"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x7ae038e93cc26068b833b71677b550593d4f1f5e769fb9ce8281e7afc2ad76fc",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8bd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0b8419c7591b4d27edfaa28c23c04e883d86a2f86a728958e9af78423f6b05a28b6ba3b1197c2e7f5cd97828183433f919140c18f8db561db7e343e3d01305405dc091c",
+          "hash": "0x1b00458c44cae1b4231552d4dc9cc7e97ce569bd593338dfadaccdee7ff384e6",
+          "sender": "0x0e6fd5d3582d21c6abf24d21987e11d8ceeb6098"
+        }
+      },
       "node": {
         "expect": "success",
         "fund": [
           "0x0e6fd5d3582d21c6abf24d21987e11d8ceeb6098"
         ],
         "feePayer": "0x0e6fd5d3582d21c6abf24d21987e11d8ceeb6098"
-      },
-      "expected": {
-        "senderSigningHash": "0x7ae038e93cc26068b833b71677b550593d4f1f5e769fb9ce8281e7afc2ad76fc",
-        "feePayerSigningHash": null,
-        "raw": "0x76f8bd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0b8419c7591b4d27edfaa28c23c04e883d86a2f86a728958e9af78423f6b05a28b6ba3b1197c2e7f5cd97828183433f919140c18f8db561db7e343e3d01305405dc091c",
-        "hash": "0x1b00458c44cae1b4231552d4dc9cc7e97ce569bd593338dfadaccdee7ff384e6",
-        "sender": "0x0e6fd5d3582d21c6abf24d21987e11d8ceeb6098"
       }
     },
     {
       "name": "second_nonce",
       "description": "Nonce 1 for the same sender as a prior case in this file (runner sends nonce 0 first).",
+      "tags": [
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "tempo-go transaction_vectors_test.go",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -69,6 +96,16 @@
           "privateKey": "0xea6f3d5f25cdd6da508e1461531afb9b0eb58a04fe46e50e3ee6b19b2945a38a"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x1851b043377955e37ee7874ece7e2afabda8860b14fce42667fbda19c43f091f",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8bd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0800180808080c0b84109f5bee4acbee6789ac2f6e8b711e4a2a7ae644180a4d42944c852fd416867e900d266dac57c5ea9c362e901ab7334a4e11360058d9abf3d768b49e0234646601b",
+          "hash": "0xd86c9a1b6953dcf14d1566152089f45a47423d9d3a04ac6d7efd392772b3023a",
+          "sender": "0x0e6fd5d3582d21c6abf24d21987e11d8ceeb6098"
+        }
+      },
       "node": {
         "expect": "success",
         "requires": [
@@ -78,20 +115,23 @@
           "0x0e6fd5d3582d21c6abf24d21987e11d8ceeb6098"
         ],
         "feePayer": "0x0e6fd5d3582d21c6abf24d21987e11d8ceeb6098"
-      },
-      "expected": {
-        "senderSigningHash": "0x1851b043377955e37ee7874ece7e2afabda8860b14fce42667fbda19c43f091f",
-        "feePayerSigningHash": null,
-        "raw": "0x76f8bd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0800180808080c0b84109f5bee4acbee6789ac2f6e8b711e4a2a7ae644180a4d42944c852fd416867e900d266dac57c5ea9c362e901ab7334a4e11360058d9abf3d768b49e0234646601b",
-        "hash": "0xd86c9a1b6953dcf14d1566152089f45a47423d9d3a04ac6d7efd392772b3023a",
-        "sender": "0x0e6fd5d3582d21c6abf24d21987e11d8ceeb6098"
       }
     },
     {
       "name": "with_fee_token",
       "description": "Explicit fee token preference (pathUSD).",
+      "tags": [
+        "fee-token",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "tempo-go with_fee_token; ox serialize feeToken",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -114,26 +154,39 @@
           "privateKey": "0x5499a430645ac6a476de8cb1ed0b38cd1d8d10483eb7b52cfb0d107f877e13c0"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x8f5d600ec525879c1a0bf039b27ff976311a318136f2663b96a95e504e616ca3",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8d1820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080809420c000000000000000000000000000000000000080c0b84177d5f7138b87e82fe05e20b09b173c8bea8e67554f1714409c4e0d2250408c6d55f07856ac750657d4511fd3155c6cabb0f505db85af9a6cff0a652468cbde0f1c",
+          "hash": "0x5ca286b79e6135e66439d41e686b38146d08fa6123ebaaece5362fb9e1cb4243",
+          "sender": "0xc895e7f283f7b7efbc5a22b75553a7d52616c94f"
+        }
+      },
       "node": {
         "expect": "success",
         "fund": [
           "0xc895e7f283f7b7efbc5a22b75553a7d52616c94f"
         ],
         "feePayer": "0xc895e7f283f7b7efbc5a22b75553a7d52616c94f"
-      },
-      "expected": {
-        "senderSigningHash": "0x8f5d600ec525879c1a0bf039b27ff976311a318136f2663b96a95e504e616ca3",
-        "feePayerSigningHash": null,
-        "raw": "0x76f8d1820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080809420c000000000000000000000000000000000000080c0b84177d5f7138b87e82fe05e20b09b173c8bea8e67554f1714409c4e0d2250408c6d55f07856ac750657d4511fd3155c6cabb0f505db85af9a6cff0a652468cbde0f1c",
-        "hash": "0x5ca286b79e6135e66439d41e686b38146d08fa6123ebaaece5362fb9e1cb4243",
-        "sender": "0xc895e7f283f7b7efbc5a22b75553a7d52616c94f"
       }
     },
     {
       "name": "fee_token_alpha_usd",
       "description": "Fee token set to a second TIP-20 (AlphaUSD); the sender holds none, so the node rejects it.",
+      "tags": [
+        "fee-token",
+        "node",
+        "node-reject"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "new",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -156,26 +209,39 @@
           "privateKey": "0x494ad642de5513d3cdbe4fbb9070d9643adbcf3735ab4fd1a7dfc896b852ca05"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x405b5171a5c3196e9964e2c1258da8cec52d8a4a80361cce7f4e36d539838289",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8d1820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080809420c000000000000000000000000000000000000180c0b841a9ff33ff5ef2c6032e30d0a3bad4c3a794a6b9283f7804505dffae097d03d46e652a135ab6d4d46458168b3f07c091c01b984ecad8f30fec3ba149b048632b391c",
+          "hash": "0x59394ec92210d007941219356fedb66585562f518ec56a6eb578dd40a0744461",
+          "sender": "0xdd519acee27128fe6302513cdeed70a81a2d53b6"
+        }
+      },
       "node": {
         "expect": "reject",
         "fund": [
           "0xdd519acee27128fe6302513cdeed70a81a2d53b6"
         ],
         "feePayer": "0xdd519acee27128fe6302513cdeed70a81a2d53b6"
-      },
-      "expected": {
-        "senderSigningHash": "0x405b5171a5c3196e9964e2c1258da8cec52d8a4a80361cce7f4e36d539838289",
-        "feePayerSigningHash": null,
-        "raw": "0x76f8d1820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080809420c000000000000000000000000000000000000180c0b841a9ff33ff5ef2c6032e30d0a3bad4c3a794a6b9283f7804505dffae097d03d46e652a135ab6d4d46458168b3f07c091c01b984ecad8f30fec3ba149b048632b391c",
-        "hash": "0x59394ec92210d007941219356fedb66585562f518ec56a6eb578dd40a0744461",
-        "sender": "0xdd519acee27128fe6302513cdeed70a81a2d53b6"
       }
     },
     {
       "name": "multiple_calls_batch",
       "description": "Three calls executed atomically.",
+      "tags": [
+        "batch",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "tempo-go multiple_calls_batch; ox serialize multiple calls",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -207,26 +273,38 @@
           "privateKey": "0x3ba568722e5d6bab6dc106ab74c1dd6c9d55ca856ccb1d31c4a286dbc981b79b"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0xc53a395077ace31c118b7b019673897d7baf25532bbab662a817bfb31a848081",
+          "feePayerSigningHash": null,
+          "raw": "0x76f9017a820539843b9aca00850ba43b7400831e8480f9011af85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001f85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000cafe0000000000000000000000000000000000000000000000000000000000000002f85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000003c0808080808080c0b841f8a3a27020ac72b5baaffddc8fbfe7261c4401021f13c4ace3d069c6af2a1c7351ff025374097963ce0f7577e841f85b1087e2b4956efd07f1c5000bd99348c61b",
+          "hash": "0xcda2b7152f99ed1e299c660da01189a3224a807ec449104a829a7ccbeca877a2",
+          "sender": "0x1880a36541d86744c1992455a0f64742027a252f"
+        }
+      },
       "node": {
         "expect": "success",
         "fund": [
           "0x1880a36541d86744c1992455a0f64742027a252f"
         ],
         "feePayer": "0x1880a36541d86744c1992455a0f64742027a252f"
-      },
-      "expected": {
-        "senderSigningHash": "0xc53a395077ace31c118b7b019673897d7baf25532bbab662a817bfb31a848081",
-        "feePayerSigningHash": null,
-        "raw": "0x76f9017a820539843b9aca00850ba43b7400831e8480f9011af85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001f85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000cafe0000000000000000000000000000000000000000000000000000000000000002f85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000003c0808080808080c0b841f8a3a27020ac72b5baaffddc8fbfe7261c4401021f13c4ace3d069c6af2a1c7351ff025374097963ce0f7577e841f85b1087e2b4956efd07f1c5000bd99348c61b",
-        "hash": "0xcda2b7152f99ed1e299c660da01189a3224a807ec449104a829a7ccbeca877a2",
-        "sender": "0x1880a36541d86744c1992455a0f64742027a252f"
       }
     },
     {
       "name": "zero_value_empty_data",
       "description": "Call to an EOA with zero value and empty data.",
+      "tags": [
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "tempo-go single_call_zero_value",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -248,26 +326,38 @@
           "privateKey": "0xd0fc2eedf23155cce4d04659f65f0e8114aaf6165404e4a9d1ed329824457ae9"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0xed3cb51725a7ce2471d2ba1e21283fc5df1e19846515979fda4a278cc4ad29b3",
+          "feePayerSigningHash": null,
+          "raw": "0x76f876820539843b9aca00850ba43b7400831e8480d8d794000000000000000000000000000000000000beef8080c0808080808080c0b84199272584e44b858db96d8ee119663eb86311d4db4d8be7fabafc66f9c940dfc250fbe623ae96cd5ad91a717509f2caa5b2ad4eb66facbefb54dac4afc75524501c",
+          "hash": "0x70da7dddc4d1d5e1492959897a0d110cc8bbcdea2d1e24884ab52ed9e2ae2805",
+          "sender": "0xe45c3d12d62de8ac3b2ca36c8ea898ada3531750"
+        }
+      },
       "node": {
         "expect": "success",
         "fund": [
           "0xe45c3d12d62de8ac3b2ca36c8ea898ada3531750"
         ],
         "feePayer": "0xe45c3d12d62de8ac3b2ca36c8ea898ada3531750"
-      },
-      "expected": {
-        "senderSigningHash": "0xed3cb51725a7ce2471d2ba1e21283fc5df1e19846515979fda4a278cc4ad29b3",
-        "feePayerSigningHash": null,
-        "raw": "0x76f876820539843b9aca00850ba43b7400831e8480d8d794000000000000000000000000000000000000beef8080c0808080808080c0b84199272584e44b858db96d8ee119663eb86311d4db4d8be7fabafc66f9c940dfc250fbe623ae96cd5ad91a717509f2caa5b2ad4eb66facbefb54dac4afc75524501c",
-        "hash": "0x70da7dddc4d1d5e1492959897a0d110cc8bbcdea2d1e24884ab52ed9e2ae2805",
-        "sender": "0xe45c3d12d62de8ac3b2ca36c8ea898ada3531750"
       }
     },
     {
       "name": "call_with_value",
       "description": "Call with non-zero value; Tempo has no native token, so the node rejects it.",
+      "tags": [
+        "node",
+        "node-reject"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "tempo-go single_call_with_value",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -289,26 +379,39 @@
           "privateKey": "0x1ff5870d68e72398dec629379a7b4e9e447ee333141c9d24fce4000c87f0d621"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0xd956db81aa39f10e9af79dc241b0ebe9643e1aa09114b1902065ac6cda601b23",
+          "feePayerSigningHash": null,
+          "raw": "0x76f876820539843b9aca00850ba43b7400831e8480d8d794000000000000000000000000000000000000beef0180c0808080808080c0b841bfad623da5811942a70d8acd15c2a982c186392820c0b400520fee2910102165073c2de2bb8f88440d0fbf1edf801dc438405b86fe450dac179c292ecb5fe0ac1c",
+          "hash": "0xee21b7e70f7619fb1030917126ae121cfeb3fd90f2585606b7824c0239107a81",
+          "sender": "0x5bb35331771f9764036592932608f6cede35bba6"
+        }
+      },
       "node": {
         "expect": "reject",
         "fund": [
           "0x5bb35331771f9764036592932608f6cede35bba6"
         ],
         "feePayer": "0x5bb35331771f9764036592932608f6cede35bba6"
-      },
-      "expected": {
-        "senderSigningHash": "0xd956db81aa39f10e9af79dc241b0ebe9643e1aa09114b1902065ac6cda601b23",
-        "feePayerSigningHash": null,
-        "raw": "0x76f876820539843b9aca00850ba43b7400831e8480d8d794000000000000000000000000000000000000beef0180c0808080808080c0b841bfad623da5811942a70d8acd15c2a982c186392820c0b400520fee2910102165073c2de2bb8f88440d0fbf1edf801dc438405b86fe450dac179c292ecb5fe0ac1c",
-        "hash": "0xee21b7e70f7619fb1030917126ae121cfeb3fd90f2585606b7824c0239107a81",
-        "sender": "0x5bb35331771f9764036592932608f6cede35bba6"
       }
     },
     {
       "name": "contract_creation",
       "description": "First call deploys Counter (to = null).",
+      "tags": [
+        "contract-creation",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "tempo-go tests/testdata/Counter.hex",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -330,26 +433,99 @@
           "privateKey": "0xd33be05ac6bbad51d8a61541852f8d05dfc21a2f244d224cb65716e5d39a5a10"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x3b8f350d9d75cfe79a6685606c9c59c691e2a2e46c4b4dfdcc1b82125e231984",
+          "feePayerSigningHash": null,
+          "raw": "0x76f9015b820539843b9aca00850ba43b7400832dc6c0f8fcf8fa8080b8f66080604052348015600e575f5ffd5b5060e180601a5f395ff3fe6080604052348015600e575f5ffd5b50600436106030575f3560e01c80638381f58a146034578063d09de08a14604e575b5f5ffd5b603a6056565b604051604591906078565b60405180910390f35b6054605b565b005b5f5481565b5f80549080606883609c565b9190505550565b5f819050919050565b607f81606e565b82525050565b5f6020820190506096825f8301606f5b92915050565b5f60a282606e565b91507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff820360ce5760cd60c0565b5b60018201905091905056c0808080808080c0b841fb5bf3576e31f922ec814a2486c4046ca7490e325c65a1d20359238ffdca4d9f5d1e720e4dadcd37c733d26abc3f000a020cd5baef7b9287c49baa829d3892c11b",
+          "hash": "0x8d09fecd1383a64c0cb88fb96d14bf533657b045e97a84064ae5566221e66202",
+          "sender": "0x12e6f0e4ed93e756efa9bfd6c4ad86ac829a622a"
+        }
+      },
       "node": {
         "expect": "success",
         "fund": [
           "0x12e6f0e4ed93e756efa9bfd6c4ad86ac829a622a"
         ],
         "feePayer": "0x12e6f0e4ed93e756efa9bfd6c4ad86ac829a622a"
+      }
+    },
+    {
+      "name": "contract_creation_then_call",
+      "description": "CREATE as the first call followed by a transfer: the only allowed position for CREATE in a batch.",
+      "tags": [
+        "contract-creation",
+        "batch",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
+      "source": "tempo-primitives tempo_transaction.rs test_validate_create_first_then_calls_ok",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "3000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": null,
+              "value": "0",
+              "data": "0x6080604052348015600e575f5ffd5b5060e180601a5f395ff3fe6080604052348015600e575f5ffd5b50600436106030575f3560e01c80638381f58a146034578063d09de08a14604e575b5f5ffd5b603a6056565b604051604591906078565b60405180910390f35b6054605b565b005b5f5481565b5f80549080606883609c565b9190505550565b5f819050919050565b607f81606e565b82525050565b5f6020820190506096825f8301606f5b92915050565b5f60a282606e565b91507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff820360ce5760cd60c0565b5b60018201905091905056"
+            },
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ]
+        },
+        "signer": {
+          "type": "secp256k1",
+          "privateKey": "0xe0fdca834cd9b72dd760a3bfde6a1bd60b49718d1d751673b0f42f5aca994a05"
+        }
       },
       "expected": {
-        "senderSigningHash": "0x3b8f350d9d75cfe79a6685606c9c59c691e2a2e46c4b4dfdcc1b82125e231984",
-        "feePayerSigningHash": null,
-        "raw": "0x76f9015b820539843b9aca00850ba43b7400832dc6c0f8fcf8fa8080b8f66080604052348015600e575f5ffd5b5060e180601a5f395ff3fe6080604052348015600e575f5ffd5b50600436106030575f3560e01c80638381f58a146034578063d09de08a14604e575b5f5ffd5b603a6056565b604051604591906078565b60405180910390f35b6054605b565b005b5f5481565b5f80549080606883609c565b9190505550565b5f819050919050565b607f81606e565b82525050565b5f6020820190506096825f8301606f5b92915050565b5f60a282606e565b91507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff820360ce5760cd60c0565b5b60018201905091905056c0808080808080c0b841fb5bf3576e31f922ec814a2486c4046ca7490e325c65a1d20359238ffdca4d9f5d1e720e4dadcd37c733d26abc3f000a020cd5baef7b9287c49baa829d3892c11b",
-        "hash": "0x8d09fecd1383a64c0cb88fb96d14bf533657b045e97a84064ae5566221e66202",
-        "sender": "0x12e6f0e4ed93e756efa9bfd6c4ad86ac829a622a"
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x51a3c0e81db44d1e76d07ca345ca5891e9ae24e03f1ca6601b74c438bcc80bdc",
+          "feePayerSigningHash": null,
+          "raw": "0x76f901ba820539843b9aca00850ba43b7400832dc6c0f9015af8fa8080b8f66080604052348015600e575f5ffd5b5060e180601a5f395ff3fe6080604052348015600e575f5ffd5b50600436106030575f3560e01c80638381f58a146034578063d09de08a14604e575b5f5ffd5b603a6056565b604051604591906078565b60405180910390f35b6054605b565b005b5f5481565b5f80549080606883609c565b9190505550565b5f819050919050565b607f81606e565b82525050565b5f6020820190506096825f8301606f5b92915050565b5f60a282606e565b91507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff820360ce5760cd60c0565b5b60018201905091905056f85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0b841898168e838449367db6564efdca7e170b8c0b30b60fb0dd2f864c45a3ced139d64c4e58f3672652faf23630f17c6e92ef19cbd45868fdbdaad0c915e3846ae581c",
+          "hash": "0xb669be217d4a7e38614e357fa69b53a763f1072e4aefc7d468ca0b3e4868f900",
+          "sender": "0xe28baed6d85f4e3ada00ca5d5aea1a1518c1680a"
+        }
+      },
+      "node": {
+        "expect": "success",
+        "fund": [
+          "0xe28baed6d85f4e3ada00ca5d5aea1a1518c1680a"
+        ],
+        "feePayer": "0xe28baed6d85f4e3ada00ca5d5aea1a1518c1680a"
       }
     },
     {
       "name": "access_list",
       "description": "Access list with one address and one storage key.",
+      "tags": [
+        "access-list",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "tempo-go transaction_with_all_fields; ox deserialize accessList",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -379,26 +555,39 @@
           "privateKey": "0x00d41677a6f295f7b0cf905e9e2f9707c9ef58ccc0e4d2c2e8a7df885bad388c"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x1fbbfd57240f384d9dd31eec61aea10677135293f810b1a42405393c0a1e6795",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8f6820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001f838f79420c0000000000000000000000000000000000000e1a00000000000000000000000000000000000000000000000000000000000000001808080808080c0b8412e5049c05ca1dbdad72416e1f3b2273180a2bed2bda9ecfaea3cc44c5799bed64cc35366b5045f35210aaf9363740dffaf34a1e5e11260c622bd51329da596761c",
+          "hash": "0xcaf5a2b4286a6442da3be7a624347fffd1e4f7c9c5c60501d890b2f931e844de",
+          "sender": "0x38cdeeed34b05435abd725f810a532f2f0d9187b"
+        }
+      },
       "node": {
         "expect": "success",
         "fund": [
           "0x38cdeeed34b05435abd725f810a532f2f0d9187b"
         ],
         "feePayer": "0x38cdeeed34b05435abd725f810a532f2f0d9187b"
-      },
-      "expected": {
-        "senderSigningHash": "0x1fbbfd57240f384d9dd31eec61aea10677135293f810b1a42405393c0a1e6795",
-        "feePayerSigningHash": null,
-        "raw": "0x76f8f6820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001f838f79420c0000000000000000000000000000000000000e1a00000000000000000000000000000000000000000000000000000000000000001808080808080c0b8412e5049c05ca1dbdad72416e1f3b2273180a2bed2bda9ecfaea3cc44c5799bed64cc35366b5045f35210aaf9363740dffaf34a1e5e11260c622bd51329da596761c",
-        "hash": "0xcaf5a2b4286a6442da3be7a624347fffd1e4f7c9c5c60501d890b2f931e844de",
-        "sender": "0x38cdeeed34b05435abd725f810a532f2f0d9187b"
       }
     },
     {
       "name": "user_nonce_key_1",
       "description": "2D nonce: nonce key 1.",
+      "tags": [
+        "nonce-key",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "tempo-go user_nonce_key_1; ox deserialize nonceKey",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -420,26 +609,39 @@
           "privateKey": "0x1d0e776ef21497e2f095aaf405085a4f443da3d092cc763dd4f562d22ac833bf"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0xc08821b74ebfba4b20b0b71f0546df5ab246ac87776e74eabf20401a45de4372",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8bd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0018080808080c0b8415fcbc2be086ae026d7d4258c2e8465379c1b9dc4d8e67270a0444cf7e7bc254b118a084a6045b4459077adff468e53b31b757a68b0630cd9bcc6d33bdc93da931b",
+          "hash": "0xb30139ee03adee7d833d7ada3b599f86b3f999e37f65a801403d002f68e07b7f",
+          "sender": "0x035b92995f3afd2f295e135013c96bada40e4506"
+        }
+      },
       "node": {
         "expect": "success",
         "fund": [
           "0x035b92995f3afd2f295e135013c96bada40e4506"
         ],
         "feePayer": "0x035b92995f3afd2f295e135013c96bada40e4506"
-      },
-      "expected": {
-        "senderSigningHash": "0xc08821b74ebfba4b20b0b71f0546df5ab246ac87776e74eabf20401a45de4372",
-        "feePayerSigningHash": null,
-        "raw": "0x76f8bd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0018080808080c0b8415fcbc2be086ae026d7d4258c2e8465379c1b9dc4d8e67270a0444cf7e7bc254b118a084a6045b4459077adff468e53b31b757a68b0630cd9bcc6d33bdc93da931b",
-        "hash": "0xb30139ee03adee7d833d7ada3b599f86b3f999e37f65a801403d002f68e07b7f",
-        "sender": "0x035b92995f3afd2f295e135013c96bada40e4506"
       }
     },
     {
       "name": "user_nonce_key_large",
       "description": "2D nonce: 128-bit nonce key.",
+      "tags": [
+        "nonce-key",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "tempo-go user_nonce_key_large",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -461,26 +663,39 @@
           "privateKey": "0x8d64fad84bfc53ba4653e1d3485ab6ab2749b1cfd88f71cbfe2560c172b7a385"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x8768c184e0ac0687346db714d93d84d3614f827647c16320a76bb1f4be4d5539",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8cd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c090ffffffffffffffffffffffffffffffff8080808080c0b8419450f4fe901a1708291f27daea1ce9392315b5f4d06740232aca420272fa1cdd63cd103164423bce601c800f4dd8549f1f9ea086a5267b890d4b22cb2ce250461c",
+          "hash": "0x35fa8236dfa750de7352fd34180a8ba5c3290145c9e029e56a4c0c6952db88dc",
+          "sender": "0xea1565803d53032766c3c7d587109d88a992e322"
+        }
+      },
       "node": {
         "expect": "success",
         "fund": [
           "0xea1565803d53032766c3c7d587109d88a992e322"
         ],
         "feePayer": "0xea1565803d53032766c3c7d587109d88a992e322"
-      },
-      "expected": {
-        "senderSigningHash": "0x8768c184e0ac0687346db714d93d84d3614f827647c16320a76bb1f4be4d5539",
-        "feePayerSigningHash": null,
-        "raw": "0x76f8cd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c090ffffffffffffffffffffffffffffffff8080808080c0b8419450f4fe901a1708291f27daea1ce9392315b5f4d06740232aca420272fa1cdd63cd103164423bce601c800f4dd8549f1f9ea086a5267b890d4b22cb2ce250461c",
-        "hash": "0x35fa8236dfa750de7352fd34180a8ba5c3290145c9e029e56a4c0c6952db88dc",
-        "sender": "0xea1565803d53032766c3c7d587109d88a992e322"
       }
     },
     {
       "name": "valid_before",
       "description": "Expires in 2100.",
+      "tags": [
+        "validity-window",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "tempo-go with_valid_before; ox deserialize validBefore",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -503,26 +718,39 @@
           "privateKey": "0x7b42b195affcfcfe5e7a45d968a07a8a2675bf47bf44c588bd82d7122b8888fe"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x776b25d5420d836914a1358afa14c6d7ef84d2dcf20c0620cfd8cd02ed9bb17d",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8c1820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808084f4865700808080c0b841a69dae3f38c9041a568c2dc4d40e41b89b908ff93f78204907f7508d00a4411b176f7f45365ae12be60514287bfaa8f3d6098b69b6b044da76c854f520f3bff61b",
+          "hash": "0xbc115c58aa0d38ec373aed508cb41f2c3f7e2032b9d32e0cd9ffffa13590e5cc",
+          "sender": "0x6b84e521fc18cb3251859643fde3fcbaba2d1811"
+        }
+      },
       "node": {
         "expect": "success",
         "fund": [
           "0x6b84e521fc18cb3251859643fde3fcbaba2d1811"
         ],
         "feePayer": "0x6b84e521fc18cb3251859643fde3fcbaba2d1811"
-      },
-      "expected": {
-        "senderSigningHash": "0x776b25d5420d836914a1358afa14c6d7ef84d2dcf20c0620cfd8cd02ed9bb17d",
-        "feePayerSigningHash": null,
-        "raw": "0x76f8c1820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808084f4865700808080c0b841a69dae3f38c9041a568c2dc4d40e41b89b908ff93f78204907f7508d00a4411b176f7f45365ae12be60514287bfaa8f3d6098b69b6b044da76c854f520f3bff61b",
-        "hash": "0xbc115c58aa0d38ec373aed508cb41f2c3f7e2032b9d32e0cd9ffffa13590e5cc",
-        "sender": "0x6b84e521fc18cb3251859643fde3fcbaba2d1811"
       }
     },
     {
       "name": "valid_after",
       "description": "Valid after 1 second past epoch (already valid).",
+      "tags": [
+        "validity-window",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "tempo-go with_valid_after; ox deserialize validAfter",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -545,26 +773,39 @@
           "privateKey": "0x26e213fa839263d73eca878bfe56518bf7d9689e6612091b74c3e20751308029"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x3bdc979474f9297c3680899a20193f7af068866fe601c1edd75ebe6333cbc2c2",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8bd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080018080c0b841618369b72965b429a68f4b96c2d40531a54c2e2ad2d713b56d2c844bd346698a4c103fe607f1a1d5b6e64139e06b60488713f8ad9b153756d66da50be8572a701b",
+          "hash": "0x61bb7de62dde4824c56656861e85ee099ede07970114350919f6b1f0e547defa",
+          "sender": "0xc70364ccce6b397d0d6158a5f577dbe4a53b1df1"
+        }
+      },
       "node": {
         "expect": "success",
         "fund": [
           "0xc70364ccce6b397d0d6158a5f577dbe4a53b1df1"
         ],
         "feePayer": "0xc70364ccce6b397d0d6158a5f577dbe4a53b1df1"
-      },
-      "expected": {
-        "senderSigningHash": "0x3bdc979474f9297c3680899a20193f7af068866fe601c1edd75ebe6333cbc2c2",
-        "feePayerSigningHash": null,
-        "raw": "0x76f8bd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080018080c0b841618369b72965b429a68f4b96c2d40531a54c2e2ad2d713b56d2c844bd346698a4c103fe607f1a1d5b6e64139e06b60488713f8ad9b153756d66da50be8572a701b",
-        "hash": "0x61bb7de62dde4824c56656861e85ee099ede07970114350919f6b1f0e547defa",
-        "sender": "0xc70364ccce6b397d0d6158a5f577dbe4a53b1df1"
       }
     },
     {
       "name": "validity_window",
       "description": "validAfter < validBefore, both set.",
+      "tags": [
+        "validity-window",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "tempo-go with_validity_window",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -588,26 +829,39 @@
           "privateKey": "0x54c83ac003e5f9c637fc55e3805089ef2ecd5b6c4a9f149659634b93a8a0f802"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x90052ea37d7600155d8f50f36ab2aa0061603878255a2dd41e2ea30c9866ac59",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8c1820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808084f4865700018080c0b841d61a1bc2b04c9796d42c1c54bdd7731600dc818c279b347273c6e0747cc44cbe2d0cc5245bbcc3bea3cbd5f268cb26f5e24e6fb3b0ec571bfc5a14be32b4bef91b",
+          "hash": "0x23494d5879abdd2d90d3bff87bf8ac728965bcbc320fd2cb8a5df32ebe085801",
+          "sender": "0xc9e5866d334947090ee8561738b045feae1cadaa"
+        }
+      },
       "node": {
         "expect": "success",
         "fund": [
           "0xc9e5866d334947090ee8561738b045feae1cadaa"
         ],
         "feePayer": "0xc9e5866d334947090ee8561738b045feae1cadaa"
-      },
-      "expected": {
-        "senderSigningHash": "0x90052ea37d7600155d8f50f36ab2aa0061603878255a2dd41e2ea30c9866ac59",
-        "feePayerSigningHash": null,
-        "raw": "0x76f8c1820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808084f4865700018080c0b841d61a1bc2b04c9796d42c1c54bdd7731600dc818c279b347273c6e0747cc44cbe2d0cc5245bbcc3bea3cbd5f268cb26f5e24e6fb3b0ec571bfc5a14be32b4bef91b",
-        "hash": "0x23494d5879abdd2d90d3bff87bf8ac728965bcbc320fd2cb8a5df32ebe085801",
-        "sender": "0xc9e5866d334947090ee8561738b045feae1cadaa"
       }
     },
     {
       "name": "expired_valid_before",
       "description": "validBefore in the past: signs, but the node rejects it.",
+      "tags": [
+        "validity-window",
+        "node",
+        "node-reject"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "new",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -630,26 +884,38 @@
           "privateKey": "0x65c989b2150face7ba3ac87576de676e790581f45d2fdab15323f5107e7005ce"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0xa661060b32fa95e4eb4a12e202ab784f8eee163e8d27c89e52a9bd26d946e1a3",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8bf820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c080808203e8808080c0b84174b63b349a49ef6ad7ff87f35ed84ad8400c8c7bdb90f06e9a546cf9a849c34e5effa2cce24ec29412714cf0e38347ec4b7782826f52f4edeb590e8cdbee82ec1c",
+          "hash": "0x71e3eb79a6fdddbf68c74a19ac56fa02c4c4b55516d5c159ff6bcf816311dc20",
+          "sender": "0x64dbd5f7e9dc2ef458d14a8d96128f582ecc0640"
+        }
+      },
       "node": {
         "expect": "reject",
         "fund": [
           "0x64dbd5f7e9dc2ef458d14a8d96128f582ecc0640"
         ],
         "feePayer": "0x64dbd5f7e9dc2ef458d14a8d96128f582ecc0640"
-      },
-      "expected": {
-        "senderSigningHash": "0xa661060b32fa95e4eb4a12e202ab784f8eee163e8d27c89e52a9bd26d946e1a3",
-        "feePayerSigningHash": null,
-        "raw": "0x76f8bf820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c080808203e8808080c0b84174b63b349a49ef6ad7ff87f35ed84ad8400c8c7bdb90f06e9a546cf9a849c34e5effa2cce24ec29412714cf0e38347ec4b7782826f52f4edeb590e8cdbee82ec1c",
-        "hash": "0x71e3eb79a6fdddbf68c74a19ac56fa02c4c4b55516d5c159ff6bcf816311dc20",
-        "sender": "0x64dbd5f7e9dc2ef458d14a8d96128f582ecc0640"
       }
     },
     {
       "name": "wrong_chain_id",
       "description": "Signed for chain 1; the dev node (1337) rejects it.",
+      "tags": [
+        "node",
+        "node-reject"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "tempo-go minimal_transaction (chain 1)",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1",
@@ -671,26 +937,38 @@
           "privateKey": "0x0d83447a91061141581de01bbcb01c1e1973a318fcaeefb6f0f1f910f7a3d74a"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0xb37cc75b9e6e4818fc8ab8b63df8a4c87f32179b28b6023af8cb2e27110a1855",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8bb01843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0b841256cd16c00d218c1643e1b60dd4f01e80371ae38016821274faec40c004b72081cbf9c3fee1745829a78b1ca0af24f3bdd5cfffc22b8e920695b0ce9b814a4771c",
+          "hash": "0x83ec4ae0697a2c215636797b2b2f29f4dd767708a2c9f236726835d119572c6c",
+          "sender": "0x05b434316cd40616d030e2953d707b4d88301da2"
+        }
+      },
       "node": {
         "expect": "reject",
         "fund": [
           "0x05b434316cd40616d030e2953d707b4d88301da2"
         ],
         "feePayer": "0x05b434316cd40616d030e2953d707b4d88301da2"
-      },
-      "expected": {
-        "senderSigningHash": "0xb37cc75b9e6e4818fc8ab8b63df8a4c87f32179b28b6023af8cb2e27110a1855",
-        "feePayerSigningHash": null,
-        "raw": "0x76f8bb01843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0b841256cd16c00d218c1643e1b60dd4f01e80371ae38016821274faec40c004b72081cbf9c3fee1745829a78b1ca0af24f3bdd5cfffc22b8e920695b0ce9b814a4771c",
-        "hash": "0x83ec4ae0697a2c215636797b2b2f29f4dd767708a2c9f236726835d119572c6c",
-        "sender": "0x05b434316cd40616d030e2953d707b4d88301da2"
       }
     },
     {
       "name": "high_gas_prices",
       "description": "100/200 gwei.",
+      "tags": [
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "tempo-go high_gas_prices",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -712,26 +990,151 @@
           "privateKey": "0x135dfc1e2bbca3b5c2e4f59b07aeacb3c3d61308e9b27a7aa88bc049a311c2e3"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x7163a629c5736137cfe0fdf7288924fdf978c1dce1df973439e170017d6039de",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8be82053985174876e800852e90edd000831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0b8417dc624e7f13dfc15c53ebedf1e0266ab81f967a7aaa15503be4da843765bb0cf640a5f38819a1800825e4878beff54ee3b9d5f05a0780bce053e3ee559ab671b1b",
+          "hash": "0x83b6f5f60187e3141853eed6e3fc41d9096d06964c7a3840c27ec4cde12fbf8d",
+          "sender": "0x363489e2156ae9c0e5311cada20a184faf3d5caf"
+        }
+      },
       "node": {
         "expect": "success",
         "fund": [
           "0x363489e2156ae9c0e5311cada20a184faf3d5caf"
         ],
         "feePayer": "0x363489e2156ae9c0e5311cada20a184faf3d5caf"
+      }
+    },
+    {
+      "name": "expiring_nonce_without_valid_before",
+      "description": "Expiring nonce (nonce key 2^256-1, nonce 0) without validBefore: the node rejects it, since an expiring-nonce transaction must expire within its window.",
+      "tags": [
+        "expiring-nonce",
+        "node",
+        "node-reject"
+      ],
+      "adapters": [
+        "python",
+        "rust",
+        "typescript"
+      ],
+      "skipReasons": {
+        "go": "tempo-go refuses to sign an expiring-nonce transaction without validBefore (Tx.Validate, pkg/transaction/transaction.go:204 in v0.6.1, :210 on main), which the node rejects anyway; the reference SDKs sign it and leave the verdict to the node. Not a bug: this scenario records the node's verdict, so it runs on the other SDKs only."
+      },
+      "source": "tempo-primitives TEMPO_EXPIRING_NONCE_KEY (tempo_transaction.rs is_expiring_nonce_tx)",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ]
+        },
+        "signer": {
+          "type": "secp256k1",
+          "privateKey": "0xa7e93894c263ba586507b4fa73c650cb9879d65cafd3978cf82800b3d8c5a926"
+        }
       },
       "expected": {
-        "senderSigningHash": "0x7163a629c5736137cfe0fdf7288924fdf978c1dce1df973439e170017d6039de",
-        "feePayerSigningHash": null,
-        "raw": "0x76f8be82053985174876e800852e90edd000831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0b8417dc624e7f13dfc15c53ebedf1e0266ab81f967a7aaa15503be4da843765bb0cf640a5f38819a1800825e4878beff54ee3b9d5f05a0780bce053e3ee559ab671b1b",
-        "hash": "0x83b6f5f60187e3141853eed6e3fc41d9096d06964c7a3840c27ec4cde12fbf8d",
-        "sender": "0x363489e2156ae9c0e5311cada20a184faf3d5caf"
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x33c76d6ec58102c9991820cff8b70a7fece3e01fb93f962348612691611994a9",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8dd820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8080808080c0b84178250259178dad43296854ab79ccccd5cec91aef7a219e11055fd15b456775ec602d7857112e1ef516efc1b0baaf419a7875b5ee719f83397e04670fa7223ca71b",
+          "hash": "0x17681c0652239c3fc9a30b00e98f74382fefaaa4209651271611c8317a88837b",
+          "sender": "0x1d268dd5267223bd4f7163c805a3812251b93cc1"
+        }
+      },
+      "node": {
+        "expect": "reject",
+        "fund": [
+          "0x1d268dd5267223bd4f7163c805a3812251b93cc1"
+        ],
+        "feePayer": "0x1d268dd5267223bd4f7163c805a3812251b93cc1"
+      }
+    },
+    {
+      "name": "expiring_nonce_valid_before_too_far",
+      "description": "Expiring nonce with validBefore in 2100, far past the expiring-nonce window: the node rejects it.",
+      "tags": [
+        "expiring-nonce",
+        "validity-window",
+        "node",
+        "node-reject"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
+      "source": "tempo-primitives TEMPO_EXPIRING_NONCE_KEY",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "validBefore": "4102444800"
+        },
+        "signer": {
+          "type": "secp256k1",
+          "privateKey": "0xbd1331950bbe749681ffc02fc7d65abc8350774d3f899b9d944334dc041e56dd"
+        }
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0xadff08b00c93ae8c0b941248981d0559f39dfcf06938e56bd560ee1e95e2796e",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8e1820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8084f4865700808080c0b841e89d29e74d139ae2d5644fc199033426e7251603602d97e92793f28082ca3b56566d233197860dc73e4d12bf6487b35130970fbc84882c7720e67451c1628b791c",
+          "hash": "0x8786b00a3d2a2117c19ea5745a86e2119aacb43de923f9fe92d9f0f569b3f65f",
+          "sender": "0xf5e6bd154bef4c6740be4dbe0683d1e2c609cf7e"
+        }
+      },
+      "node": {
+        "expect": "reject",
+        "fund": [
+          "0xf5e6bd154bef4c6740be4dbe0683d1e2c609cf7e"
+        ],
+        "feePayer": "0xf5e6bd154bef4c6740be4dbe0683d1e2c609cf7e"
       }
     },
     {
       "name": "sponsored",
       "description": "Fee payer co-signs and pays; the sender holds no tokens.",
+      "tags": [
+        "sponsored",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "tempo-go sponsored_transaction; ox serialize with feePayerSignature",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -754,26 +1157,40 @@
         },
         "feePayerPrivateKey": "0xead7c07a46854f1245c20013769523fb16c1c1527547aa6800a7682c2544c4de"
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0xb5724f5c4d2620a923194424f582004dcd17cf3d01944b18fe302aab4d1a70f2",
+          "feePayerSigningHash": "0x14cef88ce6256c566d0ed3554b9d795061dc45adc831d4db90bd60bfce867967",
+          "raw": "0x76f8ba820539843b9aca00850ba43b7400831e8480d8d794000000000000000000000000000000000000beef8080c08080808080f84301a0e1ea3d475fade860dd2e8f7a783c5dca5ea3dd8982a99a3518dd4ace7779770ea06390d1ea7dcac5ef8e245c78ea9673b48c5d2d2f56ff07dc36c446ec490525abc0b8413126e672148be3bb41c0f543565f1d0fa7bcf46524b094fff12228e08448070d79c51ff27c0f43e2681fad4bafc05a7270b4b342830fc587f769268bd605230d1b",
+          "hash": "0xcb5f1ef4ae1aaa99fa0e89b24e7449c9eaf886e9621a019920e70674ad666082",
+          "sender": "0x79f632ff4bb7e36f08f571163ced009b202da056"
+        }
+      },
       "node": {
         "expect": "success",
         "fund": [
           "0x88b6547452b28e09ef47a85e66c6aeba83df81f5"
         ],
         "feePayer": "0x88b6547452b28e09ef47a85e66c6aeba83df81f5"
-      },
-      "expected": {
-        "senderSigningHash": "0xb5724f5c4d2620a923194424f582004dcd17cf3d01944b18fe302aab4d1a70f2",
-        "feePayerSigningHash": "0x14cef88ce6256c566d0ed3554b9d795061dc45adc831d4db90bd60bfce867967",
-        "raw": "0x76f8ba820539843b9aca00850ba43b7400831e8480d8d794000000000000000000000000000000000000beef8080c08080808080f84301a0e1ea3d475fade860dd2e8f7a783c5dca5ea3dd8982a99a3518dd4ace7779770ea06390d1ea7dcac5ef8e245c78ea9673b48c5d2d2f56ff07dc36c446ec490525abc0b8413126e672148be3bb41c0f543565f1d0fa7bcf46524b094fff12228e08448070d79c51ff27c0f43e2681fad4bafc05a7270b4b342830fc587f769268bd605230d1b",
-        "hash": "0xcb5f1ef4ae1aaa99fa0e89b24e7449c9eaf886e9621a019920e70674ad666082",
-        "sender": "0x79f632ff4bb7e36f08f571163ced009b202da056"
       }
     },
     {
       "name": "sponsored_with_fee_token",
       "description": "Fee payer picks the fee token; the sender payload leaves it out.",
+      "tags": [
+        "sponsored",
+        "fee-token",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "tempo-go sponsored_with_fee_token",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -797,26 +1214,39 @@
         },
         "feePayerPrivateKey": "0x4ed0f6e0a3493a7ed97e6d5ec6b3ac26b0c84a6bb64622857e859221c9f36730"
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0xb5724f5c4d2620a923194424f582004dcd17cf3d01944b18fe302aab4d1a70f2",
+          "feePayerSigningHash": "0x8f9cb04363d6bb0e9ff2705bdf48475282e8a6baa45518b504cdf76f6c79c97b",
+          "raw": "0x76f8ce820539843b9aca00850ba43b7400831e8480d8d794000000000000000000000000000000000000beef8080c0808080809420c0000000000000000000000000000000000000f84301a0e1daef3d34f430989fa284ab0deb9710e61fe4a7a4472effc5b011c7978b7cf6a0217b7fa59194620e9b58ec97ece139af79408afe4b594968e71a623a6e42e3dec0b841c2cf0af811920f0351ffea70b0df90c109125b3971e28b14e4c86fcf32c8a58b27831ed2ae2028c5e620e1ae71c25b86165362bf5edd3cba3453eef1c90166db1c",
+          "hash": "0x96a4c8ae630f399e6c3a32837757f89110d99d4f014d804687ffef91aa612095",
+          "sender": "0x86130940bb8e27c2f4974b888e40e346c0e20871"
+        }
+      },
       "node": {
         "expect": "success",
         "fund": [
           "0x0af8583b55a02476a632f3dae7e7617d3d10b3ba"
         ],
         "feePayer": "0x0af8583b55a02476a632f3dae7e7617d3d10b3ba"
-      },
-      "expected": {
-        "senderSigningHash": "0xb5724f5c4d2620a923194424f582004dcd17cf3d01944b18fe302aab4d1a70f2",
-        "feePayerSigningHash": "0x8f9cb04363d6bb0e9ff2705bdf48475282e8a6baa45518b504cdf76f6c79c97b",
-        "raw": "0x76f8ce820539843b9aca00850ba43b7400831e8480d8d794000000000000000000000000000000000000beef8080c0808080809420c0000000000000000000000000000000000000f84301a0e1daef3d34f430989fa284ab0deb9710e61fe4a7a4472effc5b011c7978b7cf6a0217b7fa59194620e9b58ec97ece139af79408afe4b594968e71a623a6e42e3dec0b841c2cf0af811920f0351ffea70b0df90c109125b3971e28b14e4c86fcf32c8a58b27831ed2ae2028c5e620e1ae71c25b86165362bf5edd3cba3453eef1c90166db1c",
-        "hash": "0x96a4c8ae630f399e6c3a32837757f89110d99d4f014d804687ffef91aa612095",
-        "sender": "0x86130940bb8e27c2f4974b888e40e346c0e20871"
       }
     },
     {
       "name": "key_authorization",
       "description": "Root signs a tx that also authorizes a secp256k1 access key with a pathUSD limit.",
+      "tags": [
+        "key-authorization",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "ox serialize keyAuthorization (secp256k1); tempo-go keychain SignAndAttach",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -853,26 +1283,40 @@
           "privateKey": "0x787f45ef2dbd7944cecabbbf4d6c95a8d330b3fde5a204ebab2860c3547fc1d7"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x47c8cd8e756fef7c883957bf06c3c36179f36ebe5cffbb2666b585ca7effde72",
+          "feePayerSigningHash": null,
+          "raw": "0x76f90139820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0f87af68205398094ad50762bd04f759957451cac83950d3b9c245a8b80dbda9420c0000000000000000000000000000000000000843b9aca00b841151c8230cc1098f4831dcd0b72b8d98dc0a3c0f940d58289f0ce75c66ef5fda76c21754a337e7c301a09b950fda2455304761aa39d68d388cc2ab1ccb72835d91bb841512058b71d8eddc06c79858ebed2736c0d579ea874c487693dcc8fb824e7d20b71a175368b7ee7ec3f50805f763d82913e6bb39a02e12b7b4e3fe44cd4ca34e71b",
+          "hash": "0x14fbb785573f3c80d3d65bc0fa106bc7874129091121697c7d5785bf3ad239e6",
+          "sender": "0x70505783416ca25a9b3bd1334da28240883f3c3b"
+        }
+      },
       "node": {
         "expect": "success",
         "fund": [
           "0x70505783416ca25a9b3bd1334da28240883f3c3b"
         ],
         "feePayer": "0x70505783416ca25a9b3bd1334da28240883f3c3b"
-      },
-      "expected": {
-        "senderSigningHash": "0x47c8cd8e756fef7c883957bf06c3c36179f36ebe5cffbb2666b585ca7effde72",
-        "feePayerSigningHash": null,
-        "raw": "0x76f90139820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0f87af68205398094ad50762bd04f759957451cac83950d3b9c245a8b80dbda9420c0000000000000000000000000000000000000843b9aca00b841151c8230cc1098f4831dcd0b72b8d98dc0a3c0f940d58289f0ce75c66ef5fda76c21754a337e7c301a09b950fda2455304761aa39d68d388cc2ab1ccb72835d91bb841512058b71d8eddc06c79858ebed2736c0d579ea874c487693dcc8fb824e7d20b71a175368b7ee7ec3f50805f763d82913e6bb39a02e12b7b4e3fe44cd4ca34e71b",
-        "hash": "0x14fbb785573f3c80d3d65bc0fa106bc7874129091121697c7d5785bf3ad239e6",
-        "sender": "0x70505783416ca25a9b3bd1334da28240883f3c3b"
       }
     },
     {
       "name": "keychain_access_key",
       "description": "The access key authorized above signs for the root account (V2 keychain signature).",
+      "tags": [
+        "keychain",
+        "keychain-v2",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "tempo-go keychain SignWithAccessKey; ox SignatureEnvelope keychain",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -895,6 +1339,16 @@
           "rootAccount": "0x70505783416ca25a9b3bd1334da28240883f3c3b"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x1851b043377955e37ee7874ece7e2afabda8860b14fce42667fbda19c43f091f",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8d2820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0800180808080c0b8560470505783416ca25a9b3bd1334da28240883f3c3bb1f7097d24130dcc5693f92112da92828524e58b7c761e46c2b3f26c33db063a50e06c5600aa18ce4675e3dfdc1a4d27cc060c21aabb25e37c50ffebbc707af91b",
+          "hash": "0x2068f675ce25c9c8e242f6295c4e9c64ed14673839d136e06ef659558e9e87e3",
+          "sender": "0x70505783416ca25a9b3bd1334da28240883f3c3b"
+        }
+      },
       "node": {
         "expect": "success",
         "requires": [
@@ -904,20 +1358,25 @@
           "0x70505783416ca25a9b3bd1334da28240883f3c3b"
         ],
         "feePayer": "0x70505783416ca25a9b3bd1334da28240883f3c3b"
-      },
-      "expected": {
-        "senderSigningHash": "0x1851b043377955e37ee7874ece7e2afabda8860b14fce42667fbda19c43f091f",
-        "feePayerSigningHash": null,
-        "raw": "0x76f8d2820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0800180808080c0b8560470505783416ca25a9b3bd1334da28240883f3c3bb1f7097d24130dcc5693f92112da92828524e58b7c761e46c2b3f26c33db063a50e06c5600aa18ce4675e3dfdc1a4d27cc060c21aabb25e37c50ffebbc707af91b",
-        "hash": "0x2068f675ce25c9c8e242f6295c4e9c64ed14673839d136e06ef659558e9e87e3",
-        "sender": "0x70505783416ca25a9b3bd1334da28240883f3c3b"
       }
     },
     {
       "name": "keychain_sponsored",
       "description": "Access key signs, fee payer co-signs.",
+      "tags": [
+        "sponsored",
+        "keychain",
+        "keychain-v2",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "new",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -941,6 +1400,16 @@
         },
         "feePayerPrivateKey": "0x854bbe8a00bf154f1583b69fe8c0157327caa9e764d3b0374dc93558024f572a"
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0xa087e8541ef3a67b7e82107d4e99447b7981fb3f62a000d5ca45cefdc435a7d4",
+          "feePayerSigningHash": "0xe60bf0e00fb5638647e3eb10f3af64ddc04714d66d0472c72d5052ae684fab7b",
+          "raw": "0x76f90116820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c08002808080f84301a0ded00ff03611df11242232dedb01a9b2ec4d2f3444811267c158f1eb64363bd6a041ed588851c691bda6f3736c7cecf50eed487146bddc3b2a964dec921ca40c03c0b8560470505783416ca25a9b3bd1334da28240883f3c3bfc6e5728a566033784f37000d22a747d4f91b58341b368b4fd1ec378b8df8a0806532ad0c6ea4ecf28608df3b26d5f2156afbc727333a7c74fe71c4e0debf6ea1c",
+          "hash": "0xd066c9314285fa5cc29591999e995220ede1a3a2a23da5c667ee6ac7eb40f11a",
+          "sender": "0x70505783416ca25a9b3bd1334da28240883f3c3b"
+        }
+      },
       "node": {
         "expect": "success",
         "requires": [
@@ -950,20 +1419,24 @@
           "0x1f6b696587342f9b5a6816fa7df990f37719667b"
         ],
         "feePayer": "0x1f6b696587342f9b5a6816fa7df990f37719667b"
-      },
-      "expected": {
-        "senderSigningHash": "0xa087e8541ef3a67b7e82107d4e99447b7981fb3f62a000d5ca45cefdc435a7d4",
-        "feePayerSigningHash": "0xe60bf0e00fb5638647e3eb10f3af64ddc04714d66d0472c72d5052ae684fab7b",
-        "raw": "0x76f90116820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c08002808080f84301a0ded00ff03611df11242232dedb01a9b2ec4d2f3444811267c158f1eb64363bd6a041ed588851c691bda6f3736c7cecf50eed487146bddc3b2a964dec921ca40c03c0b8560470505783416ca25a9b3bd1334da28240883f3c3bfc6e5728a566033784f37000d22a747d4f91b58341b368b4fd1ec378b8df8a0806532ad0c6ea4ecf28608df3b26d5f2156afbc727333a7c74fe71c4e0debf6ea1c",
-        "hash": "0xd066c9314285fa5cc29591999e995220ede1a3a2a23da5c667ee6ac7eb40f11a",
-        "sender": "0x70505783416ca25a9b3bd1334da28240883f3c3b"
       }
     },
     {
       "name": "keychain_unauthorized_key",
       "description": "A key the root never authorized signs for it; the node rejects it.",
+      "tags": [
+        "keychain",
+        "keychain-v2",
+        "node",
+        "node-reject"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "new",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -986,6 +1459,16 @@
           "rootAccount": "0x70505783416ca25a9b3bd1334da28240883f3c3b"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x923934067553f5f940a0423009e1aa6ee8f9d53a5f92b11c481a5581412b9214",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8d2820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0800380808080c0b8560470505783416ca25a9b3bd1334da28240883f3c3b5fc7c2be40fe73aea61d65829ca713242abe1b20db27024ddec5dcbb8ec505072305bfac0ed0ee1c9db325d234a880210624269384a590a9c4f3a8f456d4e6ef1b",
+          "hash": "0x49a9c4b7753b01060cbf221b9a654b770511493e1f146bb875638345e5b3fe56",
+          "sender": "0x70505783416ca25a9b3bd1334da28240883f3c3b"
+        }
+      },
       "node": {
         "expect": "reject",
         "requires": [
@@ -995,20 +1478,89 @@
           "0x70505783416ca25a9b3bd1334da28240883f3c3b"
         ],
         "feePayer": "0x70505783416ca25a9b3bd1334da28240883f3c3b"
+      }
+    },
+    {
+      "name": "keychain_v1_access_key",
+      "description": "The authorized access key signs with the legacy V1 keychain envelope (0x03, inner signature over the plain signing hash), deprecated at T1C: the node rejects it.",
+      "tags": [
+        "keychain",
+        "keychain-v1",
+        "node",
+        "node-reject"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1",
+        "python": ">0.6.2"
+      },
+      "skipReasons": {
+        "go": "tempo-go has no keychain V1 signing API: keychain.SignWithAccessKey always writes a V2 envelope (pkg/keychain/keychain.go:14,89-130 in v0.6.1; :14,96-137 on main). Not fixed on tempo-go main (542c18e) either: re-check on the next tempo-go bump.",
+        "python": "pytempo has no keychain V1 signing API: KeychainSignature is V2-only in 0.6.2 (pytempo/keychain.py:847, :903); main parses V1 envelopes but KeychainSignature.sign always derives the V2 digest (pytempo/keychain.py:932) and sign_access_key takes no version (models.py:750-770). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump."
+      },
+      "source": "ox SignatureEnvelope keychain v1; tempo-primitives KeychainSignature",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "3",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ]
+        },
+        "signer": {
+          "type": "keychain",
+          "accessKeyPrivateKey": "0xa813b4a2d5ba0ac630e619a178ecd397d8d82e546bc60dbefc3be9e6bc3036e5",
+          "rootAccount": "0x70505783416ca25a9b3bd1334da28240883f3c3b",
+          "version": "v1"
+        }
       },
       "expected": {
-        "senderSigningHash": "0x923934067553f5f940a0423009e1aa6ee8f9d53a5f92b11c481a5581412b9214",
-        "feePayerSigningHash": null,
-        "raw": "0x76f8d2820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0800380808080c0b8560470505783416ca25a9b3bd1334da28240883f3c3b5fc7c2be40fe73aea61d65829ca713242abe1b20db27024ddec5dcbb8ec505072305bfac0ed0ee1c9db325d234a880210624269384a590a9c4f3a8f456d4e6ef1b",
-        "hash": "0x49a9c4b7753b01060cbf221b9a654b770511493e1f146bb875638345e5b3fe56",
-        "sender": "0x70505783416ca25a9b3bd1334da28240883f3c3b"
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x923934067553f5f940a0423009e1aa6ee8f9d53a5f92b11c481a5581412b9214",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8d2820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0800380808080c0b8560370505783416ca25a9b3bd1334da28240883f3c3bd4339b11087a4b60e179d121abd2a4d236c2f217b8e202e69fd803c6467996841d0dc8bed0f86796f0abf76df585f703b589335909e25181737cb545a6e2d52e1c",
+          "hash": "0x0b745c2ce4db2d5642292bec2d4429e90b56e08f87653d6cfc27329eff1ed9e8",
+          "sender": "0x70505783416ca25a9b3bd1334da28240883f3c3b"
+        }
+      },
+      "node": {
+        "expect": "reject",
+        "requires": [
+          "keychain_sponsored"
+        ],
+        "fund": [
+          "0x70505783416ca25a9b3bd1334da28240883f3c3b"
+        ],
+        "feePayer": "0x70505783416ca25a9b3bd1334da28240883f3c3b"
       }
     },
     {
       "name": "key_authorization_expiry_periodic_limit",
       "description": "Access key with an expiry and a daily pathUSD limit.",
+      "tags": [
+        "key-authorization",
+        "periodic-limit",
+        "expiry",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1",
+        "python": ">0.6.2"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released.",
+        "python": "pytempo rejects periodic token limits in key authorizations (pytempo/keychain.py:126-130, :570), which tempo-primitives and the node support. Fixed by pytempo#134 (https://github.com/tempoxyz/pytempo/pull/134), merged but not yet released (release PR pytempo#135, 0.7.0)."
+      },
       "source": "tempo-primitives TokenLimit.period; ox KeyAuthorization period",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -1046,26 +1598,40 @@
           "privateKey": "0x585e9d0dcbd4478f08e9be863ad112ed9eb28cbd209cae25ff6bc8e905c8f267"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x176f5ad199ea7297b0044955d9594155ba6c8a5ae6f579cd2c51dfde7e225b7f",
+          "feePayerSigningHash": null,
+          "raw": "0x76f90141820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0f882f83d820539809480abf92f6b72752d3847873a704bdb11c033c9a584f4865700dedd9420c0000000000000000000000000000000000000834c4b4083015180b841650493a5c44f0e6595259a5d7b911ead832a6a2bca31bc4cb4b934017c4194d657b730348fe748153c49eff585e71952d320f09b97f8ecf3734efe2fb2c728b31cb841ea50fa1e7165fbd7ae19861ac01acfea18790aaa5799aafbcb7a16a9134a9d736fbafe21f3f97b35a4d9813ec5a87f93dd7f0ee4ff48db9d4d61ca3bbba9841f1c",
+          "hash": "0x8afae595150ebf590188bf7d8562abd5b880909d51c5e5d25416e6557680aee5",
+          "sender": "0x123f68c947a95a862624b693981adbc31c804922"
+        }
+      },
       "node": {
         "expect": "success",
         "fund": [
           "0x123f68c947a95a862624b693981adbc31c804922"
         ],
         "feePayer": "0x123f68c947a95a862624b693981adbc31c804922"
-      },
-      "expected": {
-        "senderSigningHash": "0x176f5ad199ea7297b0044955d9594155ba6c8a5ae6f579cd2c51dfde7e225b7f",
-        "feePayerSigningHash": null,
-        "raw": "0x76f90141820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0f882f83d820539809480abf92f6b72752d3847873a704bdb11c033c9a584f4865700dedd9420c0000000000000000000000000000000000000834c4b4083015180b841650493a5c44f0e6595259a5d7b911ead832a6a2bca31bc4cb4b934017c4194d657b730348fe748153c49eff585e71952d320f09b97f8ecf3734efe2fb2c728b31cb841ea50fa1e7165fbd7ae19861ac01acfea18790aaa5799aafbcb7a16a9134a9d736fbafe21f3f97b35a4d9813ec5a87f93dd7f0ee4ff48db9d4d61ca3bbba9841f1c",
-        "hash": "0x8afae595150ebf590188bf7d8562abd5b880909d51c5e5d25416e6557680aee5",
-        "sender": "0x123f68c947a95a862624b693981adbc31c804922"
       }
     },
     {
       "name": "keychain_periodic_key",
       "description": "The periodic-limit access key signs for its root.",
+      "tags": [
+        "keychain",
+        "keychain-v2",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "new",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -1088,6 +1654,16 @@
           "rootAccount": "0x123f68c947a95a862624b693981adbc31c804922"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x1851b043377955e37ee7874ece7e2afabda8860b14fce42667fbda19c43f091f",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8d2820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0800180808080c0b85604123f68c947a95a862624b693981adbc31c80492216bad5506d10ee282b9c2467cbb7d135e7fe17bac78d34e4d62ef3f51d8b3024059135fb41cce47e9a008d9167589c86229036f8fa16695560830f10cc83c8a11b",
+          "hash": "0xbdceb0b83aa88bdc10266f67112052b10a32c61d6e45faf906b96e4ddaffef33",
+          "sender": "0x123f68c947a95a862624b693981adbc31c804922"
+        }
+      },
       "node": {
         "expect": "success",
         "requires": [
@@ -1097,20 +1673,24 @@
           "0x123f68c947a95a862624b693981adbc31c804922"
         ],
         "feePayer": "0x123f68c947a95a862624b693981adbc31c804922"
-      },
-      "expected": {
-        "senderSigningHash": "0x1851b043377955e37ee7874ece7e2afabda8860b14fce42667fbda19c43f091f",
-        "feePayerSigningHash": null,
-        "raw": "0x76f8d2820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0800180808080c0b85604123f68c947a95a862624b693981adbc31c80492216bad5506d10ee282b9c2467cbb7d135e7fe17bac78d34e4d62ef3f51d8b3024059135fb41cce47e9a008d9167589c86229036f8fa16695560830f10cc83c8a11b",
-        "hash": "0xbdceb0b83aa88bdc10266f67112052b10a32c61d6e45faf906b96e4ddaffef33",
-        "sender": "0x123f68c947a95a862624b693981adbc31c804922"
       }
     },
     {
       "name": "key_authorization_no_spending",
       "description": "Access key with limits = [] (no spending allowed).",
+      "tags": [
+        "key-authorization",
+        "no-spending",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "tempo-primitives KeyAuthorization.limits Some([])",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -1142,26 +1722,40 @@
           "privateKey": "0xdf8a8f672ed92de2eb5ef9bd7970f1c8fb5a9d6b89d3e79dcaad1774f036134b"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0xcdf28a328c9362baa2ff4e77e4d9c2b110a0bee53227affe885821a9792fd7f7",
+          "feePayerSigningHash": null,
+          "raw": "0x76f9011e820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0f85fdb8205398094b73999ba00a056a736c9cfcfaa627c265db62b6d80c0b841853f5fc8a4ddfbf797f111bdf6e17f3b25b92bfb5bbcd4cb6a60bf7243378e7f617e7c8331718792b5aa8ee9bc34f270d4c19af0e0f08f6c1c25810bd48cb02b1bb8417edf0f6a47617c212414be5acec49d6a632e39404e112f00dd7a54258d5821525f54fdaa41a2d5b6c290972c0526b93b10d58408e5723d8fd11558e253dbad201c",
+          "hash": "0x7b1909bde181891b1b7b12080064e8edc519e2e659ebf7fedfe9a67cf91ca476",
+          "sender": "0x832aabd426240a24ec5635cffdffac0c2243257a"
+        }
+      },
       "node": {
         "expect": "success",
         "fund": [
           "0x832aabd426240a24ec5635cffdffac0c2243257a"
         ],
         "feePayer": "0x832aabd426240a24ec5635cffdffac0c2243257a"
-      },
-      "expected": {
-        "senderSigningHash": "0xcdf28a328c9362baa2ff4e77e4d9c2b110a0bee53227affe885821a9792fd7f7",
-        "feePayerSigningHash": null,
-        "raw": "0x76f9011e820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0f85fdb8205398094b73999ba00a056a736c9cfcfaa627c265db62b6d80c0b841853f5fc8a4ddfbf797f111bdf6e17f3b25b92bfb5bbcd4cb6a60bf7243378e7f617e7c8331718792b5aa8ee9bc34f270d4c19af0e0f08f6c1c25810bd48cb02b1bb8417edf0f6a47617c212414be5acec49d6a632e39404e112f00dd7a54258d5821525f54fdaa41a2d5b6c290972c0526b93b10d58408e5723d8fd11558e253dbad201c",
-        "hash": "0x7b1909bde181891b1b7b12080064e8edc519e2e659ebf7fedfe9a67cf91ca476",
-        "sender": "0x832aabd426240a24ec5635cffdffac0c2243257a"
       }
     },
     {
       "name": "keychain_no_spending_transfer",
       "description": "The no-spending key tries a pathUSD transfer: the pool rejects it (SpendingLimitExceeded).",
+      "tags": [
+        "keychain",
+        "keychain-v2",
+        "node",
+        "node-reject"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "new",
-      "op": "tx.sign",
       "input": {
         "tx": {
           "chainId": "1337",
@@ -1184,6 +1778,16 @@
           "rootAccount": "0x832aabd426240a24ec5635cffdffac0c2243257a"
         }
       },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x1851b043377955e37ee7874ece7e2afabda8860b14fce42667fbda19c43f091f",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8d2820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0800180808080c0b85604832aabd426240a24ec5635cffdffac0c2243257abbe8de131c0567a785ff6abc0c489d3eea5bc8dd3eed2038c39119c8d7ca3daa416dcb3280cd36c4ba550b1420df30a6d347f474d0271c90cea1cc496b3dcb4a1c",
+          "hash": "0xb923434a00dea483f42c2a71b5bf4d49a2a65a22107dd920ae64a38bfafb6b23",
+          "sender": "0x832aabd426240a24ec5635cffdffac0c2243257a"
+        }
+      },
       "node": {
         "expect": "reject",
         "requires": [
@@ -1193,19 +1797,1091 @@
           "0x832aabd426240a24ec5635cffdffac0c2243257a"
         ],
         "feePayer": "0x832aabd426240a24ec5635cffdffac0c2243257a"
+      }
+    },
+    {
+      "name": "key_authorization_call_scopes",
+      "description": "Root authorizes an access key scoped (TIP-1011) to pathUSD transfer() with a recipient allowlist of one address.",
+      "tags": [
+        "key-authorization",
+        "call-scopes",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1",
+        "python": ">0.6.2"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released.",
+        "python": "pytempo has no inline key authorization call scopes (TIP-1011 allowed_calls): KeyAuthorization always writes the field absent (pytempo/keychain.py:596 in 0.6.2, :590 on main). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump."
+      },
+      "source": "ox KeyAuthorization.test.ts scopes; tempo-primitives CallScope/SelectorRule",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "5000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "keyAuthorization": {
+            "privateKey": "0xaacfc777a4749bcafadfee81fb4ffb644d53ddd87c3b2ab5b01661d1d3da3f70",
+            "authorization": {
+              "chainId": "1337",
+              "keyType": "secp256k1",
+              "keyId": "0x7534197ebeb94bd301b90c9d310336a96fe03ae0",
+              "expiry": null,
+              "limits": [
+                {
+                  "token": "0x20c0000000000000000000000000000000000000",
+                  "limit": "1000000000"
+                }
+              ],
+              "allowedCalls": [
+                {
+                  "target": "0x20c0000000000000000000000000000000000000",
+                  "selectorRules": [
+                    {
+                      "selector": "0xa9059cbb",
+                      "recipients": [
+                        "0x000000000000000000000000000000000000beef"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "signer": {
+          "type": "secp256k1",
+          "privateKey": "0xaacfc777a4749bcafadfee81fb4ffb644d53ddd87c3b2ab5b01661d1d3da3f70"
+        }
       },
       "expected": {
-        "senderSigningHash": "0x1851b043377955e37ee7874ece7e2afabda8860b14fce42667fbda19c43f091f",
-        "feePayerSigningHash": null,
-        "raw": "0x76f8d2820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0800180808080c0b85604832aabd426240a24ec5635cffdffac0c2243257abbe8de131c0567a785ff6abc0c489d3eea5bc8dd3eed2038c39119c8d7ca3daa416dcb3280cd36c4ba550b1420df30a6d347f474d0271c90cea1cc496b3dcb4a1c",
-        "hash": "0xb923434a00dea483f42c2a71b5bf4d49a2a65a22107dd920ae64a38bfafb6b23",
-        "sender": "0x832aabd426240a24ec5635cffdffac0c2243257a"
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x943bc0d21c57d64039529139901471b7c611020ce54d9122c80b8a8b31cd26bc",
+          "feePayerSigningHash": null,
+          "raw": "0x76f9016e820539843b9aca00850ba43b7400834c4b40f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0f8aff86a82053980947534197ebeb94bd301b90c9d310336a96fe03ae080dbda9420c0000000000000000000000000000000000000843b9aca00f3f29420c0000000000000000000000000000000000000dcdb84a9059cbbd594000000000000000000000000000000000000beefb841215b5ed6371c8a91e8c02922f5f069cbec8332a13fccfff3e420f47fdeaf44685f7d2f75f07479a3c78b8cebeb06b6761efa1729ef711c869281d5a3afad01861bb841ff7b7803e74e42988ba29e5aa0ce2f26f2e36cf9771ac5a22a16a953209a152667673b96e6afa8c778d94d4887041ffa1ed6af0f9a61046b398607020dd4a81b1c",
+          "hash": "0x641c23c85ceeb04817ab3220c53b9491c44d9c44f41bf4f8193049b1025a20d4",
+          "sender": "0x1dea5f15c3cb5fe5b240d34380703679eca897f6"
+        }
+      },
+      "node": {
+        "expect": "success",
+        "fund": [
+          "0x1dea5f15c3cb5fe5b240d34380703679eca897f6"
+        ],
+        "feePayer": "0x1dea5f15c3cb5fe5b240d34380703679eca897f6"
+      }
+    },
+    {
+      "name": "keychain_scoped_allowed_call",
+      "description": "The scoped key calls pathUSD transfer() to its allowed recipient.",
+      "tags": [
+        "keychain",
+        "keychain-v2",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
+      "source": "new",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "1",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ]
+        },
+        "signer": {
+          "type": "keychain",
+          "accessKeyPrivateKey": "0xeb8ea84f1d5e65abfdc54efdaddb086164c03e049232ee89e173b3ca3de2bed3",
+          "rootAccount": "0x1dea5f15c3cb5fe5b240d34380703679eca897f6"
+        }
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x1851b043377955e37ee7874ece7e2afabda8860b14fce42667fbda19c43f091f",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8d2820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0800180808080c0b856041dea5f15c3cb5fe5b240d34380703679eca897f61af451da669e9705d51f463179e234807340e4bcdf710a06689c79cc8ae814964878a901f10121dc20dec38b68885b6a442168e4379bf18369db5c1ec69500ec1b",
+          "hash": "0x7aaa64ca342aec31e989ef4cc26e70d99a3d6bbe4987cbd74c1ca610cdb9da95",
+          "sender": "0x1dea5f15c3cb5fe5b240d34380703679eca897f6"
+        }
+      },
+      "node": {
+        "expect": "success",
+        "requires": [
+          "key_authorization_call_scopes"
+        ],
+        "fund": [
+          "0x1dea5f15c3cb5fe5b240d34380703679eca897f6"
+        ],
+        "feePayer": "0x1dea5f15c3cb5fe5b240d34380703679eca897f6"
+      }
+    },
+    {
+      "name": "keychain_scoped_other_recipient",
+      "description": "The scoped key calls pathUSD transfer() to a recipient outside its allowlist: the call reverts.",
+      "tags": [
+        "keychain",
+        "keychain-v2",
+        "node",
+        "node-revert"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
+      "source": "new",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "2",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000cafe0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ]
+        },
+        "signer": {
+          "type": "keychain",
+          "accessKeyPrivateKey": "0xeb8ea84f1d5e65abfdc54efdaddb086164c03e049232ee89e173b3ca3de2bed3",
+          "rootAccount": "0x1dea5f15c3cb5fe5b240d34380703679eca897f6"
+        }
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x12101fb79f4f50bc8132af2016d9d6c031c68cc9766d0369451ff17418cdfdae",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8d2820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000cafe0000000000000000000000000000000000000000000000000000000000000001c0800280808080c0b856041dea5f15c3cb5fe5b240d34380703679eca897f694ade388f782034d7de645c882a6342813f1f479b7a13386d5151fd2ffa6c2c118922ac974ad5c4bebc9fd490bf6315550d07cf268b2d126e62814dab09abb591b",
+          "hash": "0x87656281354c7b91d5b0d098d743d28e1cb338f154e18d54a896b8c4f6c0202a",
+          "sender": "0x1dea5f15c3cb5fe5b240d34380703679eca897f6"
+        }
+      },
+      "node": {
+        "expect": "revert",
+        "requires": [
+          "keychain_scoped_allowed_call"
+        ],
+        "fund": [
+          "0x1dea5f15c3cb5fe5b240d34380703679eca897f6"
+        ],
+        "feePayer": "0x1dea5f15c3cb5fe5b240d34380703679eca897f6"
+      }
+    },
+    {
+      "name": "keychain_scoped_other_selector",
+      "description": "The scoped key calls pathUSD approve(), a selector outside its scope: the call reverts.",
+      "tags": [
+        "keychain",
+        "keychain-v2",
+        "node",
+        "node-revert"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
+      "source": "new",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "3",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0x095ea7b3000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ]
+        },
+        "signer": {
+          "type": "keychain",
+          "accessKeyPrivateKey": "0xeb8ea84f1d5e65abfdc54efdaddb086164c03e049232ee89e173b3ca3de2bed3",
+          "rootAccount": "0x1dea5f15c3cb5fe5b240d34380703679eca897f6"
+        }
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x6031d6b176d58ae84b2fc8e89b8f6d9728f8bd51526f83a513cd915bad173cd7",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8d2820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844095ea7b3000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0800380808080c0b856041dea5f15c3cb5fe5b240d34380703679eca897f68179c30f7864ec92febbcb59d2529ec0f4ff69bcc7e78d251f6fe6c51bd43cdc1a286eb5e645e378eb356236fe8024a08efaefccc1092b1cdab2a0e5c249d9661b",
+          "hash": "0x7df886ef923915c5c62531b6a5d5c29b35e0459444f0c3a409e242b255e7a6b4",
+          "sender": "0x1dea5f15c3cb5fe5b240d34380703679eca897f6"
+        }
+      },
+      "node": {
+        "expect": "revert",
+        "requires": [
+          "keychain_scoped_other_recipient"
+        ],
+        "fund": [
+          "0x1dea5f15c3cb5fe5b240d34380703679eca897f6"
+        ],
+        "feePayer": "0x1dea5f15c3cb5fe5b240d34380703679eca897f6"
+      }
+    },
+    {
+      "name": "key_authorization_deny_all_calls",
+      "description": "Root authorizes an access key with allowedCalls = [] (scoped mode, no call allowed).",
+      "tags": [
+        "key-authorization",
+        "call-scopes",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1",
+        "python": ">0.6.2"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released.",
+        "python": "pytempo has no inline key authorization call scopes (TIP-1011 allowed_calls): KeyAuthorization always writes the field absent (pytempo/keychain.py:596 in 0.6.2, :590 on main). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump."
+      },
+      "source": "tempo-primitives KeyAuthorization.allowed_calls Some([])",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "keyAuthorization": {
+            "privateKey": "0x59556e8a2b713fd748b9d1a4a4d8acc37d9b970db8fc9496d6104410b3870b81",
+            "authorization": {
+              "chainId": "1337",
+              "keyType": "secp256k1",
+              "keyId": "0x93b1a85c1655c359a175d3e3ea24ac80fd444ec9",
+              "expiry": null,
+              "limits": null,
+              "allowedCalls": []
+            }
+          }
+        },
+        "signer": {
+          "type": "secp256k1",
+          "privateKey": "0x59556e8a2b713fd748b9d1a4a4d8acc37d9b970db8fc9496d6104410b3870b81"
+        }
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x6d784aaafbe88c43794ea1514daba0f6095caa8f6a048eea2cadd334276e0648",
+          "feePayerSigningHash": null,
+          "raw": "0x76f9011f820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0f860dc820539809493b1a85c1655c359a175d3e3ea24ac80fd444ec98080c0b8417b13f724c61b8924603785bc73f03fe1f8b1629217945e0f731d181a470fa80367c6675a218ddead47e525f7afad4835625761bc62756e7d0197c7975ec51f601cb8411e56385b380424f64e35d6d46bd29a4fc115b976ff3ec22577afbd5e472fa84066b22960af7bbbd5b33dac8075a99ae3351f95f01ec4c731e877ce9296e4b2b31b",
+          "hash": "0x3f2ba19c9141adccfe5f4b7306336f3908b1c9329118332ed2c9da6952bc8753",
+          "sender": "0xacd87ffa2cb46d235ccac9264bba22a222521f98"
+        }
+      },
+      "node": {
+        "expect": "success",
+        "fund": [
+          "0xacd87ffa2cb46d235ccac9264bba22a222521f98"
+        ],
+        "feePayer": "0xacd87ffa2cb46d235ccac9264bba22a222521f98"
+      }
+    },
+    {
+      "name": "keychain_deny_all_calls_transfer",
+      "description": "The deny-all key tries a pathUSD transfer: the node includes it and the call reverts.",
+      "tags": [
+        "keychain",
+        "keychain-v2",
+        "node",
+        "node-revert"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
+      "source": "new",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "1",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ]
+        },
+        "signer": {
+          "type": "keychain",
+          "accessKeyPrivateKey": "0xf09574ec7568a13a724cc42b958b285f49bbe16a9877bd6f079fe0514b5d4248",
+          "rootAccount": "0xacd87ffa2cb46d235ccac9264bba22a222521f98"
+        }
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x1851b043377955e37ee7874ece7e2afabda8860b14fce42667fbda19c43f091f",
+          "feePayerSigningHash": null,
+          "raw": "0x76f8d2820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0800180808080c0b85604acd87ffa2cb46d235ccac9264bba22a222521f98ba4b5906a27e6a56f08b392df44c1631b1b3365edef00cb0c290246dbe89f1fd10475ab283e23e667ad703891f770bbd021836a07140664d71860808facbe9431b",
+          "hash": "0x4b578a4406a2d5276ee98b0a039c325e9bfb5d72e899a37d3bdae02c12a3b363",
+          "sender": "0xacd87ffa2cb46d235ccac9264bba22a222521f98"
+        }
+      },
+      "node": {
+        "expect": "revert",
+        "requires": [
+          "key_authorization_deny_all_calls"
+        ],
+        "fund": [
+          "0xacd87ffa2cb46d235ccac9264bba22a222521f98"
+        ],
+        "feePayer": "0xacd87ffa2cb46d235ccac9264bba22a222521f98"
+      }
+    },
+    {
+      "name": "key_authorization_witness",
+      "description": "Key authorization carrying a TIP-1053 witness.",
+      "tags": [
+        "key-authorization",
+        "witness",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
+      "source": "ox KeyAuthorization witness; tempo-primitives KeyAuthorization.witness",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "keyAuthorization": {
+            "privateKey": "0x36b65fa42f7df33c990756314a3bbacf452efab94e09683c847c26e65f552e34",
+            "authorization": {
+              "chainId": "1337",
+              "keyType": "secp256k1",
+              "keyId": "0xb7408bd6d23b4eb4eb75796fa769b9f2cf570f6b",
+              "expiry": null,
+              "limits": null,
+              "witness": "0xaf4113d584d8d1af33184e26ef4c6edefcfb46c5ef38d63ef2cb25a3c32b70d0"
+            }
+          }
+        },
+        "signer": {
+          "type": "secp256k1",
+          "privateKey": "0x36b65fa42f7df33c990756314a3bbacf452efab94e09683c847c26e65f552e34"
+        }
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0xfb1154a85e788a09762d816ec3177c6e683bdfd5d62648ff721785a33412d818",
+          "feePayerSigningHash": null,
+          "raw": "0x76f90141820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0f882f83d8205398094b7408bd6d23b4eb4eb75796fa769b9f2cf570f6b808080a0af4113d584d8d1af33184e26ef4c6edefcfb46c5ef38d63ef2cb25a3c32b70d0b8419aee693f3eabbb80233738f24304f51674373c5e2ecee30367fbae4b38e974d019809fac80e4b5cdbff024816f476812b7841e2d4136452df13db45c04a5c0941bb8415ba3a9acf443f2caf03a860df3616ca595bb593e28855151faea64cc478d100a6a3f42a3e255ef789e231f36ba7bca70906eed202ff1c3c0ef8fd50b8010fc0b1c",
+          "hash": "0x140b8634773a0808f8c82789ee6186a635d866047430c4f2f56a310be1ddc57d",
+          "sender": "0x4916feb036724931c3532047014269019e910e00"
+        }
+      },
+      "node": {
+        "expect": "success",
+        "fund": [
+          "0x4916feb036724931c3532047014269019e910e00"
+        ],
+        "feePayer": "0x4916feb036724931c3532047014269019e910e00"
+      }
+    },
+    {
+      "name": "key_authorization_zero_witness",
+      "description": "Key authorization with the all-zero witness, which is a present witness, not an absent one.",
+      "tags": [
+        "key-authorization",
+        "witness",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
+      "source": "tempo-primitives test_decode_accepts_explicit_zero_witness",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "keyAuthorization": {
+            "privateKey": "0xd0ad4d8d565286155674d571eef4d063c2cceb3faf68ee9ddfb078895e4889bb",
+            "authorization": {
+              "chainId": "1337",
+              "keyType": "secp256k1",
+              "keyId": "0xae53bd308e89e7439ca92c761388fea37f9488d9",
+              "expiry": null,
+              "limits": null,
+              "witness": "0x0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        },
+        "signer": {
+          "type": "secp256k1",
+          "privateKey": "0xd0ad4d8d565286155674d571eef4d063c2cceb3faf68ee9ddfb078895e4889bb"
+        }
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x80b69b1dc41521401062410966bef7dbc632a1f2523eeb88dc914f5695cb65c0",
+          "feePayerSigningHash": null,
+          "raw": "0x76f90141820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0f882f83d8205398094ae53bd308e89e7439ca92c761388fea37f9488d9808080a00000000000000000000000000000000000000000000000000000000000000000b84194a0e682f28e2db53f100e6a6ff63c3ce8bffc90bbca34a741ca29f07fcb351f055e744d832f3ee0c17b03d82c8c35a00f10b1194b1b6f39582e218fecc56f9c1bb84145b0e2acb22f7c828a72e286db7554a54924651cc12c1c10fe0bc83ca42c8d967d64940f3e190b85e5534a54ccbc893e87a57cef4b6f58ce9768d04d9c96b4001c",
+          "hash": "0x519dd154f60b70e83a8db0055de722befaba21805200db49f53b9946c9bf3f07",
+          "sender": "0x63f3e0f1fe90c1662c1403e9cc41dcc70dbff493"
+        }
+      },
+      "node": {
+        "expect": "success",
+        "fund": [
+          "0x63f3e0f1fe90c1662c1403e9cc41dcc70dbff493"
+        ],
+        "feePayer": "0x63f3e0f1fe90c1662c1403e9cc41dcc70dbff493"
+      }
+    },
+    {
+      "name": "key_authorization_admin_key",
+      "description": "Root authorizes a TIP-1049 admin access key bound to its own account.",
+      "tags": [
+        "key-authorization",
+        "admin-key",
+        "account-binding",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
+      "source": "ox KeyAuthorization isAdmin/account; tempo-primitives KeyAuthorization.is_admin",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "keyAuthorization": {
+            "privateKey": "0x46d840aba3ecfa8476fabc0b5962e5087968cd1e82facc33cd75b38a64d7aa77",
+            "authorization": {
+              "chainId": "1337",
+              "keyType": "secp256k1",
+              "keyId": "0xc06f96fb284235cd656cbac369a8821a9d250fed",
+              "expiry": null,
+              "limits": null,
+              "isAdmin": true,
+              "account": "0x57c70b4d7d41d079545132967d3241a399fc04e1"
+            }
+          }
+        },
+        "signer": {
+          "type": "secp256k1",
+          "privateKey": "0x46d840aba3ecfa8476fabc0b5962e5087968cd1e82facc33cd75b38a64d7aa77"
+        }
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0xa67b78b6e6d1e7b6d3fc54ba04bf9f1e2282db706f9e6f57415b5784879f5126",
+          "feePayerSigningHash": null,
+          "raw": "0x76f90136820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0f877f38205398094c06f96fb284235cd656cbac369a8821a9d250fed80808080019457c70b4d7d41d079545132967d3241a399fc04e1b8415fac8f34d5111534678843b9158aad7359ea0cb1d706b2275fd7b463cc47d1c2568591e422b69911111a74907b2a521d8c84e91a755d997a7d305fd316902a071bb841fe67a808e9a27cb40cd53634d6cb802729e4cec2dfe732d74875e65f932252381eda5930af2b486bf9ed360b74bd5b05a215cb42a753d2cd896e26c81268f6201c",
+          "hash": "0xa29fbc76593de3e0bf401909e52f3fa0f166ab27c25c462483e098772789bda0",
+          "sender": "0x57c70b4d7d41d079545132967d3241a399fc04e1"
+        }
+      },
+      "node": {
+        "expect": "success",
+        "fund": [
+          "0x57c70b4d7d41d079545132967d3241a399fc04e1"
+        ],
+        "feePayer": "0x57c70b4d7d41d079545132967d3241a399fc04e1"
+      }
+    },
+    {
+      "name": "key_authorization_account_bound",
+      "description": "Root-signed key authorization bound (TIP-1049 account field) to the root account itself.",
+      "tags": [
+        "key-authorization",
+        "account-binding",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
+      "source": "tempo-primitives KeyAuthorization.account",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "keyAuthorization": {
+            "privateKey": "0x6c6789b34ee2fb3d8987a086ded9fd3d90d9ff27b08439d15094f456ccadbdd1",
+            "authorization": {
+              "chainId": "1337",
+              "keyType": "secp256k1",
+              "keyId": "0xbb96604c8604050e1dc4588fb9f352760a983ff4",
+              "expiry": null,
+              "limits": null,
+              "account": "0x1f21048e48b2dde0a940a3ae7651d34f59644237"
+            }
+          }
+        },
+        "signer": {
+          "type": "secp256k1",
+          "privateKey": "0x6c6789b34ee2fb3d8987a086ded9fd3d90d9ff27b08439d15094f456ccadbdd1"
+        }
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x8685929b8b3b4cc3e79c056f35c47c921f93a28aeb0f998cdb1e3cb192ca0864",
+          "feePayerSigningHash": null,
+          "raw": "0x76f90136820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0f877f38205398094bb96604c8604050e1dc4588fb9f352760a983ff48080808080941f21048e48b2dde0a940a3ae7651d34f59644237b841091ed2f55682697022ecffcb6263415147debd105548ac40898dbb2df7d330123647380b61c3d5045601183e0d3113c0b2124fdef672e9396c74646af307b1ca1bb8413557c4b2b2face937b5d7691b234502ea9dcb5e2bba778287e83f4599f15ff75604f3c64cc4992467c2fa3b99dd93920ea1e4a95660b02be6340f77f4356ca291c",
+          "hash": "0xf7af82c94c1aae26fd2ebf021632a4d9b5555993fb9cc2485283842072dc865f",
+          "sender": "0x1f21048e48b2dde0a940a3ae7651d34f59644237"
+        }
+      },
+      "node": {
+        "expect": "success",
+        "fund": [
+          "0x1f21048e48b2dde0a940a3ae7651d34f59644237"
+        ],
+        "feePayer": "0x1f21048e48b2dde0a940a3ae7651d34f59644237"
+      }
+    },
+    {
+      "name": "key_authorization_wrong_account",
+      "description": "Key authorization bound to an account other than the transaction sender: the node rejects it.",
+      "tags": [
+        "key-authorization",
+        "account-binding",
+        "node",
+        "node-reject"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
+      "source": "tempo-primitives KeyAuthorization.account",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "keyAuthorization": {
+            "privateKey": "0xed0e77b6d41196af2d48bbe1f6cd51e84c6b0663f3a449f889436f333ee541f3",
+            "authorization": {
+              "chainId": "1337",
+              "keyType": "secp256k1",
+              "keyId": "0xb0bf4dabf3584dac42f419555989dffc496849c0",
+              "expiry": null,
+              "limits": null,
+              "account": "0x000000000000000000000000000000000000cafe"
+            }
+          }
+        },
+        "signer": {
+          "type": "secp256k1",
+          "privateKey": "0xed0e77b6d41196af2d48bbe1f6cd51e84c6b0663f3a449f889436f333ee541f3"
+        }
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x6eab796efae2b7cfcb1f7ebb4aecf9a679a5cc17150e0274d1b7baded7333722",
+          "feePayerSigningHash": null,
+          "raw": "0x76f90136820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0f877f38205398094b0bf4dabf3584dac42f419555989dffc496849c0808080808094000000000000000000000000000000000000cafeb841af0cc431de2b973d6ea52edc7c3ca700b08ce29505b11835b12375c9beb4ed0d62c39e86da6ee64697059780e885697a86e14378e2dd6492cb969b1ab37e9df01cb841452243e90e19f72688dce57c1a22170202b92d6e7494271685c005c1d78b132a1272387f255fd2e6b3bb444d29f098f85c30f9cf790a7c96214ad98d6bf71c471c",
+          "hash": "0xfe7f0e812cc6218fcee8cc2c154678694210d3b3ceabce1a367686e98040801e",
+          "sender": "0xb9af2b4938c03511e99cbf5bf8ed1218cd453b15"
+        }
+      },
+      "node": {
+        "expect": "reject",
+        "fund": [
+          "0xb9af2b4938c03511e99cbf5bf8ed1218cd453b15"
+        ],
+        "feePayer": "0xb9af2b4938c03511e99cbf5bf8ed1218cd453b15"
+      }
+    },
+    {
+      "name": "key_authorization_mixed_limits",
+      "description": "One one-off pathUSD limit and one periodic AlphaUSD limit in the same authorization.",
+      "tags": [
+        "key-authorization",
+        "periodic-limit",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1",
+        "python": ">0.6.2"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released.",
+        "python": "pytempo 0.6.2 rejects periodic token limits in key authorizations (pytempo/keychain.py:570) and TokenLimit.to_rlp drops period (keychain.py:126-130). Fixed by pytempo#134 (https://github.com/tempoxyz/pytempo/pull/134), merged but not yet released (release PR pytempo#135, 0.7.0)."
+      },
+      "source": "tempo-primitives TokenLimit.period",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "keyAuthorization": {
+            "privateKey": "0x13863a1e23b103fac5096b7a15d35c0af03b95865997c7a25845330ad21b4de5",
+            "authorization": {
+              "chainId": "1337",
+              "keyType": "secp256k1",
+              "keyId": "0x72fc9ff31dfddae9674733cc5e7f1539851b2706",
+              "expiry": null,
+              "limits": [
+                {
+                  "token": "0x20c0000000000000000000000000000000000000",
+                  "limit": "1000000",
+                  "period": "0"
+                },
+                {
+                  "token": "0x20c0000000000000000000000000000000000001",
+                  "limit": "5000000",
+                  "period": "3600"
+                }
+              ]
+            }
+          }
+        },
+        "signer": {
+          "type": "secp256k1",
+          "privateKey": "0x13863a1e23b103fac5096b7a15d35c0af03b95865997c7a25845330ad21b4de5"
+        }
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0xb82383518a4fb76b1b0146a98633eba72f622d9ffc8751fab271da15cee4a789",
+          "feePayerSigningHash": null,
+          "raw": "0x76f90156820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0f897f852820539809472fc9ff31dfddae9674733cc5e7f1539851b270680f7d99420c0000000000000000000000000000000000000830f4240dc9420c0000000000000000000000000000000000001834c4b40820e10b841b4fcc1a61c92900546d55ecd1c25ffe58e1f3dc75789d64243c58fc8914dd0e43616167e8a3a15586015043fa242e467eecb98033c0fc70b8efb4caa4c8bc0591bb84163f14dc63c43cc3a95af3369e605238b4cefdc80fb624606085a3a8d1fd103cf1e06955fa8d6d50946151e1f0f2d658600356a773e28fbd1c64f7072697e88911c",
+          "hash": "0x8f0e2a16e66c716854050efbd1555b61372f9d70bd5c7e0dab74d1395055e96f",
+          "sender": "0x48442157848230fb660da6598d517e304996e837"
+        }
+      },
+      "node": {
+        "expect": "success",
+        "fund": [
+          "0x48442157848230fb660da6598d517e304996e837"
+        ],
+        "feePayer": "0x48442157848230fb660da6598d517e304996e837"
+      }
+    },
+    {
+      "name": "keychain_self_authorized_sponsored",
+      "description": "An access key signs (keychain V2) the transaction that carries its own root-signed authorization, and a fee payer co-signs.",
+      "tags": [
+        "sponsored",
+        "keychain",
+        "keychain-v2",
+        "key-authorization",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
+      "source": "viem/tempo Account access keys; ox keyAuthorization + keychain",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x000000000000000000000000000000000000beef",
+              "value": "0",
+              "data": "0x"
+            }
+          ],
+          "keyAuthorization": {
+            "privateKey": "0xd2ca1945adaf8ab06dac27f6b47cba351f617bc03d01c9743dbfa1ff1d645e19",
+            "authorization": {
+              "chainId": "1337",
+              "keyType": "secp256k1",
+              "keyId": "0xc03363babaee5fb69d1642bdc88e6de8539e3eae",
+              "expiry": null,
+              "limits": null
+            }
+          }
+        },
+        "signer": {
+          "type": "keychain",
+          "accessKeyPrivateKey": "0x8e9573bf28c1d7f1cbd0b39c2184e42ad2034cc872f9a5286244fcb8781c88ac",
+          "rootAccount": "0x29cd16e4d2a2f2a7af2f2f3f2a163c9c5ce06658"
+        },
+        "feePayerPrivateKey": "0xe5d4db26ea3f792ece7ddbda3b3a1315e0ba8609e7c8cac4d7caf620f6c023fc"
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x822be690e2a9735ec3a838883b22c105195d1dc3487a9a313f97e562787118a8",
+          "feePayerSigningHash": "0x30eaacfba0efe0353ee9a3ec48abb10f3df5f2532c6ae06704c39cc2f5c9b71e",
+          "raw": "0x76f9012e820539843b9aca00850ba43b7400831e8480d8d794000000000000000000000000000000000000beef8080c08080808080f84301a0cf39b94d510a6ca32ef5ab0e063386c8d2d78aed6c27f280fd1ef4959334ad1ea00934244684f0bcf63e7f12071b9bbc500ef4111f5b3e0996c135013792911762c0f85dd98205398094c03363babaee5fb69d1642bdc88e6de8539e3eaeb84136cd192b5c8b7cf602b6865e71017b50c5a9dc4d02833b44b3204861d077b1af4f034ea9045b7e57604f54be18126477607271e681fbbf271ed4e2cd1564fa7f1cb8560429cd16e4d2a2f2a7af2f2f3f2a163c9c5ce0665812ec0f36644ad10d39da300cec23a721225bb4c6a136d07d916989809596ad0922c37894ab5b5630cf7ff5d6301b673d9170b66dbaa9b12d8f34caec61393b431b",
+          "hash": "0x2f882a1ad890e275dde1cd5d0d1b5c361662f0f828f5537c767ae9078740ee11",
+          "sender": "0x29cd16e4d2a2f2a7af2f2f3f2a163c9c5ce06658"
+        }
+      },
+      "node": {
+        "expect": "success",
+        "fund": [
+          "0x3f0194b45bcf1d27efe58870c3a1122bcd898b24"
+        ],
+        "feePayer": "0x3f0194b45bcf1d27efe58870c3a1122bcd898b24"
+      }
+    },
+    {
+      "name": "keychain_self_authorized",
+      "description": "An access key signs the transaction carrying its own authorization; the root pays.",
+      "tags": [
+        "keychain",
+        "keychain-v2",
+        "key-authorization",
+        "node",
+        "node-success"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
+      "source": "viem/tempo Account access keys",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "keyAuthorization": {
+            "privateKey": "0x046c606dc88ff1e66c6a50c6eb4371695e721c686849867dfd9c584fb32249c4",
+            "authorization": {
+              "chainId": "1337",
+              "keyType": "secp256k1",
+              "keyId": "0xb070a7941634dc05d4a611de932ba6783118454c",
+              "expiry": null,
+              "limits": null
+            }
+          }
+        },
+        "signer": {
+          "type": "keychain",
+          "accessKeyPrivateKey": "0xc483858a3808aaca1f086e703578296deb267e51be9ca9adb72904a27cd60d88",
+          "rootAccount": "0xd41e31689ab57daa5128d384105f098e08037325"
+        }
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0xba08cd77b0ff89960301106f79cb4d14ac4664864838a233dd6826d935e8374b",
+          "feePayerSigningHash": null,
+          "raw": "0x76f90131820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0f85dd98205398094b070a7941634dc05d4a611de932ba6783118454cb8415b4117a657a2510b282adaae34ea85262c2c68f903e56f6424eed78b0e5bb3a90f9218085945d1b463c28607297eb720c156004b4c427c00931b7b43006382ee1bb85604d41e31689ab57daa5128d384105f098e08037325dcd11176896396a9574791e62e1f91ba30fde9ffed18f9a7e0c9a5232b5419c445cccd265871b27a5da3ef2a655c4e06afcb2f4460ec29f9cb01df33ef4495e41c",
+          "hash": "0xcc5cbc1c015d0764be3730a4f1f6a8ef3e7b50f4de79cae4c6d57539577da730",
+          "sender": "0xd41e31689ab57daa5128d384105f098e08037325"
+        }
+      },
+      "node": {
+        "expect": "success",
+        "fund": [
+          "0xd41e31689ab57daa5128d384105f098e08037325"
+        ],
+        "feePayer": "0xd41e31689ab57daa5128d384105f098e08037325"
+      }
+    },
+    {
+      "name": "keychain_v1_self_authorized",
+      "description": "Same as keychain_self_authorized with a legacy V1 keychain envelope: the node rejects it.",
+      "tags": [
+        "keychain",
+        "keychain-v1",
+        "key-authorization",
+        "node",
+        "node-reject"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1",
+        "python": ">0.6.2"
+      },
+      "skipReasons": {
+        "go": "tempo-go has no keychain V1 signing API: keychain.SignWithAccessKey always writes a V2 envelope (pkg/keychain/keychain.go:14,89-130 in v0.6.1; :14,96-137 on main). Not fixed on tempo-go main (542c18e) either: re-check on the next tempo-go bump.",
+        "python": "pytempo has no keychain V1 signing API: KeychainSignature is V2-only in 0.6.2 (pytempo/keychain.py:847, :903); main parses V1 envelopes but KeychainSignature.sign always derives the V2 digest (pytempo/keychain.py:932) and sign_access_key takes no version (models.py:750-770). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump."
+      },
+      "source": "ox SignatureEnvelope keychain v1",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "2000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ],
+          "keyAuthorization": {
+            "privateKey": "0x7a39a9ba7a0cc6055815bec79467c9b4a2a0ca8ced9ef414d72b5642f0fcb683",
+            "authorization": {
+              "chainId": "1337",
+              "keyType": "secp256k1",
+              "keyId": "0x54b283b361567ba77254afa2d22f55d490827467",
+              "expiry": null,
+              "limits": null
+            }
+          }
+        },
+        "signer": {
+          "type": "keychain",
+          "accessKeyPrivateKey": "0xe1201096d3889d22aadaee294666251f29c29eeebbfafd86bbf345d41f13aae3",
+          "rootAccount": "0xf659dc0ddd468389357264083871bc8dc18dfe63",
+          "version": "v1"
+        }
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x59fbff726b401ef51e562269a2962b2b4e9d2571d8fc3fb31fb611fe09f59180",
+          "feePayerSigningHash": null,
+          "raw": "0x76f90131820539843b9aca00850ba43b7400831e8480f85ef85c9420c000000000000000000000000000000000000080b844a9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001c0808080808080c0f85dd9820539809454b283b361567ba77254afa2d22f55d490827467b8419f07511165b6a1d4760062bb46a06a4ae45eb696ca1ceb656a86c450a40ff8813bff631a1afaf1e5b14e38c781dffe4f7dc56a7ba2e5810383e69fd917835ad01cb85603f659dc0ddd468389357264083871bc8dc18dfe63ab393f8a57897465edb35dc3dc1d70a1a73801e146aa58f491d2fb4f626cacb1031fa5277b1b22b56730a7eed473c2f9c164e4f3fc21704ddbaee100d9d291a01b",
+          "hash": "0x7b8520cf93088d0ae29c3839462ae96b2b30848a28ec45ece2fbe0067ff1f9ee",
+          "sender": "0xf659dc0ddd468389357264083871bc8dc18dfe63"
+        }
+      },
+      "node": {
+        "expect": "reject",
+        "fund": [
+          "0xf659dc0ddd468389357264083871bc8dc18dfe63"
+        ],
+        "feePayer": "0xf659dc0ddd468389357264083871bc8dc18dfe63"
+      }
+    },
+    {
+      "name": "keychain_contract_creation",
+      "description": "An access key signs a transaction whose call is a CREATE: the node rejects it (access keys cannot deploy contracts).",
+      "tags": [
+        "keychain",
+        "keychain-v2",
+        "key-authorization",
+        "contract-creation",
+        "node",
+        "node-reject"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
+      "source": "tempo-primitives / node keychain validation",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "3000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": null,
+              "value": "0",
+              "data": "0x6080604052348015600e575f5ffd5b5060e180601a5f395ff3fe6080604052348015600e575f5ffd5b50600436106030575f3560e01c80638381f58a146034578063d09de08a14604e575b5f5ffd5b603a6056565b604051604591906078565b60405180910390f35b6054605b565b005b5f5481565b5f80549080606883609c565b9190505550565b5f819050919050565b607f81606e565b82525050565b5f6020820190506096825f8301606f5b92915050565b5f60a282606e565b91507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff820360ce5760cd60c0565b5b60018201905091905056"
+            }
+          ],
+          "keyAuthorization": {
+            "privateKey": "0x14fff61806da855512cd6149deac753abd67d5a92004d91670f01cc3e89f52f0",
+            "authorization": {
+              "chainId": "1337",
+              "keyType": "secp256k1",
+              "keyId": "0x1eff502a2dfbc9c18feae5c7476577b0f1677ef1",
+              "expiry": null,
+              "limits": null
+            }
+          }
+        },
+        "signer": {
+          "type": "keychain",
+          "accessKeyPrivateKey": "0x20cb63050a118a2696e6f082228d6733836215b9473359ff708b80900f45f074",
+          "rootAccount": "0x1c3d8c1458b6cc6bdc4c2fb4a41fb2b876f1a57f"
+        }
+      },
+      "expected": {
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0x56cc67f7bd5d7465fc7e04d679309b86a3ab847f8819ea8f4a6d7048c33a02a4",
+          "feePayerSigningHash": null,
+          "raw": "0x76f901cf820539843b9aca00850ba43b7400832dc6c0f8fcf8fa8080b8f66080604052348015600e575f5ffd5b5060e180601a5f395ff3fe6080604052348015600e575f5ffd5b50600436106030575f3560e01c80638381f58a146034578063d09de08a14604e575b5f5ffd5b603a6056565b604051604591906078565b60405180910390f35b6054605b565b005b5f5481565b5f80549080606883609c565b9190505550565b5f819050919050565b607f81606e565b82525050565b5f6020820190506096825f8301606f5b92915050565b5f60a282606e565b91507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff820360ce5760cd60c0565b5b60018201905091905056c0808080808080c0f85dd982053980941eff502a2dfbc9c18feae5c7476577b0f1677ef1b8415bd1d19029e696ee96ffb5a3611186a632e12447cdecee69498c8ddc7c3235ed1f3bcc6c2d1b97990d977194fc021cafb53d22c44e5cdff1784fb376a8b96ba71cb856041c3d8c1458b6cc6bdc4c2fb4a41fb2b876f1a57fc7fe01b46e21318c7b2949a658b96834715a633a90c50a83dd0f6fd053ea22cd53e4a19fee426c68d5da39202eddf24dba603842b6f5385a328cfcdfeb955f9c1b",
+          "hash": "0x5e6d209e9182e01cecdebb8e3ef0af0731ccfc18084fcc7f131dbda4f2ddde46",
+          "sender": "0x1c3d8c1458b6cc6bdc4c2fb4a41fb2b876f1a57f"
+        }
+      },
+      "node": {
+        "expect": "reject",
+        "fund": [
+          "0x1c3d8c1458b6cc6bdc4c2fb4a41fb2b876f1a57f"
+        ],
+        "feePayer": "0x1c3d8c1458b6cc6bdc4c2fb4a41fb2b876f1a57f"
       }
     },
     {
       "name": "tempo_go_minimal_transaction",
-      "op": "tx.sign",
       "description": "tempo-go golden: chain 1, anvil key 0, no node submission.",
+      "tags": [],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go writes the secp256k1 v byte as 0/1 (pkg/transaction/serialize.go:346; keychain inner signature pkg/keychain/keychain.go:64). The node accepts it but re-encodes to 27/28 and reports that hash, so Tx.Hash() returns a hash the node never knows. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "tempo-go pkg/transaction/transaction_vectors_test.go minimal_transaction",
       "input": {
         "tx": {
@@ -1229,17 +2905,22 @@
         }
       },
       "expected": {
-        "senderSigningHash": "0xb4e26bee79cd67af2d28a6e2b9af8bd6ea35d2840cc705bfc9f063ddaa4647a4",
-        "feePayerSigningHash": null,
-        "raw": "0x76f87201843b9aca008477359400825208d8d79470997970c51812dc3a010c7d01b50e0d17dc79c88080c0808080808080c0b8415699d8feb5ace056f1c1e93c420f53942e7b9f31058cb2a2bb26550e5930ef1a55f6bdd3a27105268536dfe17f386d79f6c8b949698d105838455a20a857c3381c",
-        "hash": "0x9f514e29772ad0997e6a96ed1f8e1eab5df0afa8b4668997789528ddfb5219d7",
-        "sender": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+        "ok": true,
+        "value": {
+          "senderSigningHash": "0xb4e26bee79cd67af2d28a6e2b9af8bd6ea35d2840cc705bfc9f063ddaa4647a4",
+          "feePayerSigningHash": null,
+          "raw": "0x76f87201843b9aca008477359400825208d8d79470997970c51812dc3a010c7d01b50e0d17dc79c88080c0808080808080c0b8415699d8feb5ace056f1c1e93c420f53942e7b9f31058cb2a2bb26550e5930ef1a55f6bdd3a27105268536dfe17f386d79f6c8b949698d105838455a20a857c3381c",
+          "hash": "0x9f514e29772ad0997e6a96ed1f8e1eab5df0afa8b4668997789528ddfb5219d7",
+          "sender": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+        }
       }
     },
     {
       "name": "reject_empty_calls",
       "description": "calls = [] is invalid.",
-      "op": "tx.sign",
+      "tags": [
+        "invalid-input"
+      ],
       "source": "ox TxEnvelopeTempo.test.ts assert",
       "input": {
         "tx": {
@@ -1256,12 +2937,26 @@
           "privateKey": "0x0b17cc188a01c059643f60de936924c2de65e3288ed39e602a8ac147b27e4d2f"
         }
       },
-      "expectedError": "invalid_input"
+      "expected": {
+        "ok": false,
+        "error": {
+          "type": "invalid_input"
+        }
+      }
     },
     {
       "name": "reject_inverted_validity_window",
       "description": "validAfter > validBefore.",
-      "op": "tx.sign",
+      "tags": [
+        "validity-window",
+        "invalid-input"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1"
+      },
+      "skipReasons": {
+        "go": "tempo-go Tx.Validate (pkg/transaction/transaction.go:171-208) does not check validAfter < validBefore or maxPriorityFeePerGas <= maxFeePerGas; the node rejects both. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released."
+      },
       "source": "ox TxEnvelopeTempo.test.ts assert",
       "input": {
         "tx": {
@@ -1286,12 +2981,28 @@
           "privateKey": "0xa14fb5fb6d2a4eec2e8d33901ef40ad69646c751abb500db1eb4a75ef780012e"
         }
       },
-      "expectedError": "invalid_input"
+      "expected": {
+        "ok": false,
+        "error": {
+          "type": "invalid_input"
+        }
+      }
     },
     {
       "name": "reject_equal_validity_window",
       "description": "validAfter == validBefore.",
-      "op": "tx.sign",
+      "tags": [
+        "validity-window",
+        "invalid-input"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1",
+        "python": ">0.6.2"
+      },
+      "skipReasons": {
+        "go": "tempo-go Tx.Validate (pkg/transaction/transaction.go:171-208) does not check validAfter < validBefore or maxPriorityFeePerGas <= maxFeePerGas; the node rejects both. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released.",
+        "python": "pytempo TempoTransaction.validate (pytempo/models.py:377-379) rejects validAfter > validBefore but not equal; tempo-primitives and the node reject equal windows too. Fixed by pytempo#134 (https://github.com/tempoxyz/pytempo/pull/134), merged but not yet released (release PR pytempo#135, 0.7.0)."
+      },
       "source": "ox TxEnvelopeTempo.test.ts assert",
       "input": {
         "tx": {
@@ -1316,12 +3027,27 @@
           "privateKey": "0x13c24bf39beaebdb6797670cb048e5190eaf1a3435841d00e02625296be01d0e"
         }
       },
-      "expectedError": "invalid_input"
+      "expected": {
+        "ok": false,
+        "error": {
+          "type": "invalid_input"
+        }
+      }
     },
     {
       "name": "reject_tip_above_fee_cap",
       "description": "maxPriorityFeePerGas > maxFeePerGas.",
-      "op": "tx.sign",
+      "tags": [
+        "invalid-input"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1",
+        "rust": ">1.11.0"
+      },
+      "skipReasons": {
+        "go": "tempo-go Tx.Validate (pkg/transaction/transaction.go:171-208) does not check validAfter < validBefore or maxPriorityFeePerGas <= maxFeePerGas; the node rejects both. Fixed by tempo-go#135 (https://github.com/tempoxyz/tempo-go/pull/135), merged but not yet released.",
+        "rust": "tempo-primitives 1.11.0 TempoTransaction::validate (crates.io, tempo_transaction.rs) does not check maxPriorityFeePerGas <= maxFeePerGas; ox and the node reject it. tempo main checks it (crates/primitives/src/transaction/tempo_transaction.rs:359-363) but no newer tempo-primitives is on crates.io yet."
+      },
       "source": "ox TxEnvelopeTempo.test.ts assert",
       "input": {
         "tx": {
@@ -1344,7 +3070,116 @@
           "privateKey": "0x4ef26e06a14ad082bf6539db9da75da6916b798fdd0d6e86a770587aec8e6e90"
         }
       },
-      "expectedError": "invalid_input"
+      "expected": {
+        "ok": false,
+        "error": {
+          "type": "invalid_input"
+        }
+      }
+    },
+    {
+      "name": "reject_create_not_first_call",
+      "description": "CREATE as the second call of a batch: only the first call may be a CREATE.",
+      "tags": [
+        "contract-creation",
+        "batch",
+        "invalid-input"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1",
+        "python": ">0.6.2",
+        "typescript": ">0.14.59"
+      },
+      "skipReasons": {
+        "go": "tempo-go Tx.Validate (pkg/transaction/transaction.go:171) does not check CREATE placement (only the first call may be a CREATE, and only one), so tempo-go signs batches tempo-primitives refuses (tempo_transaction.rs validate_calls) and the node rejects. Not fixed on tempo-go main (542c18e) either: re-check on the next tempo-go bump.",
+        "python": "pytempo TempoTransaction.validate (pytempo/models.py:352 in 0.6.2, :367 on main) does not check CREATE placement, so pytempo signs batches tempo-primitives refuses and the node rejects. Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump.",
+        "typescript": "ox TxEnvelopeTempo.assert (ox/tempo/TxEnvelopeTempo.ts:177-226) does not check CREATE placement (only the first call may be a CREATE, and only one), so ox signs batches tempo-primitives refuses (tempo_transaction.rs validate_calls) and the node rejects. Not fixed in ox yet: re-check on the next ox bump."
+      },
+      "source": "tempo-primitives tempo_transaction.rs validate_calls; test_validate_create_not_first_call_fails",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "3000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": "0x20c0000000000000000000000000000000000000",
+              "value": "0",
+              "data": "0xa9059cbb000000000000000000000000000000000000000000000000000000000000beef0000000000000000000000000000000000000000000000000000000000000001"
+            },
+            {
+              "to": null,
+              "value": "0",
+              "data": "0x6080604052348015600e575f5ffd5b5060e180601a5f395ff3fe6080604052348015600e575f5ffd5b50600436106030575f3560e01c80638381f58a146034578063d09de08a14604e575b5f5ffd5b603a6056565b604051604591906078565b60405180910390f35b6054605b565b005b5f5481565b5f80549080606883609c565b9190505550565b5f819050919050565b607f81606e565b82525050565b5f6020820190506096825f8301606f5b92915050565b5f60a282606e565b91507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff820360ce5760cd60c0565b5b60018201905091905056"
+            }
+          ]
+        },
+        "signer": {
+          "type": "secp256k1",
+          "privateKey": "0x25ecbbd84b218d2b1993d60a70414205683d54dd927c098b8720d997abf78e3d"
+        }
+      },
+      "expected": {
+        "ok": false,
+        "error": {
+          "type": "invalid_input"
+        }
+      }
+    },
+    {
+      "name": "reject_two_creates",
+      "description": "Two CREATE calls in one batch.",
+      "tags": [
+        "contract-creation",
+        "batch",
+        "invalid-input"
+      ],
+      "sdkVersions": {
+        "go": ">0.6.1",
+        "python": ">0.6.2",
+        "typescript": ">0.14.59"
+      },
+      "skipReasons": {
+        "go": "tempo-go Tx.Validate (pkg/transaction/transaction.go:171) does not check CREATE placement (only the first call may be a CREATE, and only one), so tempo-go signs batches tempo-primitives refuses (tempo_transaction.rs validate_calls) and the node rejects. Not fixed on tempo-go main (542c18e) either: re-check on the next tempo-go bump.",
+        "python": "pytempo TempoTransaction.validate (pytempo/models.py:352 in 0.6.2, :367 on main) does not check CREATE placement, so pytempo signs batches tempo-primitives refuses and the node rejects. Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump.",
+        "typescript": "ox TxEnvelopeTempo.assert (ox/tempo/TxEnvelopeTempo.ts:177-226) does not check CREATE placement (only the first call may be a CREATE, and only one), so ox signs batches tempo-primitives refuses (tempo_transaction.rs validate_calls) and the node rejects. Not fixed in ox yet: re-check on the next ox bump."
+      },
+      "source": "tempo-primitives tempo_transaction.rs validate_calls; test_validate_multiple_creates_fails",
+      "input": {
+        "tx": {
+          "chainId": "1337",
+          "nonce": "0",
+          "nonceKey": "0",
+          "gas": "3000000",
+          "maxFeePerGas": "50000000000",
+          "maxPriorityFeePerGas": "1000000000",
+          "calls": [
+            {
+              "to": null,
+              "value": "0",
+              "data": "0x6080604052348015600e575f5ffd5b5060e180601a5f395ff3fe6080604052348015600e575f5ffd5b50600436106030575f3560e01c80638381f58a146034578063d09de08a14604e575b5f5ffd5b603a6056565b604051604591906078565b60405180910390f35b6054605b565b005b5f5481565b5f80549080606883609c565b9190505550565b5f819050919050565b607f81606e565b82525050565b5f6020820190506096825f8301606f5b92915050565b5f60a282606e565b91507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff820360ce5760cd60c0565b5b60018201905091905056"
+            },
+            {
+              "to": null,
+              "value": "0",
+              "data": "0x6080604052348015600e575f5ffd5b5060e180601a5f395ff3fe6080604052348015600e575f5ffd5b50600436106030575f3560e01c80638381f58a146034578063d09de08a14604e575b5f5ffd5b603a6056565b604051604591906078565b60405180910390f35b6054605b565b005b5f5481565b5f80549080606883609c565b9190505550565b5f819050919050565b607f81606e565b82525050565b5f6020820190506096825f8301606f5b92915050565b5f60a282606e565b91507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff820360ce5760cd60c0565b5b60018201905091905056"
+            }
+          ]
+        },
+        "signer": {
+          "type": "secp256k1",
+          "privateKey": "0x4fe56321140c93ae602e68b2dfb22263e60ed51015914cfdc14895b505259885"
+        }
+      },
+      "expected": {
+        "ok": false,
+        "error": {
+          "type": "invalid_input"
+        }
+      }
     }
   ]
 }

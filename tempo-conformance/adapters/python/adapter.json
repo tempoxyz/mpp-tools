@@ -1,10 +1,12 @@
 {
+  "$schema": "../../schemas/adapter-manifest.schema.json",
+  "schema": 1,
   "name": "python",
   "language": "python",
   "sdk": {
     "package": "pytempo",
-    "registry": "pypi",
-    "version": "0.6.2"
+    "manifest": "pyproject.toml",
+    "lockfile": "uv.lock"
   },
   "build": [
     "uv",
@@ -24,5 +26,8 @@
     "tx.sign",
     "tx.decode",
     "key_authorization.sign"
-  ]
+  ],
+  "capabilityGaps": {
+    "signature.recover": "pytempo 0.6.2 has no P256/WebAuthn signature verification or keychain recovery API. pytempo#133 (https://github.com/tempoxyz/pytempo/pull/133, open) adds it; wire the adapter to it once released."
+  }
 }

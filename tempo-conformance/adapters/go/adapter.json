@@ -1,13 +1,16 @@
 {
+  "$schema": "../../schemas/adapter-manifest.schema.json",
+  "schema": 1,
   "name": "go",
   "language": "go",
-  "sdk": "github.com/tempoxyz/tempo-go",
+  "sdk": {
+    "package": "github.com/tempoxyz/tempo-go",
+    "manifest": "go.mod",
+    "lockfile": "go.mod"
+  },
   "build": [
-    "go",
-    "build",
-    "-o",
-    "adapter",
-    "."
+    "sh",
+    "build.sh"
   ],
   "command": [
     "./adapter"
@@ -17,5 +20,8 @@
     "tx.sign",
     "tx.decode",
     "key_authorization.sign"
-  ]
+  ],
+  "capabilityGaps": {
+    "signature.recover": "tempo-go v0.6.1 has no P256/WebAuthn signature verification or keychain recovery API (pkg/transaction/signing.go:108 recovers secp256k1 only; pkg/keychain/keychain.go:136-151 parses secp256k1 keychain envelopes only). tempo-go#133 (https://github.com/tempoxyz/tempo-go/pull/133, open) adds it; wire the adapter to it once released."
+  }
 }
