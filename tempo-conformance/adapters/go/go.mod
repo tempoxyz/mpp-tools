@@ -4,7 +4,7 @@ go 1.25.9
 
 require (
 	github.com/ethereum/go-ethereum v1.17.4
-	github.com/tempoxyz/tempo-go v0.6.1
+	github.com/tempoxyz/tempo-go v0.7.0
 )
 
 require (

@@ -97,6 +97,8 @@ func handleLine(line []byte) (resp map[string]any) {
 		value, err = txDecode(input)
 	case "key_authorization.sign":
 		value, err = keyAuthSign(input)
+	case "signature.recover":
+		value, err = signatureRecover(input)
 	default:
 		err = errf("unsupported", "unknown op %q", req.Op)
 	}
@@ -815,14 +817,16 @@ func txDecode(input map[string]any) (any, error) {
 		if err != nil {
 			return nil, errf("decode_error", "VerifySignature: %v", err)
 		}
-	case "keychain":
-		_, root, err := keychain.VerifyAccessKeySignature(tx)
+	case "keychain", "p256", "webauthn":
+		// transaction.RecoverSigner verifies any envelope (P256, WebAuthn,
+		// keychain V1/V2); for keychain, Account is the root.
+		rec, err := transaction.RecoverSigner(tx)
 		if err != nil {
-			return nil, errf("decode_error", "VerifyAccessKeySignature: %v", err)
+			return nil, errf("decode_error", "RecoverSigner: %v", err)
 		}
-		sender = root
+		sender = rec.Account
 	default:
-		return nil, errf("unsupported", "tempo-go cannot recover the sender of a %s signature off-chain (transaction.VerifySignature, signing.go:108)", sigType)
+		return nil, errf("unsupported", "tempo-go cannot recover the sender of a %s signature", sigType)
 	}
 
 	var feePayer any
@@ -889,4 +893,22 @@ func txDecode(input map[string]any) (any, error) {
 		"feePayer":      feePayer,
 		"hash":          hexb(hash.Bytes()),
 	}, nil
+}
+
+// signatureRecover answers signature.recover with signer.RecoverEnvelope, the
+// account a Tempo signature envelope signs hash for.
+func signatureRecover(input map[string]any) (any, error) {
+	hash, err := parseHash(input["hash"], "hash")
+	if err != nil {
+		return nil, err
+	}
+	sig, err := parseHex(input["signature"], "signature")
+	if err != nil {
+		return nil, err
+	}
+	rec, err := signer.RecoverEnvelope(hash, sig)
+	if err != nil {
+		return nil, errf("verification_error", "RecoverEnvelope: %v", err)
+	}
+	return map[string]any{"signer": addr(rec.Account)}, nil
 }

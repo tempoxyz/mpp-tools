@@ -149,12 +149,6 @@
       "tags": [
         "periodic-limit"
       ],
-      "sdkVersions": {
-        "python": ">0.6.2"
-      },
-      "skipReasons": {
-        "python": "pytempo rejects periodic token limits in key authorizations (pytempo/keychain.py:126-130, :570), which tempo-primitives and the node support. Fixed by pytempo#134 (https://github.com/tempoxyz/pytempo/pull/134), merged but not yet released (release PR pytempo#135, 0.7.0)."
-      },
       "source": "tempo-primitives TokenLimit.period",
       "input": {
         "authorization": {
@@ -215,12 +209,6 @@
       "tags": [
         "periodic-limit"
       ],
-      "sdkVersions": {
-        "python": ">0.6.2"
-      },
-      "skipReasons": {
-        "python": "pytempo 0.6.2 rejects periodic token limits in key authorizations (pytempo/keychain.py:570) and TokenLimit.to_rlp drops period (keychain.py:126-130). Fixed by pytempo#134 (https://github.com/tempoxyz/pytempo/pull/134), merged but not yet released (release PR pytempo#135, 0.7.0)."
-      },
       "source": "tempo-primitives TokenLimit.period",
       "input": {
         "authorization": {
@@ -355,10 +343,10 @@
         "call-scopes"
       ],
       "sdkVersions": {
-        "python": ">0.6.2"
+        "python": ">0.7.0"
       },
       "skipReasons": {
-        "python": "pytempo has no inline key authorization call scopes (TIP-1011 allowed_calls): KeyAuthorization always writes the field absent (pytempo/keychain.py:596 in 0.6.2, :590 on main). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump."
+        "python": "pytempo has no inline key authorization call scopes (TIP-1011 allowed_calls): KeyAuthorization always writes the field absent (pytempo/keychain.py:596 in 0.6.2, :590 on main). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump. Still unfixed in pytempo 0.7.0."
       },
       "source": "ox KeyAuthorization.test.ts scopes; tempo-primitives CallScope",
       "input": {
@@ -390,10 +378,10 @@
         "call-scopes"
       ],
       "sdkVersions": {
-        "python": ">0.6.2"
+        "python": ">0.7.0"
       },
       "skipReasons": {
-        "python": "pytempo has no inline key authorization call scopes (TIP-1011 allowed_calls): KeyAuthorization always writes the field absent (pytempo/keychain.py:596 in 0.6.2, :590 on main). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump."
+        "python": "pytempo has no inline key authorization call scopes (TIP-1011 allowed_calls): KeyAuthorization always writes the field absent (pytempo/keychain.py:596 in 0.6.2, :590 on main). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump. Still unfixed in pytempo 0.7.0."
       },
       "source": "ox KeyAuthorization.test.ts scopes",
       "input": {
@@ -430,10 +418,10 @@
         "call-scopes"
       ],
       "sdkVersions": {
-        "python": ">0.6.2"
+        "python": ">0.7.0"
       },
       "skipReasons": {
-        "python": "pytempo has no inline key authorization call scopes (TIP-1011 allowed_calls): KeyAuthorization always writes the field absent (pytempo/keychain.py:596 in 0.6.2, :590 on main). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump."
+        "python": "pytempo has no inline key authorization call scopes (TIP-1011 allowed_calls): KeyAuthorization always writes the field absent (pytempo/keychain.py:596 in 0.6.2, :590 on main). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump. Still unfixed in pytempo 0.7.0."
       },
       "source": "ox KeyAuthorization.test.ts scopes recipients",
       "input": {
@@ -474,10 +462,10 @@
         "call-scopes"
       ],
       "sdkVersions": {
-        "python": ">0.6.2"
+        "python": ">0.7.0"
       },
       "skipReasons": {
-        "python": "pytempo has no inline key authorization call scopes (TIP-1011 allowed_calls): KeyAuthorization always writes the field absent (pytempo/keychain.py:596 in 0.6.2, :590 on main). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump."
+        "python": "pytempo has no inline key authorization call scopes (TIP-1011 allowed_calls): KeyAuthorization always writes the field absent (pytempo/keychain.py:596 in 0.6.2, :590 on main). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump. Still unfixed in pytempo 0.7.0."
       },
       "source": "tempo-primitives CallScope",
       "input": {
@@ -523,10 +511,10 @@
         "call-scopes"
       ],
       "sdkVersions": {
-        "python": ">0.6.2"
+        "python": ">0.7.0"
       },
       "skipReasons": {
-        "python": "pytempo has no inline key authorization call scopes (TIP-1011 allowed_calls): KeyAuthorization always writes the field absent (pytempo/keychain.py:596 in 0.6.2, :590 on main). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump."
+        "python": "pytempo has no inline key authorization call scopes (TIP-1011 allowed_calls): KeyAuthorization always writes the field absent (pytempo/keychain.py:596 in 0.6.2, :590 on main). Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump. Still unfixed in pytempo 0.7.0."
       },
       "source": "tempo-primitives test_key_authorization_decode_accepts_explicit_deny_all_allowed_calls_field",
       "input": {
@@ -660,10 +648,10 @@
         "expiry"
       ],
       "sdkVersions": {
-        "python": ">0.6.2"
+        "python": ">0.7.0"
       },
       "skipReasons": {
-        "python": "pytempo 0.6.2 rejects periodic token limits in key authorizations (pytempo/keychain.py:570) and TokenLimit.to_rlp drops period (keychain.py:126-130). Fixed by pytempo#134 (https://github.com/tempoxyz/pytempo/pull/134), merged but not yet released (release PR pytempo#135, 0.7.0)."
+        "python": "pytempo 0.6.2 rejects periodic token limits in key authorizations (pytempo/keychain.py:570) and TokenLimit.to_rlp drops period (keychain.py:126-130). Fixed by pytempo#134 (https://github.com/tempoxyz/pytempo/pull/134), merged but not yet released (release PR pytempo#135, 0.7.0). Still unfixed in pytempo 0.7.0."
       },
       "source": "new",
       "input": {
