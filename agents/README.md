@@ -13,7 +13,7 @@ Each repository with `"sync": "workflow"` runs `.github/workflows/sync-agents.ym
 
 wevm/mppx (`"sync": "manual"`) is outside tempoxyz's STS installation: update its section by hand with `sync.py render`. mpp-tools (`"sync": "local"`) renders its own AGENTS.md in the same pull request that changes `shared.md`; CI fails when they differ.
 
-The [AGENTS.md workflow](../.github/workflows/agents.yml) tests `sync.py`, checks this repository's AGENTS.md, and audits every repository daily, writing the result to the run summary.
+The [AGENTS.md workflow](../.github/workflows/agents.yml) tests `sync.py`, checks this repository's AGENTS.md, and audits every public repository daily, writing the result to the run summary. Repositories marked `"private": true` in `repos.json` are skipped, because the audit reads files anonymously.
 
 ## Adding a repository
 

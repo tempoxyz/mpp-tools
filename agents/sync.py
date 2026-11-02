@@ -187,6 +187,10 @@ def main(argv: list[str] | None = None) -> int:
     print("| Repository | AGENTS.md |")
     print("| --- | --- |")
     for entry in repos:
+        if entry.get("private"):
+            # Anonymous raw fetches can't read private repositories.
+            print(f"| {entry['repo']} | skipped (private) |")
+            continue
         try:
             doc = _fetch(entry["repo"])
         except (urllib.error.URLError, TimeoutError) as err:
