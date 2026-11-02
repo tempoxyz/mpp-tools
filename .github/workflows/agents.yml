@@ -1,0 +1,74 @@
+name: AGENTS.md
+
+# Tests agents/sync.py, checks this repository's AGENTS.md against the shared
+# section, and audits every MPP repository's AGENTS.md daily (results in the
+# run summary). See agents/README.md.
+on:
+  pull_request:
+    paths:
+      - AGENTS.md
+      - agents/**
+      - .github/workflows/agents.yml
+      - .github/workflows/agents-sync.yml
+  push:
+    branches:
+      - main
+    paths:
+      - AGENTS.md
+      - agents/**
+  schedule:
+    - cron: "41 15 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: Check AGENTS.md
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test sync.py
+        working-directory: agents
+        run: python3 -m unittest -v test_sync
+      - name: Check AGENTS.md
+        run: python3 agents/sync.py check AGENTS.md
+
+  audit:
+    name: Audit MPP repositories
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Audit every AGENTS.md on main
+        run: |
+          set +e
+          python3 agents/sync.py audit > "$RUNNER_TEMP/audit.md"
+          status=$?
+          set -e
+          { echo "## AGENTS.md audit"; echo; cat "$RUNNER_TEMP/audit.md"; } >> "$GITHUB_STEP_SUMMARY"
+          cat "$RUNNER_TEMP/audit.md"
+          exit "$status"

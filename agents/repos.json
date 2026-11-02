@@ -1,0 +1,40 @@
+{
+  "repositories": [
+    {
+      "repo": "tempoxyz/mpp-tools",
+      "sync": "local"
+    },
+    {
+      "repo": "wevm/mppx",
+      "sync": "manual"
+    },
+    {
+      "repo": "tempoxyz/mpp-rs",
+      "sync": "workflow"
+    },
+    {
+      "repo": "tempoxyz/pympp",
+      "sync": "workflow"
+    },
+    {
+      "repo": "tempoxyz/mpp-go",
+      "sync": "workflow"
+    },
+    {
+      "repo": "tempoxyz/mpp-swift",
+      "sync": "workflow"
+    },
+    {
+      "repo": "tempoxyz/mpp-specs",
+      "sync": "workflow"
+    },
+    {
+      "repo": "tempoxyz/mpp",
+      "sync": "workflow"
+    },
+    {
+      "repo": "tempoxyz/mpp-proxy",
+      "sync": "workflow"
+    }
+  ]
+}

@@ -54,6 +54,7 @@ make flow         # run end-to-end 402 flow conformance
 
 ```text
 mpp-tools/
+├── agents/               # Canonical AGENTS.md shape and shared MPP section, synced to every MPP repo
 ├── agricola/             # Control plane for SDK change review
 ├── ledger/               # Append-only Agricola decision records
 ├── conformance/          # Cross-SDK conformance test suite
