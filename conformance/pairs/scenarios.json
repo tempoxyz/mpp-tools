@@ -35,6 +35,24 @@
           "kind": "pay",
           "path": "/paid"
         }
+      ],
+      "expectedFailures": [
+        {
+          "client": "*",
+          "server": "go",
+          "steps": [
+            "unpaid"
+          ],
+          "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
+        },
+        {
+          "client": "*",
+          "server": "go",
+          "steps": [
+            "pay"
+          ],
+          "reason": "mpp-go formats receipt timestamps with milliseconds (2026-01-01T00:00:00.000Z); mppx keeps the method's timestamp as given (2026-01-01T00:00:00Z)."
+        }
       ]
     },
     {
@@ -105,6 +123,30 @@
             "paid"
           ],
           "reason": "The rust adapter's challenge.parse returns opaque as a decoded object instead of its wire string, so it cannot echo a challenge that carries opaque (route meta, or pympp's per-challenge nonce)."
+        },
+        {
+          "client": "*",
+          "server": "go",
+          "steps": [
+            "unpaid"
+          ],
+          "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
+        },
+        {
+          "client": "*",
+          "server": "go",
+          "steps": [
+            "paid"
+          ],
+          "reason": "mpp-go formats receipt timestamps with milliseconds (2026-01-01T00:00:00.000Z); mppx keeps the method's timestamp as given (2026-01-01T00:00:00Z)."
+        },
+        {
+          "client": "*",
+          "server": "go",
+          "steps": [
+            "replayed"
+          ],
+          "reason": "mpp-go answers a replayed credential with 403 verification-failed and no challenge (ErrCredentialReplayed, so auto-paying clients do not pay again); mppx answers 402 verification-failed with a fresh challenge."
         }
       ]
     },
@@ -169,6 +211,14 @@
             "expensive_with_cheap_credential"
           ],
           "reason": "pympp answers a credential it rejects before settlement (bad challenge id, other realm, other route, expired, malformed) with a fresh payment-required challenge and reports the reason only on its payment.failed event; mppx returns the specific problem type: invalid-challenge, payment-expired or malformed-credential."
+        },
+        {
+          "client": "*",
+          "server": "go",
+          "steps": [
+            "cheap_challenge"
+          ],
+          "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
         }
       ]
     },
@@ -222,6 +272,14 @@
             "other_realm"
           ],
           "reason": "pympp answers a credential it rejects before settlement (bad challenge id, other realm, other route, expired, malformed) with a fresh payment-required challenge and reports the reason only on its payment.failed event; mppx returns the specific problem type: invalid-challenge, payment-expired or malformed-credential."
+        },
+        {
+          "client": "*",
+          "server": "go",
+          "steps": [
+            "unpaid"
+          ],
+          "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
         }
       ]
     },
@@ -304,6 +362,15 @@
             "rebound_expired"
           ],
           "reason": "pympp answers a credential it rejects before settlement (bad challenge id, other realm, other route, expired, malformed) with a fresh payment-required challenge and reports the reason only on its payment.failed event; mppx returns the specific problem type: invalid-challenge, payment-expired or malformed-credential."
+        },
+        {
+          "client": "*",
+          "server": "go",
+          "steps": [
+            "issued_expired",
+            "unpaid"
+          ],
+          "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
         }
       ]
     },
@@ -370,6 +437,14 @@
             "tampered_amount"
           ],
           "reason": "pympp answers a credential it rejects before settlement (bad challenge id, other realm, other route, expired, malformed) with a fresh payment-required challenge and reports the reason only on its payment.failed event; mppx returns the specific problem type: invalid-challenge, payment-expired or malformed-credential."
+        },
+        {
+          "client": "*",
+          "server": "go",
+          "steps": [
+            "unpaid"
+          ],
+          "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
         }
       ]
     },
@@ -443,6 +518,23 @@
             "credential_in_authorization"
           ],
           "reason": "The rust adapter's challenge.parse returns opaque as a decoded object instead of its wire string, so it cannot echo a challenge that carries opaque (route meta, or pympp's per-challenge nonce)."
+        },
+        {
+          "client": "*",
+          "server": "go",
+          "steps": [
+            "unpaid",
+            "credential_in_authorization"
+          ],
+          "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
+        },
+        {
+          "client": "*",
+          "server": "go",
+          "steps": [
+            "pay"
+          ],
+          "reason": "mpp-go formats receipt timestamps with milliseconds (2026-01-01T00:00:00.000Z); mppx keeps the method's timestamp as given (2026-01-01T00:00:00Z)."
         }
       ]
     },
@@ -534,6 +626,22 @@
             "bob_with_alice_credential"
           ],
           "reason": "pympp answers a credential it rejects before settlement (bad challenge id, other realm, other route, expired, malformed) with a fresh payment-required challenge and reports the reason only on its payment.failed event; mppx returns the specific problem type: invalid-challenge, payment-expired or malformed-credential."
+        },
+        {
+          "client": "*",
+          "server": "go",
+          "steps": [
+            "pay_alice"
+          ],
+          "reason": "mpp-go formats receipt timestamps with milliseconds (2026-01-01T00:00:00.000Z); mppx keeps the method's timestamp as given (2026-01-01T00:00:00Z)."
+        },
+        {
+          "client": "*",
+          "server": "go",
+          "steps": [
+            "alice_challenge"
+          ],
+          "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
         }
       ]
     },
@@ -580,6 +688,24 @@
           "name": "pay",
           "kind": "pay",
           "path": "/multi"
+        }
+      ],
+      "expectedFailures": [
+        {
+          "client": "*",
+          "server": "go",
+          "steps": [
+            "unpaid"
+          ],
+          "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
+        },
+        {
+          "client": "*",
+          "server": "go",
+          "steps": [
+            "pay"
+          ],
+          "reason": "mpp-go formats receipt timestamps with milliseconds (2026-01-01T00:00:00.000Z); mppx keeps the method's timestamp as given (2026-01-01T00:00:00Z)."
         }
       ]
     },
@@ -641,6 +767,15 @@
             "empty_object"
           ],
           "reason": "pympp answers a credential it rejects before settlement (bad challenge id, other realm, other route, expired, malformed) with a fresh payment-required challenge and reports the reason only on its payment.failed event; mppx returns the specific problem type: invalid-challenge, payment-expired or malformed-credential."
+        },
+        {
+          "client": "*",
+          "server": "go",
+          "steps": [
+            "empty_payment",
+            "other_scheme"
+          ],
+          "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
         }
       ]
     },
@@ -727,6 +862,14 @@
             "pay_unpayable"
           ],
           "reason": "pympp before 0.19 returns the first 402 unchanged when no challenge matches its methods; mppx (and pympp 0.19, tempoxyz/pympp#368) fails with 'No method found for challenges: ... Available: ...' and returns a 402 only after a paid retry."
+        },
+        {
+          "client": "*",
+          "server": "go",
+          "steps": [
+            "unpaid"
+          ],
+          "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
         }
       ]
     }
