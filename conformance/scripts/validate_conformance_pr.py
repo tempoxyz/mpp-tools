@@ -19,11 +19,17 @@ def split_patterns(value: str) -> list[str]:
 
 def path_matches(path: str, pattern: str) -> bool:
     normalized = path.strip("/")
-    normalized_pattern = pattern.strip("/")
+    normalized_pattern = pattern.lstrip("/")
+    if normalized_pattern.endswith("/**/"):
+        # "dir/**/" covers everything below dir, as "dir/**" does.
+        normalized_pattern = normalized_pattern[:-1]
     if normalized_pattern.endswith("/**"):
         prefix = normalized_pattern[:-3].rstrip("/")
         return normalized == prefix or normalized.startswith(prefix + "/")
     if normalized_pattern.endswith("/"):
+        # A glob prefix such as "src/*/" matches every file below the matched directories.
+        if any(char in normalized_pattern for char in "*?["):
+            return fnmatchcase(normalized, normalized_pattern + "*")
         return normalized.startswith(normalized_pattern)
     return fnmatchcase(normalized, normalized_pattern)
 
