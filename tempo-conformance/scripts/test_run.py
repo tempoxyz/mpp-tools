@@ -13,6 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import resolve_sdk  # noqa: E402
 import run  # noqa: E402
 import sdk_version  # noqa: E402
 
@@ -107,3 +108,45 @@ class SdkVersionTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ResolveSdkTest(unittest.TestCase):
+    def test_restores_files_when_resolving_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            (p / "go.mod").write_text("module x\nrequire github.com/tempoxyz/tempo-go v0.6.1\n")
+            sdk = {"package": "github.com/tempoxyz/tempo-go", "manifest": "go.mod", "lockfile": "go.mod"}
+            resolution = resolve_sdk.Resolution(p, sdk)
+
+            def broken(cwd, package, env):
+                (cwd / "go.mod").write_text("garbage")
+                (cwd / "go.sum").write_text("new")
+                raise RuntimeError("proxy refused the release")
+
+            original = resolve_sdk.RESOLVERS["go.mod"]
+            resolve_sdk.RESOLVERS["go.mod"] = broken
+            try:
+                with self.assertRaisesRegex(RuntimeError, "proxy refused"):
+                    resolution.apply({})
+            finally:
+                resolve_sdk.RESOLVERS["go.mod"] = original
+            self.assertIn("v0.6.1", (p / "go.mod").read_text())
+            self.assertFalse((p / "go.sum").exists())
+
+    def test_restore_undoes_a_successful_resolution(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            (p / "uv.lock").write_text("old lock")
+            (p / "pyproject.toml").write_text("old manifest")
+            sdk = {"package": "pytempo", "manifest": "pyproject.toml", "lockfile": "uv.lock"}
+            resolution = resolve_sdk.Resolution(p, sdk)
+            original = resolve_sdk.RESOLVERS["uv.lock"]
+            resolve_sdk.RESOLVERS["uv.lock"] = lambda cwd, package, env: (cwd / "uv.lock").write_text("new lock")
+            try:
+                resolution.apply({})
+            finally:
+                resolve_sdk.RESOLVERS["uv.lock"] = original
+            self.assertEqual((p / "uv.lock").read_text(), "new lock")
+            resolution.restore()
+            self.assertEqual((p / "uv.lock").read_text(), "old lock")
+            self.assertEqual((p / "pyproject.toml").read_text(), "old manifest")

@@ -6,17 +6,19 @@ TEMPO_IMAGE ?= ghcr.io/tempoxyz/tempo:1.17.0
 ADAPTERS ?=
 REPORT ?=
 ARGS ?=
+SDK ?= latest
+PIN ?=
 PYTHON ?= uv run --locked --project ../conformance python
 
-RUN = TEMPO_IMAGE=$(TEMPO_IMAGE) $(PYTHON) scripts/run.py $(if $(ADAPTERS),--adapters $(ADAPTERS)) $(if $(REPORT),--report $(REPORT)) $(ARGS)
+RUN = TEMPO_IMAGE=$(TEMPO_IMAGE) $(PYTHON) scripts/run.py $(if $(ADAPTERS),--adapters $(ADAPTERS)) $(if $(REPORT),--report $(REPORT)) --sdk $(SDK) $(if $(PIN),--pin $(PIN)) $(ARGS)
 
 .PHONY: all build test vectors validate test-scripts skips sdk-versions generate help
 
-all: ## Build every adapter, run all vectors, submit node scenarios to a fresh dev node per adapter
+all: ## Build every adapter at its latest SDK release (SDK=pinned for the lockfiles), run all vectors, submit node scenarios to a fresh dev node per adapter
 	$(RUN) --build
 
 build: ## Build adapters only
-	$(PYTHON) scripts/run.py --build-only $(if $(ADAPTERS),--adapters $(ADAPTERS))
+	$(PYTHON) scripts/run.py --build-only --keep-resolved --sdk $(SDK) $(if $(PIN),--pin $(PIN)) $(if $(ADAPTERS),--adapters $(ADAPTERS))
 
 test: all
 

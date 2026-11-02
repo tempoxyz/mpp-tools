@@ -39,7 +39,7 @@
         "lockfile"
       ],
       "additionalProperties": false,
-      "description": "The SDK package under test, pinned in the package manifest and lockfile; scripts/sdk_version.py reads its version from the lockfile for sdkVersions constraints.",
+      "description": "The SDK package under test. By default the runner resolves its latest release before building (scripts/resolve_sdk.py); the checked-in manifest and lockfile pin it when pinned is true or the run uses --sdk pinned or --pin. scripts/sdk_version.py reads the version under test from the lockfile for sdkVersions constraints.",
       "properties": {
         "package": {
           "type": "string",
@@ -52,6 +52,10 @@
         "lockfile": {
           "type": "string",
           "minLength": 1
+        },
+        "pinned": {
+          "type": "boolean",
+          "description": "Keep this adapter on its checked-in lockfile even when the runner resolves the latest SDK release (--sdk latest, the default)."
         }
       }
     },

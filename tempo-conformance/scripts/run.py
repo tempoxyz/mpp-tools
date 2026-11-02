@@ -21,6 +21,7 @@ import argparse
 import json
 import os
 import queue
+import signal
 import socket
 import subprocess
 import sys
@@ -30,6 +31,7 @@ import urllib.request
 from collections import Counter
 from pathlib import Path
 
+import resolve_sdk
 import sdk_version
 from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
@@ -113,6 +115,30 @@ class Adapter:
         if self._version is None:
             self._version = sdk_version.installed_version(self.name)
         return self._version
+
+    def resolve(self, mode: str, pins: set[str]) -> None:
+        """Move the SDK to its latest release unless pinned (see resolve_sdk)."""
+        self.resolution = "pinned"
+        if mode != "latest" or self.name in pins or self.manifest["sdk"].get("pinned"):
+            return
+        before = sdk_version.installed_version(self.name)
+        self._resolver = resolve_sdk.Resolution(self.dir, self.manifest["sdk"])
+        try:
+            self._resolver.apply(_adapter_env())
+        except Exception as error:  # noqa: BLE001  fall back to the checked-in pin
+            print(f"! {self.name}: could not resolve the latest {self.manifest['sdk']['package']}, "
+                  f"using the pinned {before}: {error}", file=sys.stderr)
+            self.resolution = "pinned (latest unavailable)"
+            return
+        self._version = None
+        self.resolution = "latest"
+        print(f"→ {self.name}: {self.manifest['sdk']['package']} {before} -> {self.version} (latest)", file=sys.stderr)
+
+    def restore(self) -> None:
+        resolver = getattr(self, "_resolver", None)
+        if resolver is not None:
+            resolver.restore()
+            self._resolver = None
 
     def build(self) -> None:
         if self.manifest.get("build"):
@@ -466,6 +492,11 @@ def main() -> int:
     ap.add_argument("--sdk-version", action="append", default=[], metavar="ADAPTER=VERSION",
                     help="evaluate sdkVersions as if ADAPTER's SDK were VERSION (when testing an unreleased SDK checkout)")
     ap.add_argument("--build-only", action="store_true", help="build the selected adapters, then exit")
+    ap.add_argument("--sdk", choices=["latest", "pinned"], default=os.environ.get("TEMPO_CONFORMANCE_SDK", "latest"),
+                    help="with --build or --build-only: test each SDK's latest release (default) or the checked-in lockfiles")
+    ap.add_argument("--pin", action="append", default=[], metavar="ADAPTER",
+                    help="keep this adapter on its checked-in lockfile even with --sdk latest")
+    ap.add_argument("--keep-resolved", action="store_true", help="leave the latest-resolved manifests and lockfiles in place")
     ap.add_argument("--validate-only", action="store_true", help="validate vectors, schemas and manifests, then exit")
     args = ap.parse_args()
 
@@ -499,6 +530,25 @@ def main() -> int:
         print("--rpc needs a fresh node per adapter: pass one adapter with --adapters", file=sys.stderr)
         return 2
 
+    # Restore latest-resolved manifests and lockfiles on SIGTERM too (CI cancels, timeouts).
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
+    pins = {p for arg in args.pin for p in arg.split(",") if p}
+    if pins - names:
+        print(f"--pin: unknown adapter(s) {', '.join(sorted(pins - names))}", file=sys.stderr)
+        return 2
+    try:
+        if args.build or args.build_only:
+            for a in adapters:
+                if a._version is None:
+                    a.resolve(args.sdk, pins)
+        return _run(args, adapters, vectors)
+    finally:
+        if not args.keep_resolved:
+            for a in adapters:
+                a.restore()
+
+
+def _run(args, adapters, vectors) -> int:
     if args.build_only:
         for a in adapters:
             a.build()
@@ -513,7 +563,8 @@ def main() -> int:
     for a in adapters:
         if args.build:
             a.build()
-        sdk = sdk_version.sdk_summary(a.name) if a._version is None else f"{a.manifest['sdk']['package']}@{a._version} (--sdk-version)"
+        sdk = (f"{sdk_version.sdk_summary(a.name)}, {getattr(a, 'resolution', 'pinned')}" if a._version is None or getattr(a, "resolution", "") == "latest"
+               else f"{a.manifest['sdk']['package']}@{a._version} (--sdk-version)")
         a.start()
         rows, outputs, probes = {}, {}, []
         try:
