@@ -6,7 +6,7 @@ TEMPO_IMAGE ?= ghcr.io/tempoxyz/tempo:1.17.0
 ADAPTERS ?=
 REPORT ?=
 ARGS ?=
-SDK ?= latest
+SDK ?= $(or $(TEMPO_CONFORMANCE_SDK),latest)
 PIN ?=
 PYTHON ?= uv run --locked --project ../conformance python
 

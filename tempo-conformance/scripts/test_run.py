@@ -150,3 +150,18 @@ class ResolveSdkTest(unittest.TestCase):
             resolution.restore()
             self.assertEqual((p / "uv.lock").read_text(), "old lock")
             self.assertEqual((p / "pyproject.toml").read_text(), "old manifest")
+
+
+class BuiltVersionTest(unittest.TestCase):
+    def test_version_follows_the_last_build_not_the_restored_lockfile(self) -> None:
+        a = run.Adapter.__new__(run.Adapter)
+        a.name = "go"
+        a._version = None
+        with tempfile.TemporaryDirectory() as d:
+            a.dir = Path(d)
+            (a.dir / run.BUILT_VERSION).write_text("v9.9.9\n")
+            self.assertEqual(a.version, "v9.9.9")
+            a.forget_build()
+            self.assertFalse((a.dir / run.BUILT_VERSION).exists())
+            a._override = "v1.2.3"
+            self.assertEqual(a.version, "v1.2.3")

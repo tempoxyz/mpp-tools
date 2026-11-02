@@ -82,6 +82,10 @@ def validate(value, ref: str, label: str) -> None:
 
 
 # --------------------------------------------------------------------------- adapters
+# Per adapter: the SDK version its current build artifacts use (gitignored).
+BUILT_VERSION = ".sdk-under-test"
+
+
 def _adapter_env() -> dict[str, str]:
     """The adapters' own toolchains pick their environments: drop the runner's venv."""
     env = dict(os.environ)
@@ -112,9 +116,20 @@ class Adapter:
 
     @property
     def version(self) -> str:
+        """The SDK version under test: what the last build used (recorded in
+        BUILT_VERSION, since a latest-resolved build outlives its restored
+        lockfile), else the checked-in lockfile's."""
+        if getattr(self, "_override", None):
+            return self._override
         if self._version is None:
-            self._version = sdk_version.installed_version(self.name)
+            built = self.dir / BUILT_VERSION
+            self._version = built.read_text().strip() if built.exists() else sdk_version.installed_version(self.name)
         return self._version
+
+    def forget_build(self) -> None:
+        """Before a rebuild: the next version comes from the (resolved) lockfile."""
+        (self.dir / BUILT_VERSION).unlink(missing_ok=True)
+        self._version = None
 
     def resolve(self, mode: str, pins: set[str]) -> None:
         """Move the SDK to its latest release unless pinned (see resolve_sdk)."""
@@ -144,6 +159,9 @@ class Adapter:
         if self.manifest.get("build"):
             print(f"→ building {self.name}: {' '.join(self.manifest['build'])}", file=sys.stderr)
             subprocess.run(self.manifest["build"], cwd=self.cwd, env=_adapter_env(), check=True)
+        self._version = None
+        (self.dir / BUILT_VERSION).unlink(missing_ok=True)
+        (self.dir / BUILT_VERSION).write_text(self.version + "\n")
 
     def start(self) -> None:
         self.proc = subprocess.Popen(
@@ -526,6 +544,7 @@ def main() -> int:
         for a in adapters:
             if a.name == name:
                 a._version = version
+                a._override = version
     if args.rpc and len(adapters) > 1 and not args.no_node:
         print("--rpc needs a fresh node per adapter: pass one adapter with --adapters", file=sys.stderr)
         return 2
@@ -540,6 +559,7 @@ def main() -> int:
         if args.build or args.build_only:
             for a in adapters:
                 if a._version is None:
+                    a.forget_build()
                     a.resolve(args.sdk, pins)
         return _run(args, adapters, vectors)
     finally:
@@ -563,8 +583,9 @@ def _run(args, adapters, vectors) -> int:
     for a in adapters:
         if args.build:
             a.build()
-        sdk = (f"{sdk_version.sdk_summary(a.name)}, {getattr(a, 'resolution', 'pinned')}" if a._version is None or getattr(a, "resolution", "") == "latest"
-               else f"{a.manifest['sdk']['package']}@{a._version} (--sdk-version)")
+        overridden = any(o.partition("=")[0] == a.name for o in args.sdk_version)
+        source = "--sdk-version" if overridden else getattr(a, "resolution", "as last built" if (a.dir / BUILT_VERSION).exists() else "pinned")
+        sdk = f"{a.manifest['sdk']['package']}@{a.version}, {source}"
         a.start()
         rows, outputs, probes = {}, {}, []
         try:
