@@ -78,6 +78,14 @@ class PathMatchesTest(unittest.TestCase):
         self.assertFalse(path_matches("conformance/adapters-old/foo.py", "conformance/adapters/"))
         self.assertFalse(path_matches("unrelated/foo.py", "conformance/adapters/"))
 
+    def test_trailing_slash_glob_pattern_matches_files_below(self) -> None:
+        from select_ci_adapters import path_matches
+
+        self.assertTrue(path_matches("src/pkg/file.py", "src/*/"))
+        self.assertTrue(path_matches("conformance/adapters/python/foo.py", "conformance/adapters/py*/"))
+        self.assertFalse(path_matches("conformance/adapters/go/foo.go", "conformance/adapters/py*/"))
+        self.assertFalse(path_matches("lib/pkg/file.py", "src/*/"))
+
     def test_other_pattern_forms_unchanged(self) -> None:
         from select_ci_adapters import path_matches
 

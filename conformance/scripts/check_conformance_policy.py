@@ -48,6 +48,9 @@ def path_matches(path: str, pattern: str) -> bool:
         prefix = normalized_pattern[:-3].rstrip("/")
         return normalized == prefix or normalized.startswith(prefix + "/")
     if normalized_pattern.endswith("/"):
+        # A glob prefix such as "src/*/" matches every file below the matched directories.
+        if any(char in normalized_pattern for char in "*?["):
+            return fnmatchcase(normalized, normalized_pattern + "*")
         return normalized.startswith(normalized_pattern)
     return fnmatchcase(normalized, normalized_pattern)
 
