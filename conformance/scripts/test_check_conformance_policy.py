@@ -111,6 +111,14 @@ class PathMatchesTest(unittest.TestCase):
         self.assertFalse(path_matches("conformance/adapters/go/foo.go", "conformance/adapters/py*/"))
         self.assertFalse(path_matches("lib/pkg/file.py", "src/*/"))
 
+    def test_double_star_trailing_slash_pattern_matches_whole_tree(self) -> None:
+        from check_conformance_policy import path_matches
+
+        self.assertTrue(path_matches("conformance/adapters/README.md", "conformance/adapters/**/"))
+        self.assertTrue(path_matches("conformance/adapters/python/foo.py", "conformance/adapters/**/"))
+        self.assertTrue(path_matches("/conformance/adapters/README.md", "/conformance/adapters/**/"))
+        self.assertFalse(path_matches("conformance/adapters-old/foo.py", "conformance/adapters/**/"))
+
     def test_other_pattern_forms_unchanged(self) -> None:
         from check_conformance_policy import path_matches
 

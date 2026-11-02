@@ -20,6 +20,9 @@ def split_patterns(value: str) -> list[str]:
 def path_matches(path: str, pattern: str) -> bool:
     normalized = path.strip("/")
     normalized_pattern = pattern.lstrip("/")
+    if normalized_pattern.endswith("/**/"):
+        # "dir/**/" covers everything below dir, as "dir/**" does.
+        normalized_pattern = normalized_pattern[:-1]
     if normalized_pattern.endswith("/**"):
         prefix = normalized_pattern[:-3].rstrip("/")
         return normalized == prefix or normalized.startswith(prefix + "/")
