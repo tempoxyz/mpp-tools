@@ -443,6 +443,14 @@ fn handle_adapter_request() {
         return;
     }
 
+    if op == "stripe.external_id_binding" {
+        match run_stripe_external_id_binding(&input_value) {
+            Ok(value) => print_adapter_success(value),
+            Err((error_type, message)) => print_adapter_error(&message, error_type),
+        }
+        return;
+    }
+
     if op == "tempo.proof.verify" {
         match run_tempo_proof_verify(&input_value) {
             Ok(value) => print_adapter_success(value),
@@ -870,6 +878,217 @@ fn verify_with_fake_tempo_rpc(
         _ => ("verification_error", e.to_string()),
     })?;
     Ok(json!({ "status": receipt.status, "reference": receipt.reference }))
+}
+
+/// Serve Stripe's POST /v1/payment_intents from a local HTTP server with the
+/// vector's paymentIntent fixture: its id and status, and the
+/// idempotent-replayed header when the fixture is replayed. A request for
+/// another path, or with a shared_payment_granted_token other than the
+/// payload's spt, is recorded in `unexpected`.
+fn serve_fake_stripe(
+    payment_intent: Value,
+    spt: String,
+    unexpected: UnexpectedRpcCall,
+) -> io::Result<String> {
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let url = format!("http://{}", listener.local_addr()?);
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(stream) = stream else { continue };
+            let _ = answer_fake_stripe(stream, &payment_intent, &spt, &unexpected);
+        }
+    });
+    Ok(url)
+}
+
+fn answer_fake_stripe(
+    stream: std::net::TcpStream,
+    payment_intent: &Value,
+    spt: &str,
+    unexpected: &UnexpectedRpcCall,
+) -> io::Result<()> {
+    let record = |call: String| {
+        if let Ok(mut slot) = unexpected.lock() {
+            slot.get_or_insert(call);
+        }
+    };
+    let mut reader = BufReader::new(stream.try_clone()?);
+    let mut request_line = String::new();
+    reader.read_line(&mut request_line)?;
+    let mut content_length = 0;
+    loop {
+        let mut line = String::new();
+        if reader.read_line(&mut line)? == 0 || line == "\r\n" {
+            break;
+        }
+        if let Some((name, value)) = line.split_once(':') {
+            if name.eq_ignore_ascii_case("content-length") {
+                content_length = value.trim().parse().unwrap_or(0);
+            }
+        }
+    }
+    let mut body = vec![0; content_length];
+    reader.read_exact(&mut body)?;
+    let token = String::from_utf8_lossy(&body)
+        .split('&')
+        .filter_map(|pair| pair.split_once('='))
+        .find(|(key, _)| *key == "shared_payment_granted_token")
+        .map(|(_, value)| form_decode(value));
+
+    let mut stream = stream;
+    if request_line.split_whitespace().take(2).collect::<Vec<_>>()
+        != ["POST", "/v1/payment_intents"]
+    {
+        record(format!("unexpected Stripe request {}", request_line.trim()));
+        return write!(
+            stream,
+            "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        );
+    }
+    if token.as_deref() != Some(spt) {
+        record("unexpected shared_payment_granted_token".to_string());
+    }
+    let replayed = payment_intent.get("replayed").and_then(Value::as_bool) == Some(true);
+    let body = serde_json::to_vec(&json!({
+        "id": payment_intent.get("id").cloned().unwrap_or(Value::Null),
+        "status": payment_intent.get("status").cloned().unwrap_or(Value::Null),
+    }))?;
+    write!(
+        stream,
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n{}Content-Length: {}\r\nConnection: close\r\n\r\n",
+        if replayed { "Idempotent-Replayed: true\r\n" } else { "" },
+        body.len()
+    )?;
+    stream.write_all(&body)?;
+    stream.flush()
+}
+
+/// Decode an application/x-www-form-urlencoded value.
+fn form_decode(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'+' => decoded.push(b' '),
+            b'%' if index + 2 < bytes.len() => {
+                let hex = std::str::from_utf8(&bytes[index + 1..index + 3]).ok();
+                match hex.and_then(|hex| u8::from_str_radix(hex, 16).ok()) {
+                    Some(byte) => {
+                        decoded.push(byte);
+                        index += 2;
+                    }
+                    None => decoded.push(b'%'),
+                }
+            }
+            byte => decoded.push(byte),
+        }
+        index += 1;
+    }
+    String::from_utf8_lossy(&decoded).into_owned()
+}
+
+/// Verify a Stripe charge credential with the SDK's server-side Stripe method
+/// against a local Stripe stub serving the vector's paymentIntent fixture,
+/// and report whether the receipt keeps the server-bound externalId.
+fn run_stripe_external_id_binding(input: &Value) -> Result<Value, (&'static str, String)> {
+    use mpp::protocol::core::PaymentChallenge;
+    use mpp::protocol::methods::stripe::method::ChargeMethod as StripeChargeMethod;
+
+    const SECRET_KEY: &str = "conformance-stripe-secret-32-bytes-min";
+    const REALM: &str = "conformance.local";
+    const EXPIRES: &str = "2099-01-29T12:05:30Z";
+
+    let unknown = |message: String| ("unknown_error", message);
+    let mut request = input.get("request").cloned().unwrap_or(json!({}));
+    // As in the golden adapter, the server's Stripe networkId defaults to
+    // "conformance" when the vector request does not name one.
+    if let Some(object) = request.as_object_mut() {
+        let details = object.entry("methodDetails").or_insert_with(|| json!({}));
+        if let Some(details) = details.as_object_mut() {
+            details
+                .entry("networkId")
+                .or_insert_with(|| json!("conformance"));
+        }
+    }
+    let payload = input.get("payload").cloned().unwrap_or(json!({}));
+    let payment_intent = input.get("paymentIntent").cloned().unwrap_or(json!({}));
+    let spt = str_field(&payload, "spt");
+    let network_id = request
+        .pointer("/methodDetails/networkId")
+        .and_then(Value::as_str)
+        .unwrap_or("conformance")
+        .to_string();
+    let payment_method_types = request
+        .pointer("/methodDetails/paymentMethodTypes")
+        .and_then(Value::as_array)
+        .map(|types| {
+            types
+                .iter()
+                .filter_map(Value::as_str)
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_else(|| vec!["card".to_string()]);
+
+    let expected: mpp::ChargeRequest =
+        serde_json::from_value(request.clone()).map_err(|e| unknown(e.to_string()))?;
+    let encoded = Base64UrlJson::from_value(&request).map_err(|e| unknown(e.to_string()))?;
+    let challenge = PaymentChallenge::with_secret_key_full(
+        SECRET_KEY,
+        REALM,
+        "stripe",
+        "charge",
+        encoded,
+        Some(EXPIRES),
+        None,
+        None,
+        None,
+        None,
+    );
+    let credential = PaymentCredential::new(challenge.to_echo(), payload);
+
+    let unexpected = UnexpectedRpcCall::default();
+    let api_base = serve_fake_stripe(payment_intent, spt, unexpected.clone())
+        .map_err(|e| unknown(e.to_string()))?;
+    let method = StripeChargeMethod::new("sk_test_conformance", network_id, payment_method_types)
+        .with_api_base(api_base);
+    let mpp = mpp::server::Mpp::new(method, REALM, SECRET_KEY);
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| unknown(e.to_string()))?;
+    let verified =
+        runtime.block_on(mpp.verify_credential_with_expected_request(&credential, &expected));
+    // A request the Stripe stub could not serve means the setup is broken, so
+    // the outcome, even a rejection, says nothing about the SDK.
+    if let Some(call) = unexpected.lock().ok().and_then(|slot| slot.clone()) {
+        return Err(unknown(format!("fake Stripe received {call}")));
+    }
+    let receipt = match verified {
+        Ok(receipt) => receipt,
+        Err(e) => {
+            let error_type = match e.code.map(|code| code.as_str()) {
+                Some("network-error") => return Err(unknown(e.to_string())),
+                // Challenge-binding failures: pinned mpp-rs reports them as
+                // credential-mismatch, later ones as invalid-challenge.
+                Some("credential-mismatch" | "invalid-challenge") => "invalid_challenge",
+                _ => "verification_failed",
+            };
+            return Ok(json!({ "ok": false, "errorType": error_type }));
+        }
+    };
+    let mut receipt_value = json!({
+        "status": receipt.status,
+        "method": receipt.method,
+        "timestamp": "2026-01-29T12:00:30Z",
+        "reference": receipt.reference,
+    });
+    if let Some(external_id) = receipt.external_id {
+        receipt_value["externalId"] = json!(external_id);
+    }
+    Ok(json!({ "ok": true, "receipt": receipt_value }))
 }
 
 fn legacy_command_for_operation(op: &str) -> Option<&'static str> {
