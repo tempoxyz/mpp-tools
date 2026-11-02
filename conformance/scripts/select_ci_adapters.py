@@ -65,7 +65,7 @@ FULL_PATTERNS = [
 
 def path_matches(path: str, pattern: str) -> bool:
     normalized = path.strip("/")
-    normalized_pattern = pattern.strip("/")
+    normalized_pattern = pattern.lstrip("/")
     if normalized_pattern.endswith("/**"):
         prefix = normalized_pattern[:-3].rstrip("/")
         return normalized == prefix or normalized.startswith(prefix + "/")

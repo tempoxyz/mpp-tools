@@ -68,5 +68,24 @@ class SelectAdaptersTests(unittest.TestCase):
                 )
 
 
+
+class PathMatchesTest(unittest.TestCase):
+    def test_trailing_slash_pattern_matches_files_below(self) -> None:
+        from select_ci_adapters import path_matches
+
+        self.assertTrue(path_matches("conformance/adapters/python/foo.py", "conformance/adapters/"))
+        self.assertTrue(path_matches("/conformance/adapters/python/foo.py", "/conformance/adapters/"))
+        self.assertFalse(path_matches("conformance/adapters-old/foo.py", "conformance/adapters/"))
+        self.assertFalse(path_matches("unrelated/foo.py", "conformance/adapters/"))
+
+    def test_other_pattern_forms_unchanged(self) -> None:
+        from select_ci_adapters import path_matches
+
+        self.assertTrue(path_matches("conformance/adapters/python/foo.py", "conformance/adapters/**"))
+        self.assertTrue(path_matches("conformance/adapters", "conformance/adapters/**"))
+        self.assertTrue(path_matches("pkg/mpp/parse.go", "pkg/*/parse.go"))
+        self.assertFalse(path_matches("pkg/mpp/parse.go", "pkg/server/*"))
+
+
 if __name__ == "__main__":
     unittest.main()

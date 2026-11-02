@@ -41,7 +41,7 @@ def split_patterns(value: str) -> list[str]:
 
 def path_matches(path: str, pattern: str) -> bool:
     normalized = path.strip("/")
-    normalized_pattern = pattern.strip("/")
+    normalized_pattern = pattern.lstrip("/")
     if not normalized_pattern:
         return False
     if normalized_pattern.endswith("/**"):
