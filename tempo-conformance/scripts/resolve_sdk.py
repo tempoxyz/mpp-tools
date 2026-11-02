@@ -14,8 +14,13 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
+import urllib.request
 from pathlib import Path
+
+# Where --keep-resolved keeps the checked-in files, so the next run restores them.
+STASH = ".sdk-pinned"
 
 
 def _run(cmd: list[str], cwd: Path, env: dict[str, str]) -> str:
@@ -38,8 +43,21 @@ def _cargo(cwd: Path, package: str, env: dict[str, str]) -> None:
     match = re.match(rf'^{re.escape(package)} = "([^"]+)"', found)
     if not match:
         raise RuntimeError(f"cargo search did not report {package}: {found!r}")
+    version = match.group(1)
+    if "-" in version:  # cargo search reports pre-releases; test the newest stable one, as go, uv and npm do
+        version = _crates_io_stable(package)
     # cargo add on an existing dependency keeps its features.
-    _run(["cargo", "add", f"{package}@={match.group(1)}"], cwd, env)
+    _run(["cargo", "add", f"{package}@={version}"], cwd, env)
+
+
+def _crates_io_stable(package: str) -> str:
+    req = urllib.request.Request(f"https://crates.io/api/v1/crates/{package}",
+                                 headers={"User-Agent": "tempoxyz/mpp-tools tempo-conformance"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        version = json.load(resp)["crate"].get("max_stable_version")
+    if not version:
+        raise RuntimeError(f"crates.io lists no stable release of {package}")
+    return version
 
 
 def _npm(cwd: Path, package: str, env: dict[str, str]) -> None:
@@ -81,6 +99,15 @@ class Resolution:
             self.restore()
             raise
 
+    def stash(self) -> None:
+        """Keep the resolved files in place (--keep-resolved) but save the
+        checked-in ones, which restore_stashed() puts back on the next run."""
+        stash = self.dir / STASH
+        stash.mkdir(exist_ok=True)
+        for f, data in self.backups.items():
+            (stash / (f.name + (".absent" if data is None else ""))).write_bytes(data or b"")
+        self.backups = {}
+
     def restore(self) -> None:
         for f, data in self.backups.items():
             if data is None:
@@ -89,3 +116,18 @@ class Resolution:
                 f.write_bytes(data)
         self.backups = {}
 
+
+
+def restore_stashed(adapter_dir: Path) -> bool:
+    """Put back the checked-in files an earlier --keep-resolved run left
+    rewritten, so this run resolves (or stays pinned) from the real pin."""
+    stash = adapter_dir / STASH
+    if not stash.is_dir():
+        return False
+    for saved in stash.iterdir():
+        if saved.name.endswith(".absent"):
+            (adapter_dir / saved.name.removesuffix(".absent")).unlink(missing_ok=True)
+        else:
+            shutil.copyfile(saved, adapter_dir / saved.name)
+    shutil.rmtree(stash)
+    return True

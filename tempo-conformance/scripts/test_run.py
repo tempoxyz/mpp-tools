@@ -106,8 +106,6 @@ class SdkVersionTest(unittest.TestCase):
             self.assertRegex(sdk_version.installed_version(name), r"^v?\d+\.\d+\.\d+")
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class ResolveSdkTest(unittest.TestCase):
@@ -165,3 +163,24 @@ class BuiltVersionTest(unittest.TestCase):
             self.assertFalse((a.dir / run.BUILT_VERSION).exists())
             a._override = "v1.2.3"
             self.assertEqual(a.version, "v1.2.3")
+
+
+class StashTest(unittest.TestCase):
+    def test_keep_resolved_files_come_back_on_the_next_run(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "go.mod").write_text("pinned")
+            r = resolve_sdk.Resolution(d, {"manifest": "go.mod", "lockfile": "go.mod", "package": "x"})
+            r.backups = {d / "go.mod": b"pinned", d / "go.sum": None}
+            (d / "go.mod").write_text("latest")
+            (d / "go.sum").write_text("latest")
+            r.stash()
+            self.assertEqual((d / "go.mod").read_text(), "latest")
+            self.assertTrue(resolve_sdk.restore_stashed(d))
+            self.assertEqual((d / "go.mod").read_text(), "pinned")
+            self.assertFalse((d / "go.sum").exists())
+            self.assertFalse(resolve_sdk.restore_stashed(d))
+
+
+if __name__ == "__main__":
+    unittest.main()

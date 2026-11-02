@@ -18,7 +18,7 @@ all: ## Build every adapter at its latest SDK release (SDK=pinned for the lockfi
 	$(RUN) --build
 
 build: ## Build adapters only
-	$(PYTHON) scripts/run.py --build-only --keep-resolved --sdk $(SDK) $(if $(PIN),--pin $(PIN)) $(if $(ADAPTERS),--adapters $(ADAPTERS))
+	$(PYTHON) scripts/run.py --build-only --sdk $(SDK) $(if $(PIN),--pin $(PIN)) $(if $(ADAPTERS),--adapters $(ADAPTERS))
 
 test: all
 
@@ -38,7 +38,7 @@ sdk-versions: ## Print the pinned SDK version of each adapter, as sdkVersions se
 	$(PYTHON) scripts/sdk_version.py
 
 generate: ## Regenerate vectors/*.json from the TypeScript reference (keeps each scenario's skips)
-	cd adapters/typescript && npm ci --silent && node generate.ts
+	rm -f adapters/typescript/.sdk-under-test && cd adapters/typescript && npm ci --silent && node generate.ts
 
 help:
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-13s %s\n", $$1, $$2}'

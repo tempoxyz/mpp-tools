@@ -84,6 +84,10 @@ jobs:
 
       - name: Run conformance against a local Tempo node
         working-directory: tempo-conformance
+        # Dependabot's SDK bumps test the lockfiles they change; every other run
+        # tests the latest SDK releases.
+        env:
+          TEMPO_CONFORMANCE_SDK: ${{ github.actor == 'dependabot[bot]' && 'pinned' || 'latest' }}
         run: make all REPORT=report.json
 
       - name: Upload report

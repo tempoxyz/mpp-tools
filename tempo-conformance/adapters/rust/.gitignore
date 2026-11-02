@@ -1,2 +1,3 @@
 target/
 .sdk-under-test
+.sdk-pinned

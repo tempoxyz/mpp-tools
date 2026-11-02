@@ -149,11 +149,25 @@ class Adapter:
         self.resolution = "latest"
         print(f"→ {self.name}: {self.manifest['sdk']['package']} {before} -> {self.version} (latest)", file=sys.stderr)
 
-    def restore(self) -> None:
+    def restore(self, keep: bool = False) -> None:
         resolver = getattr(self, "_resolver", None)
         if resolver is not None:
-            resolver.restore()
+            resolver.stash() if keep else resolver.restore()
             self._resolver = None
+
+    def build_or_fallback(self) -> None:
+        """Build; if a latest-resolved SDK fails to build (such as a download
+        the CI package proxy refuses), fall back to the checked-in pin."""
+        try:
+            self.build()
+        except subprocess.CalledProcessError as error:
+            if getattr(self, "resolution", None) != "latest":
+                raise
+            self.restore()
+            print(f"! {self.name}: building the latest {self.manifest['sdk']['package']} failed ({error}), "
+                  "rebuilding the pinned one", file=sys.stderr)
+            self.resolution = "pinned (latest failed to build)"
+            self.build()
 
     def build(self) -> None:
         if self.manifest.get("build"):
@@ -514,7 +528,7 @@ def main() -> int:
                     help="with --build or --build-only: test each SDK's latest release (default) or the checked-in lockfiles")
     ap.add_argument("--pin", action="append", default=[], metavar="ADAPTER",
                     help="keep this adapter on its checked-in lockfile even with --sdk latest")
-    ap.add_argument("--keep-resolved", action="store_true", help="leave the latest-resolved manifests and lockfiles in place")
+    ap.add_argument("--keep-resolved", action="store_true", help="leave the latest-resolved manifests and lockfiles in place (the next --build run restores the checked-in ones)")
     ap.add_argument("--validate-only", action="store_true", help="validate vectors, schemas and manifests, then exit")
     args = ap.parse_args()
 
@@ -558,20 +572,21 @@ def main() -> int:
     try:
         if args.build or args.build_only:
             for a in adapters:
+                if resolve_sdk.restore_stashed(a.dir):
+                    print(f"→ {a.name}: restored the checked-in files an earlier --keep-resolved run left", file=sys.stderr)
                 if a._version is None:
                     a.forget_build()
                     a.resolve(args.sdk, pins)
         return _run(args, adapters, vectors)
     finally:
-        if not args.keep_resolved:
-            for a in adapters:
-                a.restore()
+        for a in adapters:
+            a.restore(keep=args.keep_resolved)
 
 
 def _run(args, adapters, vectors) -> int:
     if args.build_only:
         for a in adapters:
-            a.build()
+            a.build_or_fallback()
         return 0
 
     def selected(s: dict) -> bool:
@@ -582,7 +597,7 @@ def _run(args, adapters, vectors) -> int:
     executed = 0
     for a in adapters:
         if args.build:
-            a.build()
+            a.build_or_fallback()
         overridden = any(o.partition("=")[0] == a.name for o in args.sdk_version)
         source = "--sdk-version" if overridden else getattr(a, "resolution", "as last built" if (a.dir / BUILT_VERSION).exists() else "pinned")
         sdk = f"{a.manifest['sdk']['package']}@{a.version}, {source}"
