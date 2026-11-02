@@ -43,6 +43,10 @@
           "steps": [
             "unpaid"
           ],
+          "fields": [
+            "body",
+            "contentType"
+          ],
           "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
         },
         {
@@ -50,6 +54,9 @@
           "server": "go",
           "steps": [
             "pay"
+          ],
+          "fields": [
+            "receipt.timestamp"
           ],
           "reason": "mpp-go formats receipt timestamps with milliseconds (2026-01-01T00:00:00.000Z); mppx keeps the method's timestamp as given (2026-01-01T00:00:00Z)."
         }
@@ -130,6 +137,10 @@
           "steps": [
             "unpaid"
           ],
+          "fields": [
+            "body",
+            "contentType"
+          ],
           "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
         },
         {
@@ -137,6 +148,9 @@
           "server": "go",
           "steps": [
             "paid"
+          ],
+          "fields": [
+            "receipt.timestamp"
           ],
           "reason": "mpp-go formats receipt timestamps with milliseconds (2026-01-01T00:00:00.000Z); mppx keeps the method's timestamp as given (2026-01-01T00:00:00Z)."
         },
@@ -218,6 +232,10 @@
           "steps": [
             "cheap_challenge"
           ],
+          "fields": [
+            "body",
+            "contentType"
+          ],
           "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
         }
       ]
@@ -278,6 +296,10 @@
           "server": "go",
           "steps": [
             "unpaid"
+          ],
+          "fields": [
+            "body",
+            "contentType"
           ],
           "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
         }
@@ -370,6 +392,10 @@
             "issued_expired",
             "unpaid"
           ],
+          "fields": [
+            "body",
+            "contentType"
+          ],
           "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
         }
       ]
@@ -443,6 +469,10 @@
           "server": "go",
           "steps": [
             "unpaid"
+          ],
+          "fields": [
+            "body",
+            "contentType"
           ],
           "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
         }
@@ -526,6 +556,10 @@
             "unpaid",
             "credential_in_authorization"
           ],
+          "fields": [
+            "body",
+            "contentType"
+          ],
           "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
         },
         {
@@ -533,6 +567,9 @@
           "server": "go",
           "steps": [
             "pay"
+          ],
+          "fields": [
+            "receipt.timestamp"
           ],
           "reason": "mpp-go formats receipt timestamps with milliseconds (2026-01-01T00:00:00.000Z); mppx keeps the method's timestamp as given (2026-01-01T00:00:00Z)."
         }
@@ -633,6 +670,9 @@
           "steps": [
             "pay_alice"
           ],
+          "fields": [
+            "receipt.timestamp"
+          ],
           "reason": "mpp-go formats receipt timestamps with milliseconds (2026-01-01T00:00:00.000Z); mppx keeps the method's timestamp as given (2026-01-01T00:00:00Z)."
         },
         {
@@ -640,6 +680,10 @@
           "server": "go",
           "steps": [
             "alice_challenge"
+          ],
+          "fields": [
+            "body",
+            "contentType"
           ],
           "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
         }
@@ -697,6 +741,10 @@
           "steps": [
             "unpaid"
           ],
+          "fields": [
+            "body",
+            "contentType"
+          ],
           "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
         },
         {
@@ -704,6 +752,9 @@
           "server": "go",
           "steps": [
             "pay"
+          ],
+          "fields": [
+            "receipt.timestamp"
           ],
           "reason": "mpp-go formats receipt timestamps with milliseconds (2026-01-01T00:00:00.000Z); mppx keeps the method's timestamp as given (2026-01-01T00:00:00Z)."
         }
@@ -774,6 +825,10 @@
           "steps": [
             "empty_payment",
             "other_scheme"
+          ],
+          "fields": [
+            "body",
+            "contentType"
           ],
           "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
         }
@@ -868,6 +923,10 @@
           "server": "go",
           "steps": [
             "unpaid"
+          ],
+          "fields": [
+            "body",
+            "contentType"
           ],
           "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
         }

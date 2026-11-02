@@ -257,6 +257,16 @@
           },
           "description": "Steps the reason covers; every other step is compared strictly."
         },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Dotted fields of the step snapshots the reason covers, such as body or receipt.timestamp; the rest of those steps is compared strictly. Without fields the whole step is covered."
+        },
         "reason": {
           "type": "string",
           "minLength": 1

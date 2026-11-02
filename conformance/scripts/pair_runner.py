@@ -402,6 +402,32 @@ def expected_failures(scenario: dict[str, Any], client: str, server: str) -> lis
     ]
 
 
+MISSING = object()
+
+
+def field_value(snapshot: dict[str, Any], field: str) -> Any:
+    """The value at a dotted field of a step snapshot, such as receipt.timestamp, or MISSING."""
+    value: Any = snapshot
+    for key in field.split("."):
+        if not isinstance(value, dict) or key not in value:
+            return MISSING
+        value = value[key]
+    return value
+
+
+def without_fields(snapshot: dict[str, Any], fields: list[str]) -> dict[str, Any]:
+    """A copy of a step snapshot with the given dotted fields removed."""
+    copy = json.loads(json.dumps(snapshot))
+    for field in fields:
+        *parents, last = field.split(".")
+        value = copy
+        for key in parents:
+            value = value.get(key) if isinstance(value, dict) else None
+        if isinstance(value, dict):
+            value.pop(last, None)
+    return copy
+
+
 def compare(
     scenario: dict[str, Any],
     expected: list[dict[str, Any]] | None,
@@ -411,8 +437,9 @@ def compare(
 ) -> PairResult:
     """Compare a run, or the error that stopped it, with the scenario's snapshot.
 
-    An expected failure covers only the steps it names: a difference in any
-    other step fails, and an entry whose steps all ran and matched is an xpass.
+    An expected failure covers only the steps it names, and with fields only
+    those fields of them: a difference anywhere else fails, and an entry whose
+    steps all ran and matched (in its fields) is an xpass.
     """
     name = scenario["name"]
     if expected is None:
@@ -429,22 +456,47 @@ def compare(
     ran = [step["name"] for step in steps] + list(differing)
     if ran != expected_names[: len(ran)] or (not differing and len(ran) != len(expected_names)):
         return PairResult(client, server, name, "fail", f"steps {ran} do not match snapshot steps {expected_names}")
-    for expected_step, actual_step in zip(expected, steps):
+    errored = set(differing)
+    pairs = {expected_step["name"]: (expected_step, actual_step) for expected_step, actual_step in zip(expected, steps)}
+    for step, (expected_step, actual_step) in pairs.items():
         changes = DeepDiff(expected_step, actual_step, verbose_level=2)
         if changes:
-            differing[expected_step["name"]] = json.dumps(changes, indent=2, default=str)
+            differing[step] = json.dumps(changes, indent=2, default=str)
     entries = expected_failures(scenario, client, server)
-    covered = {step for entry in entries for step in entry["steps"]}
-    unexpected = [f"step {step}: {diff}" for step, diff in differing.items() if step not in covered]
+    unexpected = []
+    for step, diff in differing.items():
+        covering = [entry for entry in entries if step in entry["steps"]]
+        if not covering:
+            unexpected.append(f"step {step}: {diff}")
+        elif all("fields" in entry for entry in covering):
+            # Entries with fields excuse only those fields; the rest of the step is still compared.
+            if step in errored:
+                unexpected.append(f"step {step}: {diff}")
+                continue
+            fields = [field for entry in covering for field in entry["fields"]]
+            expected_step, actual_step = pairs[step]
+            changes = DeepDiff(without_fields(expected_step, fields), without_fields(actual_step, fields), verbose_level=2)
+            if changes:
+                unexpected.append(f"step {step}: {json.dumps(changes, indent=2, default=str)}")
     if unexpected:
         return PairResult(client, server, name, "fail", "\n".join(unexpected))
+
+    def confirmed(entry: dict[str, Any]) -> bool:
+        for step in set(entry["steps"]) & set(differing):
+            if "fields" not in entry or step in errored:
+                return True
+            expected_step, actual_step = pairs[step]
+            if any(field_value(expected_step, field) != field_value(actual_step, field) for field in entry["fields"]):
+                return True
+        return False
+
     # Steps after a failed one never ran, so entries naming them are neither confirmed nor stale.
-    stale = [entry for entry in entries if set(entry["steps"]) <= set(ran) and not set(entry["steps"]) & set(differing)]
+    stale = [entry for entry in entries if set(entry["steps"]) <= set(ran) and not confirmed(entry)]
     if stale:
         reasons = " ".join(entry["reason"] for entry in stale)
         return PairResult(client, server, name, "xpass", f"expected failure no longer fails: {reasons}")
     if differing:
-        reasons = " ".join(entry["reason"] for entry in entries if set(entry["steps"]) & set(differing))
+        reasons = " ".join(entry["reason"] for entry in entries if confirmed(entry))
         return PairResult(client, server, name, "xfail", reasons)
     return PairResult(client, server, name, "pass")
 
