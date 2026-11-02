@@ -17,7 +17,7 @@ uv run --locked ty check agricola                               # type-check
 uv run --locked coverage run -m unittest discover -s agricola/tests -v && uv run --locked coverage report
 uv run --locked agricola validate                               # validate sdks.yaml and Agricola state
 
-python3 -m unittest -v agents/test_sync.py                      # AGENTS.md tooling (run from agents/)
+(cd agents && python3 -m unittest -v test_sync)                # AGENTS.md tooling and the sync workflow's renderer
 python3 agents/sync.py check AGENTS.md                          # this file's shape
 ```
 

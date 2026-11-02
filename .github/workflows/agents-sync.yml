@@ -34,33 +34,56 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Checkout mpp-tools agents
+      - name: Checkout mpp-tools shared section
+        # Only data comes from mpp-tools main: the render code below is part of
+        # this pinned workflow, so nothing merged later runs with id-token.
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: tempoxyz/mpp-tools
           ref: main
-          path: ${{ runner.temp }}/mpp-tools
-          sparse-checkout: agents
+          path: .mpp-tools-agents
+          sparse-checkout: agents/shared.md
+          sparse-checkout-cone-mode: false
           persist-credentials: false
 
       - name: Render the shared section
         id: render
         env:
           AGENTS_PATH: ${{ inputs.path }}
-          SYNC: ${{ runner.temp }}/mpp-tools/agents/sync.py
+          SHARED: .mpp-tools-agents/agents/shared.md
         run: |
-          python3 "$SYNC" render "$AGENTS_PATH"
-          if ! report="$(python3 "$SYNC" check "$AGENTS_PATH")"; then
-            while IFS= read -r line; do
-              echo "::warning file=$AGENTS_PATH::$line"
-            done <<< "$report"
-          fi
+          # Same result as agents/sync.py render; agents/test_sync.py runs this
+          # script and compares the two.
+          python3 - "$AGENTS_PATH" "$SHARED" <<'RENDER'
+          import pathlib
+          import sys
+
+          BEGIN = (
+              "<!-- BEGIN MPP SHARED: synced from tempoxyz/mpp-tools agents/shared.md. "
+              "Edit it there; changes here are overwritten. -->"
+          )
+          END = "<!-- END MPP SHARED -->"
+          path = pathlib.Path(sys.argv[1])
+          shared = pathlib.Path(sys.argv[2]).read_text()
+          doc = path.read_text() if path.exists() else ""
+          block = f"{BEGIN}\n\n{shared.strip()}\n\n{END}\n"
+          start = doc.find("<!-- BEGIN MPP SHARED")
+          if start == -1:
+              new = doc.rstrip("\n") + "\n\n" + block
+          else:
+              end = doc.find(END, start)
+              if end == -1:
+                  sys.exit(f"{path}: the shared MPP section has no end marker; fix it by hand")
+              tail = doc[end + len(END) :].lstrip("\n")
+              new = doc[:start].rstrip("\n") + "\n\n" + block + tail
+          path.write_text(new)
+          RENDER
           if git diff --quiet -- "$AGENTS_PATH" && git ls-files --error-unmatch -- "$AGENTS_PATH" >/dev/null 2>&1; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-          echo "source=$(git -C "$RUNNER_TEMP/mpp-tools" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "source=$(git -C .mpp-tools-agents rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Fetch GitHub token via STS
         if: steps.render.outputs.changed == 'true'

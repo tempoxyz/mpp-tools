@@ -43,6 +43,9 @@ def block(shared: str) -> str:
 def render(doc: str, shared: str) -> str:
     """Return doc with the current shared section replacing or appended to its own."""
     new = block(shared)
+    start = doc.find("<!-- BEGIN MPP SHARED")
+    if start != -1 and doc.find(END, start) == -1:
+        raise ValueError("the shared MPP section has no end marker; fix it by hand")
     if _BLOCK.search(doc):
         head = _BLOCK.split(doc, maxsplit=1)
         return head[0].rstrip("\n") + "\n\n" + new + head[1].lstrip("\n")
@@ -91,7 +94,8 @@ def check(doc: str, shared: str) -> list[str]:
             errors.append("the shared MPP section is out of date (run sync.py render)")
 
     heads = _headings(own)
-    if not heads or heads[0][0] != 1:
+    first = next((ln for ln in own.splitlines() if ln.strip()), "")
+    if not first.startswith("# "):
         errors.append("must start with a '# <repository>' title")
     elif sum(1 for level, _ in heads if level == 1) > 1:
         errors.append("must have exactly one '# ' title outside code blocks")
@@ -158,7 +162,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "render":
         doc = args.path.read_text() if args.path.exists() else ""
-        new = render(doc, shared)
+        try:
+            new = render(doc, shared)
+        except ValueError as err:
+            print(f"{args.path}: {err}", file=sys.stderr)
+            return 1
         if new != doc:
             args.path.write_text(new)
             print(f"{args.path}: updated")
@@ -179,8 +187,12 @@ def main(argv: list[str] | None = None) -> int:
     print("| Repository | AGENTS.md |")
     print("| --- | --- |")
     for entry in repos:
-        doc = _fetch(entry["repo"])
-        errors = ["no AGENTS.md on main"] if doc is None else check(doc, shared)
+        try:
+            doc = _fetch(entry["repo"])
+        except (urllib.error.URLError, TimeoutError) as err:
+            errors = [f"could not fetch AGENTS.md: {err}"]
+        else:
+            errors = ["no AGENTS.md on main"] if doc is None else check(doc, shared)
         failed = failed or bool(errors)
         print(f"| {entry['repo']} | {'ok' if not errors else '; '.join(errors)} |")
     return 1 if failed else 0

@@ -1,3 +1,5 @@
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -56,7 +58,50 @@ class RenderTest(unittest.TestCase):
             )
 
 
+WORKFLOW = Path(__file__).resolve().parent.parent / ".github/workflows/agents-sync.yml"
+
+
+def workflow_render(doc: str, shared: str) -> subprocess.CompletedProcess[str]:
+    """Run the render script embedded in agents-sync.yml on doc."""
+    text = WORKFLOW.read_text()
+    body = text.split("<<'RENDER'\n", 1)[1].split("\n          RENDER\n", 1)[0]
+    script = "\n".join(line.removeprefix("          ") for line in body.splitlines())
+    with tempfile.TemporaryDirectory() as tmp:
+        target, source = Path(tmp, "AGENTS.md"), Path(tmp, "shared.md")
+        target.write_text(doc)
+        source.write_text(shared)
+        result = subprocess.run(
+            [sys.executable, "-c", script, str(target), str(source)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        result.stdout = target.read_text()
+        return result
+
+
+class WorkflowRenderTest(unittest.TestCase):
+    def test_matches_sync_render(self) -> None:
+        stale = sync.render(GOOD, "## MPP\n\nOld.\n")
+        for doc in (GOOD, stale, sync.render(GOOD, SHARED), "", stale + "\n\n"):
+            result = workflow_render(doc, SHARED)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, sync.render(doc, SHARED))
+
+    def test_refuses_missing_end_marker(self) -> None:
+        broken = sync.render(GOOD, SHARED).replace(sync.END, "")
+        self.assertNotEqual(workflow_render(broken, SHARED).returncode, 0)
+        with self.assertRaises(ValueError):
+            sync.render(broken, SHARED)
+
+
 class CheckTest(unittest.TestCase):
+    def test_preamble_before_title(self) -> None:
+        doc = sync.render("Preamble.\n" + GOOD, SHARED)
+        self.assertIn(
+            "must start with a '# <repository>' title", sync.check(doc, SHARED)
+        )
+
     def test_missing_section(self) -> None:
         self.assertIn(
             "missing the shared MPP section (run sync.py render)",
