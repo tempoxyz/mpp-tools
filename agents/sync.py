@@ -29,7 +29,7 @@ BEGIN = (
 END = "<!-- END MPP SHARED -->"
 REQUIRED = ("Commands", "Layout", "Conventions")
 
-_FENCE = re.compile(r"^\s{0,3}(```|~~~)")
+_FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
 _BLOCK = re.compile(
     re.escape("<!-- BEGIN MPP SHARED") + r".*?" + re.escape(END) + r"\n?",
     re.DOTALL,
@@ -59,7 +59,8 @@ def _headings(text: str) -> list[tuple[int, str]]:
             marker = m.group(1)
             if fence is None:
                 fence = marker
-            elif marker == fence:
+                continue
+            if marker[0] == fence[0] and len(marker) >= len(fence):
                 fence = None
             continue
         if fence is not None:

@@ -102,6 +102,11 @@ class CheckTest(unittest.TestCase):
             "must start with a '# <repository>' title", sync.check(doc, SHARED)
         )
 
+    def test_nested_fences(self) -> None:
+        doc = GOOD.replace("- src/", "- src/\n\n````md\n```ts\nx\n```\n## Usage\n````")
+        self.assertEqual(sync.check(sync.render(doc, SHARED), SHARED), [])
+        self.assertNotIn((2, "Usage"), sync._headings(doc))
+
     def test_reserved_heading(self) -> None:
         doc = sync.render(GOOD + "\n## MPP\n\nlocal\n", SHARED)
         self.assertIn(
