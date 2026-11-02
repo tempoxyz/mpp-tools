@@ -508,12 +508,25 @@ async def verify_tempo_proof(input_value: dict):
 
 
 class ConformanceStripePaymentIntents:
-    """Serves payment_intents.create from the vector's paymentIntent fixture."""
+    """Serves payment_intents.create from the vector's paymentIntent fixture.
+
+    pympp wraps any client exception in VerificationFailedError, so a call the
+    stub cannot serve is recorded in faults: the adapter reports it as a setup
+    error instead of letting it pass as a verification failure.
+    """
 
     def __init__(self, input_value: dict):
         self._input = input_value
+        self.faults: list[str] = []
 
-    def create(self, params: dict, options: dict | None = None):
+    def create(self, *args, **kwargs):
+        try:
+            return self._create(*args, **kwargs)
+        except Exception as exc:
+            self.faults.append(f"{type(exc).__name__}: {exc}")
+            raise
+
+    def _create(self, params: dict, options: dict | None = None):
         if params.get("shared_payment_granted_token") != self._input["payload"].get("spt"):
             raise RuntimeError("Unexpected shared_payment_granted_token")
         payment_intent = self._input["paymentIntent"]
@@ -541,7 +554,7 @@ class ConformanceStripeClient:
 
 async def verify_stripe_external_id_binding(input_value: dict):
     """Verify a Stripe charge credential with pympp's server against a stubbed Stripe client."""
-    from mpp.errors import InvalidChallengeError
+    from mpp.errors import InvalidChallengeError, PaymentError
     from mpp.methods.stripe import ChargeIntent
     from mpp.server.verify import verify_or_challenge
 
@@ -564,7 +577,12 @@ async def verify_stripe_external_id_binding(input_value: dict):
         expires=expires,
     )
     credential = Credential(challenge=challenge.to_echo(), payload=input_value["payload"])
-    intent = ChargeIntent(client=ConformanceStripeClient(input_value))
+    stripe_client = ConformanceStripeClient(input_value)
+    intent = ChargeIntent(client=stripe_client)
+
+    def stub_fault():
+        faults = stripe_client.payment_intents.faults
+        return error(f"Stripe stub fault: {faults[0]}", "unknown_error") if faults else None
 
     try:
         verified = await verify_or_challenge(
@@ -576,10 +594,18 @@ async def verify_stripe_external_id_binding(input_value: dict):
             method="stripe",
             expires=expires,
         )
-    except InvalidChallengeError:
-        return success({"ok": False, "errorType": "invalid_challenge"})
-    except Exception:
-        return success({"ok": False, "errorType": "verification_failed"})
+    except Exception as exc:
+        # A call the stub could not serve means the setup is broken, so the
+        # outcome, even a rejection, says nothing about the SDK.
+        if fault := stub_fault():
+            return fault
+        if isinstance(exc, InvalidChallengeError):
+            return success({"ok": False, "errorType": "invalid_challenge"})
+        if isinstance(exc, PaymentError):
+            return success({"ok": False, "errorType": "verification_failed"})
+        raise
+    if fault := stub_fault():
+        return fault
     if isinstance(verified, Challenge):
         return success({"ok": False, "errorType": "invalid_challenge"})
 
