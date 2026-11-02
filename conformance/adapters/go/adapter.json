@@ -25,6 +25,7 @@
     "base64url.decode",
     "challenge.id",
     "http.payment_request",
+    "http.server",
     "server.verify",
     "tempo.receipt.verify",
     "tempo.proof.verify",

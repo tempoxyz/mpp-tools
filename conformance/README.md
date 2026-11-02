@@ -135,8 +135,9 @@ no chain is needed: it settles each challenge once, declines the signature
 `0xdecline`, and returns a fixed receipt. Snapshots are generated only from the
 TypeScript client and server. A pair that differs from them for a known reason
 is listed under the scenario's `expectedFailures` with the `steps` that reason
-covers; every other step is still compared, and an entry whose steps start
-matching fails as `xpass` until it is removed. The reusable SDK workflow passes
+covers, or with `fields` only those fields of them (such as
+`receipt.timestamp`); every other step and field is still compared, and an entry
+whose steps start matching fails as `xpass` until it is removed. The reusable SDK workflow passes
 `--allow-xpass`, so an SDK that fixes a known difference reports the stale
 entry without failing before mpp-tools removes it. Server adapters
 that cannot serve, such as Python before the pympp 0.16 engine, are skipped.

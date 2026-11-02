@@ -333,6 +333,10 @@ func handleAdapterRequest() {
 		handleHTTPPaymentRequest(request.Input)
 		return
 	}
+	if request.Op == "http.server" {
+		handleHTTPServer(request.Input)
+		return
+	}
 	if request.Op == "tempo.receipt.verify" {
 		printJSON(runTempoReceiptVerify(request.Input))
 		return

@@ -162,6 +162,44 @@ class CompareTest(unittest.TestCase):
         failed = pair_runner.compare(self.scenario, self.expected, error, "go", "typescript")
         self.assertEqual((failed.status, failed.detail), ("fail", "step b: RuntimeError: adapter crashed"))
 
+    fields_scenario = {
+        "name": "s",
+        "expectedFailures": [
+            {"client": "*", "server": "go", "steps": ["unpaid"], "fields": ["body", "contentType"], "reason": "bare"},
+            {"client": "*", "server": "go", "steps": ["pay"], "fields": ["receipt.timestamp"], "reason": "ms"},
+        ],
+    }
+    fields_expected = [
+        {"name": "unpaid", "status": 402, "contentType": "application/problem+json", "body": {"type": "t", "status": 402}},
+        {"name": "pay", "status": 200, "receipt": {"status": "success", "timestamp": "2026-01-01T00:00:00Z"}},
+    ]
+
+    def fields_run(self, unpaid: dict[str, object] | None = None, receipt: dict[str, object] | None = None) -> list[dict[str, object]]:
+        bare = {"name": "unpaid", "status": 402, **(unpaid or {})}
+        pay = {"name": "pay", "status": 200, "receipt": {"status": "success", "timestamp": "2026-01-01T00:00:00.000Z", **(receipt or {})}}
+        return [bare, pay]
+
+    def test_expected_failure_fields_excuse_only_those_fields(self) -> None:
+        xfail = pair_runner.compare(self.fields_scenario, self.fields_expected, self.fields_run(), "go", "go")
+        self.assertEqual((xfail.status, xfail.detail), ("xfail", "bare ms"))
+        # A difference outside the excused fields of a covered step still fails.
+        status = pair_runner.compare(self.fields_scenario, self.fields_expected, self.fields_run(unpaid={"status": 500}), "go", "go")
+        self.assertEqual(status.status, "fail")
+        self.assertIn("step unpaid:", str(status.detail))
+        receipt = pair_runner.compare(self.fields_scenario, self.fields_expected, self.fields_run(receipt={"status": "failed"}), "go", "go")
+        self.assertEqual(receipt.status, "fail")
+        self.assertIn("step pay:", str(receipt.detail))
+
+    def test_expected_failure_whose_fields_match_is_stale(self) -> None:
+        run = self.fields_run(receipt={"timestamp": "2026-01-01T00:00:00Z"})
+        result = pair_runner.compare(self.fields_scenario, self.fields_expected, run, "go", "go")
+        self.assertEqual((result.status, result.detail), ("xpass", "expected failure no longer fails: ms"))
+
+    def test_expected_failure_fields_do_not_excuse_step_errors(self) -> None:
+        error = pair_runner.StepFailed("unpaid", [], RuntimeError("adapter crashed"))
+        result = pair_runner.compare(self.fields_scenario, self.fields_expected, error, "go", "go")
+        self.assertEqual((result.status, result.detail), ("fail", "step unpaid: RuntimeError: adapter crashed"))
+
     def test_errors_outside_a_step_fail(self) -> None:
         failed = pair_runner.compare(self.scenario, self.expected, RuntimeError("server crashed"), "go", "python")
         self.assertEqual((failed.status, failed.detail), ("fail", "RuntimeError: server crashed"))
