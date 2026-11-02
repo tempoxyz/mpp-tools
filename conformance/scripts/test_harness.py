@@ -19,6 +19,8 @@ from harness import (
     FLOW_RESULTS_PATH,
     SCHEMA_STORE,
     VECTORS_DIR,
+    DEFAULT_BUILD_TIMEOUT,
+    build_adapter,
     load_flow_cases,
     load_flow_results,
     load_json,
@@ -83,6 +85,41 @@ class AdapterClientValidationTests(unittest.TestCase):
             )
 
         run.assert_not_called()
+
+
+class BuildAdapterTimeoutTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.adapter = AdapterConfig(
+            name="test",
+            command=["test-adapter"],
+            build_command=["build-adapter"],
+            capabilities=["challenge.parse"],
+        )
+
+    def run_build(self, env: dict[str, str]) -> tuple[str | None, object]:
+        with patch.dict(os.environ, env, clear=False), patch("harness.subprocess.run") as run:
+            if "CONFORMANCE_BUILD_TIMEOUT" not in env:
+                os.environ.pop("CONFORMANCE_BUILD_TIMEOUT", None)
+            run.return_value.returncode = 0
+            error = build_adapter(self.adapter)
+        return error, run
+
+    def test_default_timeout(self) -> None:
+        error, run = self.run_build({})
+        self.assertIsNone(error)
+        self.assertEqual(run.call_args.kwargs["timeout"], DEFAULT_BUILD_TIMEOUT)
+
+    def test_timeout_from_environment(self) -> None:
+        error, run = self.run_build({"CONFORMANCE_BUILD_TIMEOUT": "900"})
+        self.assertIsNone(error)
+        self.assertEqual(run.call_args.kwargs["timeout"], 900.0)
+
+    def test_invalid_timeout_is_reported(self) -> None:
+        for value in ("soon", "0", "-5"):
+            with self.subTest(value=value):
+                error, run = self.run_build({"CONFORMANCE_BUILD_TIMEOUT": value})
+                self.assertIn("CONFORMANCE_BUILD_TIMEOUT", error or "")
+                run.assert_not_called()
 
 
 class RepositoryDataSchemaTests(unittest.TestCase):
