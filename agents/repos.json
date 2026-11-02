@@ -21,11 +21,6 @@
       "sync": "workflow"
     },
     {
-      "repo": "tempoxyz/mpp-swift",
-      "sync": "workflow",
-      "private": true
-    },
-    {
       "repo": "tempoxyz/mpp-specs",
       "sync": "workflow"
     },
