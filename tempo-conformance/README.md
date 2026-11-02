@@ -4,8 +4,7 @@ Checks that the core Tempo SDKs turn the same inputs into the same bytes, and
 that the local Tempo node accepts what they produce. It follows the structure of
 the MPP conformance suite in [`../conformance`](../conformance): an operation
 registry, one vector file per operation in the MPP vector format, adapters that
-speak JSON lines, SDKs pinned in each adapter's package manifest and lockfile and
-bumped by Dependabot, and per-scenario `sdkVersions` and `adapters` to skip known
+speak JSON lines, each SDK tested at its latest release unless pinned, and per-scenario `sdkVersions` and `adapters` to skip known
 SDK gaps.
 
 | Adapter | SDK under test (version used by `sdkVersions`) | Pin |
@@ -32,7 +31,9 @@ make all                 # build adapters, run vectors, run node scenarios (need
 make vectors             # vectors only, no node
 make all ADAPTERS=go     # one SDK
 make skips               # every skipped scenario per adapter, with its reason
-make sdk-versions        # pinned SDK versions, as sdkVersions sees them
+make sdk-versions        # checked-in SDK versions, as sdkVersions sees them
+make all SDK=pinned      # use the checked-in lockfiles instead of the latest releases
+make all PIN=go          # pin one adapter, test the others at their latest release
 make validate            # schemas only
 make generate            # regenerate vectors from the TypeScript reference
 ```
@@ -42,19 +43,31 @@ and its SemVer matcher (`../conformance/scripts/version_constraints.py`).
 `TEMPO_RPC_URL` points it at an existing **fresh** node instead of starting
 `ghcr.io/tempoxyz/tempo:1.17.0`.
 
-## Pins and skips
+## Latest releases, pins and skips
 
-SDK versions are pinned in each adapter's package manifest and lockfile;
-Dependabot (`.github/dependabot.yml`) opens bump PRs, and this suite is their
-gate. Known SDK gaps are not failures, they are skips recorded on the scenario,
+Each build resolves every SDK to its **latest release** (scripts/resolve_sdk.py):
+the runner rewrites the adapter's manifest and lockfile to the newest version of
+its sdk.package, builds and tests against it, then restores both files. For the
+TypeScript reference that is the newest viem and the exact ox it bundles. The
+run prints the version it used (`go (github.com/tempoxyz/tempo-go@v0.7.0, latest)`).
+
+An adapter stays on its checked-in lockfile when it is pinned: `SDK=pinned`
+(`--sdk pinned`, `TEMPO_CONFORMANCE_SDK=pinned`) for all, `PIN=go,python`
+(`--pin`) for some, or `"pinned": true` in its adapter.json sdk block. If the
+latest release cannot be installed, such as a release the CI package proxy
+(Aegis) still holds back because it is new, the adapter falls back to its
+checked-in pin and the run says so. The lockfiles stay checked in as that
+fallback and for reproducible local runs; Dependabot keeps them current.
+
+Known SDK gaps are not failures, they are skips recorded on the scenario,
 as in the MPP suite:
 
 - `sdkVersions`: `{ "<adapter>": "<npm-style SemVer constraint>" }`. The
-  scenario runs on that adapter only when its pinned version satisfies the
+  scenario runs on that adapter only when the version under test satisfies the
   constraint. A gap fixed in a release newer than the pin, or not fixed yet, is
-  `">PINNED"` (for example `"go": ">0.6.1"`): the Dependabot bump that moves
-  past the pin runs the scenario, and fails until the fix is really there, at
-  which point the constraint moves to the new version.
+  `">CURRENT"` (for example `"go": ">0.7.0"`): the next release runs the
+  scenario, and fails until the fix is really there, at which point the
+  constraint moves to the new version.
 - `adapters`: the scenario runs only on the listed adapters, for a case an SDK
   will deliberately never match.
 - `skipReasons`: required, one entry per adapter that `sdkVersions`

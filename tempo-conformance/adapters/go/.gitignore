@@ -1,1 +1,3 @@
 adapter
+.sdk-under-test
+.sdk-pinned

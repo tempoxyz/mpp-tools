@@ -21,6 +21,7 @@ import argparse
 import json
 import os
 import queue
+import signal
 import socket
 import subprocess
 import sys
@@ -30,6 +31,7 @@ import urllib.request
 from collections import Counter
 from pathlib import Path
 
+import resolve_sdk
 import sdk_version
 from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
@@ -80,6 +82,10 @@ def validate(value, ref: str, label: str) -> None:
 
 
 # --------------------------------------------------------------------------- adapters
+# Per adapter: the SDK version its current build artifacts use (gitignored).
+BUILT_VERSION = ".sdk-under-test"
+
+
 def _adapter_env() -> dict[str, str]:
     """The adapters' own toolchains pick their environments: drop the runner's venv."""
     env = dict(os.environ)
@@ -110,14 +116,66 @@ class Adapter:
 
     @property
     def version(self) -> str:
+        """The SDK version under test: what the last build used (recorded in
+        BUILT_VERSION, since a latest-resolved build outlives its restored
+        lockfile), else the checked-in lockfile's."""
+        if getattr(self, "_override", None):
+            return self._override
         if self._version is None:
-            self._version = sdk_version.installed_version(self.name)
+            built = self.dir / BUILT_VERSION
+            self._version = built.read_text().strip() if built.exists() else sdk_version.installed_version(self.name)
         return self._version
+
+    def forget_build(self) -> None:
+        """Before a rebuild: the next version comes from the (resolved) lockfile."""
+        (self.dir / BUILT_VERSION).unlink(missing_ok=True)
+        self._version = None
+
+    def resolve(self, mode: str, pins: set[str]) -> None:
+        """Move the SDK to its latest release unless pinned (see resolve_sdk)."""
+        self.resolution = "pinned"
+        if mode != "latest" or self.name in pins or self.manifest["sdk"].get("pinned"):
+            return
+        before = sdk_version.installed_version(self.name)
+        self._resolver = resolve_sdk.Resolution(self.dir, self.manifest["sdk"])
+        try:
+            self._resolver.apply(_adapter_env())
+        except Exception as error:  # noqa: BLE001  fall back to the checked-in pin
+            print(f"! {self.name}: could not resolve the latest {self.manifest['sdk']['package']}, "
+                  f"using the pinned {before}: {error}", file=sys.stderr)
+            self.resolution = "pinned (latest unavailable)"
+            return
+        self._version = None
+        self.resolution = "latest"
+        print(f"→ {self.name}: {self.manifest['sdk']['package']} {before} -> {self.version} (latest)", file=sys.stderr)
+
+    def restore(self, keep: bool = False) -> None:
+        resolver = getattr(self, "_resolver", None)
+        if resolver is not None:
+            resolver.stash() if keep else resolver.restore()
+            self._resolver = None
+
+    def build_or_fallback(self) -> None:
+        """Build; if a latest-resolved SDK fails to build (such as a download
+        the CI package proxy refuses), fall back to the checked-in pin."""
+        try:
+            self.build()
+        except subprocess.CalledProcessError as error:
+            if getattr(self, "resolution", None) != "latest":
+                raise
+            self.restore()
+            print(f"! {self.name}: building the latest {self.manifest['sdk']['package']} failed ({error}), "
+                  "rebuilding the pinned one", file=sys.stderr)
+            self.resolution = "pinned (latest failed to build)"
+            self.build()
 
     def build(self) -> None:
         if self.manifest.get("build"):
             print(f"→ building {self.name}: {' '.join(self.manifest['build'])}", file=sys.stderr)
             subprocess.run(self.manifest["build"], cwd=self.cwd, env=_adapter_env(), check=True)
+        self._version = None
+        (self.dir / BUILT_VERSION).unlink(missing_ok=True)
+        (self.dir / BUILT_VERSION).write_text(self.version + "\n")
 
     def start(self) -> None:
         self.proc = subprocess.Popen(
@@ -466,6 +524,11 @@ def main() -> int:
     ap.add_argument("--sdk-version", action="append", default=[], metavar="ADAPTER=VERSION",
                     help="evaluate sdkVersions as if ADAPTER's SDK were VERSION (when testing an unreleased SDK checkout)")
     ap.add_argument("--build-only", action="store_true", help="build the selected adapters, then exit")
+    ap.add_argument("--sdk", choices=["latest", "pinned"], default=os.environ.get("TEMPO_CONFORMANCE_SDK", "latest"),
+                    help="with --build or --build-only: test each SDK's latest release (default) or the checked-in lockfiles")
+    ap.add_argument("--pin", action="append", default=[], metavar="ADAPTER",
+                    help="keep this adapter on its checked-in lockfile even with --sdk latest")
+    ap.add_argument("--keep-resolved", action="store_true", help="leave the latest-resolved manifests and lockfiles in place (the next --build run restores the checked-in ones)")
     ap.add_argument("--validate-only", action="store_true", help="validate vectors, schemas and manifests, then exit")
     args = ap.parse_args()
 
@@ -495,13 +558,35 @@ def main() -> int:
         for a in adapters:
             if a.name == name:
                 a._version = version
+                a._override = version
     if args.rpc and len(adapters) > 1 and not args.no_node:
         print("--rpc needs a fresh node per adapter: pass one adapter with --adapters", file=sys.stderr)
         return 2
 
+    # Restore latest-resolved manifests and lockfiles on SIGTERM too (CI cancels, timeouts).
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
+    pins = {p for arg in args.pin for p in arg.split(",") if p}
+    if pins - names:
+        print(f"--pin: unknown adapter(s) {', '.join(sorted(pins - names))}", file=sys.stderr)
+        return 2
+    try:
+        if args.build or args.build_only:
+            for a in adapters:
+                if resolve_sdk.restore_stashed(a.dir):
+                    print(f"→ {a.name}: restored the checked-in files an earlier --keep-resolved run left", file=sys.stderr)
+                if a._version is None:
+                    a.forget_build()
+                    a.resolve(args.sdk, pins)
+        return _run(args, adapters, vectors)
+    finally:
+        for a in adapters:
+            a.restore(keep=args.keep_resolved)
+
+
+def _run(args, adapters, vectors) -> int:
     if args.build_only:
         for a in adapters:
-            a.build()
+            a.build_or_fallback()
         return 0
 
     def selected(s: dict) -> bool:
@@ -512,8 +597,10 @@ def main() -> int:
     executed = 0
     for a in adapters:
         if args.build:
-            a.build()
-        sdk = sdk_version.sdk_summary(a.name) if a._version is None else f"{a.manifest['sdk']['package']}@{a._version} (--sdk-version)"
+            a.build_or_fallback()
+        overridden = any(o.partition("=")[0] == a.name for o in args.sdk_version)
+        source = "--sdk-version" if overridden else getattr(a, "resolution", "as last built" if (a.dir / BUILT_VERSION).exists() else "pinned")
+        sdk = f"{a.manifest['sdk']['package']}@{a.version}, {source}"
         a.start()
         rows, outputs, probes = {}, {}, []
         try:
