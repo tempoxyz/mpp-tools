@@ -22,7 +22,8 @@
     },
     {
       "repo": "tempoxyz/mpp-swift",
-      "sync": "workflow"
+      "sync": "workflow",
+      "private": true
     },
     {
       "repo": "tempoxyz/mpp-specs",
@@ -34,7 +35,8 @@
     },
     {
       "repo": "tempoxyz/mpp-proxy",
-      "sync": "workflow"
+      "sync": "workflow",
+      "private": true
     }
   ]
 }
