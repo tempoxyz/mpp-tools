@@ -9,7 +9,7 @@ The shape of AGENTS.md in every MPP repository, and the conventions they all sha
 
 ## Sync
 
-Each repository with `"sync": "workflow"` runs `.github/workflows/sync-agents.yml` hourly and on demand. It calls the reusable [`agents-sync.yml`](../.github/workflows/agents-sync.yml), which checks out `agents/` from mpp-tools main, renders the shared section into that repository's AGENTS.md, and opens or updates an auto-merge pull request on `automation/sync-agents`. The token comes from GitHub STS through the repository's own `.github/sts/agents-sync.sts.yaml` policy, as tempoxyz/plugins does for skills. A merged change to `shared.md` reaches every repository within an hour; run the repository's Sync AGENTS.md workflow to do it at once.
+Each repository with `"sync": "workflow"` runs `.github/workflows/sync-agents.yml` daily (15:17 UTC) and on demand. It calls the reusable [`agents-sync.yml`](../.github/workflows/agents-sync.yml), which checks out `agents/shared.md` from mpp-tools main, renders the shared section into that repository's AGENTS.md, and opens or updates an auto-merge pull request on `automation/sync-agents`. The token comes from GitHub STS through the repository's own `.github/sts/agents-sync.sts.yaml` policy, as tempoxyz/plugins does for skills. A merged change to `shared.md` reaches every repository within a day; run the repository's Sync AGENTS.md workflow to do it at once.
 
 wevm/mppx (`"sync": "manual"`) is outside tempoxyz's STS installation: update its section by hand with `sync.py render`. mpp-tools (`"sync": "local"`) renders its own AGENTS.md in the same pull request that changes `shared.md`; CI fails when they differ.
 
