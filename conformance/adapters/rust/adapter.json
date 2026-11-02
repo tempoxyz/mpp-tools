@@ -26,6 +26,7 @@
     "http.payment_request",
     "tempo.proof.typed_data",
     "tempo.receipt.verify",
-    "tempo.proof.verify"
+    "tempo.proof.verify",
+    "stripe.external_id_binding"
   ]
 }

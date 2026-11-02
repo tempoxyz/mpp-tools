@@ -247,6 +247,7 @@ OP_TO_COMMAND = {
     "tempo.receipt.verify": "verify-tempo-receipt",
     "tempo.proof.verify": "verify-tempo-proof",
     "tempo.proof.typed_data": "tempo-proof-typed-data",
+    "stripe.external_id_binding": "verify-stripe-external-id-binding",
 }
 
 
@@ -504,6 +505,120 @@ async def verify_tempo_receipt(input_value: dict):
 async def verify_tempo_proof(input_value: dict):
     rpc = FakeRpcClient(access_keys=input_value.get("accessKeys") or [])
     return await verify_with_fake_rpc(input_value["credential"], rpc)
+
+
+class ConformanceStripePaymentIntents:
+    """Serves payment_intents.create from the vector's paymentIntent fixture.
+
+    pympp wraps any client exception in VerificationFailedError, so a call the
+    stub cannot serve is recorded in faults: the adapter reports it as a setup
+    error instead of letting it pass as a verification failure.
+    """
+
+    def __init__(self, input_value: dict):
+        self._input = input_value
+        self.faults: list[str] = []
+
+    def create(self, *args, **kwargs):
+        try:
+            return self._create(*args, **kwargs)
+        except Exception as exc:
+            self.faults.append(f"{type(exc).__name__}: {exc}")
+            raise
+
+    def _create(self, params: dict, options: dict | None = None):
+        if params.get("shared_payment_granted_token") != self._input["payload"].get("spt"):
+            raise RuntimeError("Unexpected shared_payment_granted_token")
+        payment_intent = self._input["paymentIntent"]
+        headers = {"idempotent-replayed": "true"} if payment_intent.get("replayed") else {}
+
+        class _LastResponse:
+            pass
+
+        class _PaymentIntent:
+            pass
+
+        last_response = _LastResponse()
+        last_response.headers = headers
+        result = _PaymentIntent()
+        result.id = payment_intent["id"]
+        result.status = payment_intent["status"]
+        result.last_response = last_response
+        return result
+
+
+class ConformanceStripeClient:
+    def __init__(self, input_value: dict):
+        self.payment_intents = ConformanceStripePaymentIntents(input_value)
+
+
+async def verify_stripe_external_id_binding(input_value: dict):
+    """Verify a Stripe charge credential with pympp's server against a stubbed Stripe client."""
+    from mpp.errors import InvalidChallengeError, PaymentError
+    from mpp.methods.stripe import ChargeIntent
+    from mpp.server.verify import verify_or_challenge
+
+    secret_key = "conformance-stripe-secret-32-bytes-min"
+    realm = "conformance.local"
+    expires = "2099-01-29T12:05:30Z"
+    request = dict(input_value["request"])
+    # As in the golden adapter, the server's Stripe networkId defaults to
+    # "conformance" when the vector request does not name one.
+    method_details = dict(request.get("methodDetails") or {})
+    method_details.setdefault("networkId", "conformance")
+    request["methodDetails"] = method_details
+
+    challenge = Challenge.create(
+        secret_key=secret_key,
+        realm=realm,
+        method="stripe",
+        intent="charge",
+        request=request,
+        expires=expires,
+    )
+    credential = Credential(challenge=challenge.to_echo(), payload=input_value["payload"])
+    stripe_client = ConformanceStripeClient(input_value)
+    intent = ChargeIntent(client=stripe_client)
+
+    def stub_fault():
+        faults = stripe_client.payment_intents.faults
+        return error(f"Stripe stub fault: {faults[0]}", "unknown_error") if faults else None
+
+    try:
+        verified = await verify_or_challenge(
+            authorization=credential.to_authorization(),
+            intent=intent,
+            request=request,
+            realm=realm,
+            secret_key=secret_key,
+            method="stripe",
+            expires=expires,
+        )
+    except Exception as exc:
+        # A call the stub could not serve means the setup is broken, so the
+        # outcome, even a rejection, says nothing about the SDK.
+        if fault := stub_fault():
+            return fault
+        if isinstance(exc, InvalidChallengeError):
+            return success({"ok": False, "errorType": "invalid_challenge"})
+        if isinstance(exc, PaymentError):
+            return success({"ok": False, "errorType": "verification_failed"})
+        raise
+    if fault := stub_fault():
+        return fault
+    if isinstance(verified, Challenge):
+        return success({"ok": False, "errorType": "invalid_challenge"})
+
+    _credential, receipt = verified
+    receipt_payload = {
+        "status": receipt.status,
+        "method": receipt.method,
+        "timestamp": "2026-01-29T12:00:30Z",
+        "reference": receipt.reference,
+    }
+    if receipt.external_id is not None:
+        receipt_payload["externalId"] = receipt.external_id
+    return success({"ok": True, "receipt": receipt_payload})
 
 
 # Problem types pympp's server reports, by the server.verify result errorType.
@@ -922,6 +1037,9 @@ def run_legacy_command(command: str, input_data: str):
         elif command == "verify-tempo-proof":
             params = json.loads(input_data)
             print(json.dumps(asyncio.run(verify_tempo_proof(params))))
+        elif command == "verify-stripe-external-id-binding":
+            params = json.loads(input_data)
+            print(json.dumps(asyncio.run(verify_stripe_external_id_binding(params))))
         elif command == "tempo-proof-typed-data":
             params = json.loads(input_data)
             result = tempo_proof_typed_data(
