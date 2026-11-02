@@ -79,6 +79,9 @@ jobs:
           conformance-directory: mpp-tools/conformance
           setup-node: "true"
           ruby-bundler-cache: "false"
+          # Like the pnpm store below: only the caller's main branch writes
+          # the Rust adapter's target cache; pull requests restore it.
+          rust-cache-save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install conformance runner dependencies
         run: make install-runner
@@ -146,6 +149,25 @@ jobs:
             *)
               echo "Unsupported adapter: $ADAPTER" >&2
               exit 2
+              ;;
+          esac
+        env:
+          ADAPTER: ${{ steps.resolve.outputs.adapter }}
+
+      # Build compiled adapters here, without the harness's build timeout: a
+      # cold release build of the Rust adapter against the SDK checkout takes
+      # several minutes. The runners' own build is then a no-op.
+      - name: Build adapter
+        if: steps.resolve.outputs.adapter == 'go' || steps.resolve.outputs.adapter == 'rust'
+        run: |
+          case "$ADAPTER" in
+            go)
+              cd adapters/go
+              GOTOOLCHAIN=auto go build -o adapter .
+              ;;
+            rust)
+              cd adapters/rust
+              cargo build --release
               ;;
           esac
         env:

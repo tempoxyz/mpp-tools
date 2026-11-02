@@ -24,6 +24,11 @@ OPERATIONS_PATH = CONFORMANCE_DIR / "operations.json"
 VECTORS_DIR = CONFORMANCE_DIR / "vectors"
 FLOW_CASES_PATH = CONFORMANCE_DIR / "flows" / "flows.json"
 FLOW_RESULTS_PATH = CONFORMANCE_DIR / "flows" / "golden-results.json"
+# A cold release build of the Rust adapter against a patched SDK checkout
+# takes several minutes; CI builds adapters in an earlier step, so this only
+# bounds a hung build.
+DEFAULT_BUILD_TIMEOUT = 600.0
+BUILD_TIMEOUT_ENV = "CONFORMANCE_BUILD_TIMEOUT"
 
 COMMAND_TO_OPERATION = {
     "parse-www-authenticate": "challenge.parse",
@@ -212,6 +217,19 @@ def discover_adapters() -> dict[str, AdapterConfig]:
     return adapters
 
 
+def build_timeout() -> float:
+    value = os.environ.get(BUILD_TIMEOUT_ENV, "").strip()
+    if not value:
+        return DEFAULT_BUILD_TIMEOUT
+    try:
+        timeout = float(value)
+    except ValueError:
+        raise ValueError(f"{BUILD_TIMEOUT_ENV} must be a number of seconds, got {value!r}") from None
+    if timeout <= 0:
+        raise ValueError(f"{BUILD_TIMEOUT_ENV} must be positive, got {value!r}")
+    return timeout
+
+
 def build_adapter(adapter: AdapterConfig) -> str | None:
     if adapter.build_command is None:
         return None
@@ -223,7 +241,7 @@ def build_adapter(adapter: AdapterConfig) -> str | None:
             adapter.build_command,
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=build_timeout(),
             cwd=adapter.cwd,
             env=env,
         )

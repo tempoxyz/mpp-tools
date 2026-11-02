@@ -17,6 +17,10 @@ inputs:
     description: Enable ruby/setup-ruby bundler cache.
     required: false
     default: "true"
+  rust-cache-save:
+    description: Save the Rust adapter build cache after the job ("true" or "false").
+    required: false
+    default: "true"
 
 runs:
   using: composite
@@ -53,6 +57,7 @@ runs:
       uses: tempoxyz/gh-actions/vendor/Swatinem/rust-cache@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
       with:
         workspaces: ${{ inputs.conformance-directory }}/adapters/rust -> target
+        save-if: ${{ inputs.rust-cache-save == 'true' }}
 
     - name: Setup Go
       if: inputs.adapter == 'go' || inputs.adapter == 'all'
