@@ -39,7 +39,7 @@ def _uv(cwd: Path, package: str, env: dict[str, str]) -> None:
 
 
 def _cargo(cwd: Path, package: str, env: dict[str, str]) -> None:
-    found = _run(["cargo", "search", package, "--limit", "1"], cwd, env)
+    found = _run(["cargo", "search", package, "--limit", "1", "--color", "never"], cwd, env)
     match = re.match(rf'^{re.escape(package)} = "([^"]+)"', found)
     if not match:
         raise RuntimeError(f"cargo search did not report {package}: {found!r}")
