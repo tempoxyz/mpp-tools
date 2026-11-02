@@ -1,0 +1,107 @@
+name: AGENTS.md sync
+
+# Reusable workflow that every MPP repository calls from its
+# .github/workflows/sync-agents.yml. It renders the shared MPP section from
+# agents/shared.md on mpp-tools main into the caller's AGENTS.md and opens or
+# updates an auto-merge pull request there. The caller's
+# .github/sts/agents-sync.sts.yaml lets this workflow mint the token for that
+# pull request; nothing else here can write to the caller. See agents/README.md.
+on:
+  workflow_call:
+    inputs:
+      path:
+        description: "AGENTS.md path in the calling repository"
+        type: string
+        required: false
+        default: AGENTS.md
+
+permissions: {}
+
+jobs:
+  sync:
+    name: Sync AGENTS.md
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Checkout mpp-tools shared section
+        # Only data comes from mpp-tools main: the render code below is part of
+        # this pinned workflow, so nothing merged later runs with id-token.
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tempoxyz/mpp-tools
+          ref: main
+          path: .mpp-tools-agents
+          sparse-checkout: agents/shared.md
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Render the shared section
+        id: render
+        env:
+          AGENTS_PATH: ${{ inputs.path }}
+          SHARED: .mpp-tools-agents/agents/shared.md
+        run: |
+          # Same result as agents/sync.py render; agents/test_sync.py runs this
+          # script and compares the two.
+          python3 - "$AGENTS_PATH" "$SHARED" <<'RENDER'
+          import pathlib
+          import sys
+
+          BEGIN = (
+              "<!-- BEGIN MPP SHARED: synced from tempoxyz/mpp-tools agents/shared.md. "
+              "Edit it there; changes here are overwritten. -->"
+          )
+          END = "<!-- END MPP SHARED -->"
+          path = pathlib.Path(sys.argv[1])
+          shared = pathlib.Path(sys.argv[2]).read_text()
+          doc = path.read_text() if path.exists() else ""
+          block = f"{BEGIN}\n\n{shared.strip()}\n\n{END}\n"
+          start = doc.find("<!-- BEGIN MPP SHARED")
+          if start == -1:
+              new = doc.rstrip("\n") + "\n\n" + block
+          else:
+              end = doc.find(END, start)
+              if end == -1:
+                  sys.exit(f"{path}: the shared MPP section has no end marker; fix it by hand")
+              tail = doc[end + len(END) :].lstrip("\n")
+              new = doc[:start].rstrip("\n") + "\n\n" + block + tail
+          path.write_text(new)
+          RENDER
+          if git diff --quiet -- "$AGENTS_PATH" && git ls-files --error-unmatch -- "$AGENTS_PATH" >/dev/null 2>&1; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "source=$(git -C .mpp-tools-agents rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch GitHub token via STS
+        if: steps.render.outputs.changed == 'true'
+        id: sts
+        uses: tempoxyz/gh-actions/actions/github-sts@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+        with:
+          policy: agents-sync
+          ttl: 10m
+
+      - name: Open or update the sync pull request
+        if: steps.render.outputs.changed == 'true'
+        uses: tempoxyz/gh-actions/actions/create-pull-request@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+        with:
+          token: ${{ steps.sts.outputs.token }}
+          branch: automation/sync-agents
+          commit-message: "chore: sync shared AGENTS.md section"
+          title: "chore: sync shared AGENTS.md section"
+          body: |
+            Syncs the shared `## MPP` section of `${{ inputs.path }}` from [tempoxyz/mpp-tools `agents/shared.md`](https://github.com/tempoxyz/mpp-tools/blob/${{ steps.render.outputs.source }}/agents/shared.md) at ${{ steps.render.outputs.source }}. Edit that file, not this section.
+          add-paths: ${{ inputs.path }}
+          auto-merge: squash
