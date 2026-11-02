@@ -1,9 +1,9 @@
 # agents
 
-The canonical shape of AGENTS.md in every MPP repository, and the section they all share.
+The shape of AGENTS.md in every MPP repository, and the conventions they all share.
 
 - [`template.md`](./template.md): the shape. A `# <repository>` title and a short paragraph on what the repository is, then `## Commands`, `## Layout` and `## Conventions` in that order, then any sections only that repository needs.
-- [`shared.md`](./shared.md): the `## MPP` section every AGENTS.md ends with (sources of truth, wire format, Challenge ID binding, the repositories, how changes move between them). Edit it here only.
+- [`shared.md`](./shared.md): the `## MPP` section every AGENTS.md ends with: shared code, tooling, change and prose conventions, pulled together from the repositories' own AGENTS.md files. Edit it here only.
 - [`repos.json`](./repos.json): the repositories that follow the shape, and how each gets the shared section.
 - [`sync.py`](./sync.py): `render PATH` writes the shared section into an AGENTS.md between its markers (appending it the first time); `check PATH...` reports shape errors; `audit` checks every repository's AGENTS.md on main.
 
@@ -19,4 +19,4 @@ The [AGENTS.md workflow](../.github/workflows/agents.yml) tests `sync.py`, check
 
 1. Rewrite its AGENTS.md from `template.md` and run `python3 agents/sync.py render AGENTS.md` there.
 2. Copy `.github/workflows/sync-agents.yml` and `.github/sts/agents-sync.sts.yaml` from tempoxyz/mpp-go, putting the repository's name and ID in the policy's subject (`gh api repos/<owner>/<name> --jq .id`).
-3. Add it to `repos.json` and the table in `shared.md`.
+3. Add it to `repos.json`.

@@ -1,57 +1,48 @@
 ## MPP
 
-This section is the same in every MPP repository. It is synced from [`agents/shared.md`](https://github.com/tempoxyz/mpp-tools/blob/main/agents/shared.md) in tempoxyz/mpp-tools: edit it there, not here. Everything above it belongs to this repository.
-
-### Sources of truth
-
-- **Protocol**: the IETF drafts in [tempoxyz/mpp-specs](https://github.com/tempoxyz/mpp-specs), published at [paymentauth.org](https://paymentauth.org). The core scheme is `specs/core/draft-httpauth-payment-01.md`; intents live under `specs/intents/`, payment methods under `specs/methods/<method>/`, and extensions and transports (discovery, MCP) under `specs/extensions/`.
-- **Behavior the specs leave open**: [wevm/mppx](https://github.com/wevm/mppx), the reference SDK. Other SDKs match its behavior, names and error types.
-- **Cross-SDK fixtures**: the conformance vectors in [tempoxyz/mpp-tools](https://github.com/tempoxyz/mpp-tools) (`conformance/vectors/`), which every SDK runs through a CLI adapter.
-- **Docs**: [mpp.dev](https://mpp.dev), built from [tempoxyz/mpp](https://github.com/tempoxyz/mpp).
-
-### Wire format
-
-- **Challenge**: `WWW-Authenticate: Payment id="...", realm="...", method="...", intent="...", request="<base64url>"`, with optional `expires`, `digest`, `opaque` and `header`.
-- **Credential**: `Authorization: Payment <base64url>` decoding to `{ challenge, payload, source? }`.
-- **Receipt**: `Payment-Receipt: <base64url>` decoding to `{ status, method, timestamp, reference }`.
-- Every JSON payload is base64url without padding (RFC 4648 §5). `request` and `opaque` are base64url-encoded JCS (RFC 8785) JSON.
-- In a Credential's `challenge`, `opaque` stays the encoded string, not an expanded object. Clients return `id` and `opaque` unchanged.
-
-### Challenge ID binding
-
-The Challenge `id` is `base64url(HMAC-SHA256(server_secret, input))`, where `input` joins these fields with `|`:
-
-```
-realm | method | intent | request | expires | digest | opaque
-```
-
-Absent optional fields are empty strings, and `opaque` is always the final slot. A Challenge that advertises a credential header other than `Authorization` binds that header name immediately before `opaque`. Servers recompute the HMAC from the echoed Challenge and reject a mismatch, and also check the realm they expect and `expires`.
-
-### Repositories
-
-| Repository | Role |
-| --- | --- |
-| [wevm/mppx](https://github.com/wevm/mppx) | TypeScript SDK and reference implementation |
-| [tempoxyz/mpp-rs](https://github.com/tempoxyz/mpp-rs) | Rust SDK |
-| [tempoxyz/pympp](https://github.com/tempoxyz/pympp) | Python SDK |
-| [tempoxyz/mpp-go](https://github.com/tempoxyz/mpp-go) | Go SDK |
-| [tempoxyz/mpp-swift](https://github.com/tempoxyz/mpp-swift) | Swift SDK |
-| [tempoxyz/mpp-specs](https://github.com/tempoxyz/mpp-specs) | IETF drafts for the scheme, intents and methods |
-| [tempoxyz/mpp-tools](https://github.com/tempoxyz/mpp-tools) | Conformance suite, Agricola, and this shared section |
-| [tempoxyz/mpp](https://github.com/tempoxyz/mpp) | mpp.dev documentation site |
-| [tempoxyz/mpp-proxy](https://github.com/tempoxyz/mpp-proxy) | Pay-per-use API proxy on Cloudflare Workers |
-
-### Changing behavior across repositories
-
-- A wire-format or protocol change starts as a pull request to tempoxyz/mpp-specs.
-- SDK behavior lands in mppx first. Agricola (tempoxyz/mpp-tools `agricola/`) propagates merged mppx pull requests labeled `agricola:all` or `agricola:<sdk>` to the other SDKs as pull requests.
-- A change to wire output or cross-SDK behavior adds or updates conformance vectors in tempoxyz/mpp-tools.
-- Port rather than diverge: keep mppx's names (Challenge, Credential, Receipt, Method), defaults and error types unless the language forces otherwise, and say why when it does.
-
-### Tempo
-
-- Mainnet chain ID `4217`; testnet (Moderato) `42431`. Never use `98865`, which is retired.
+Conventions every MPP repository shares, pulled together from their AGENTS.md files. Synced from [`agents/shared.md`](https://github.com/tempoxyz/mpp-tools/blob/main/agents/shared.md) in tempoxyz/mpp-tools: edit it there. The sections above it are this repository's own and win where they are more specific.
 
 ### This file
 
-Every MPP repository's AGENTS.md has the same shape: `# <repository>` and a short paragraph on what it is, then `## Commands`, `## Layout` and `## Conventions` in that order, then any sections only this repository needs, then this section last. The repository's `.github/workflows/sync-agents.yml` keeps this section in sync with mpp-tools by opening a pull request when it changes. The template and checker are in [tempoxyz/mpp-tools `agents/`](https://github.com/tempoxyz/mpp-tools/tree/main/agents).
+- Keep it to `# <repository>` and a short paragraph, then `## Commands`, `## Layout`, `## Conventions`, then only the sections this repository needs, then this section.
+- Write rules an agent can act on: commands, paths, constraints. Leave out background, history and anything the code, specs or README already say.
+- When you learn a convention the hard way, add it to the section it belongs to in the same pull request.
+
+### Code
+
+- Make the smallest change that does the job and follow the surrounding code. Start concrete; extract an abstraction only once several real uses share it.
+- Keep the public API narrow. Add rather than remove or rename, and mark what you replace as deprecated before deleting it.
+- Document every exported item (JSDoc, rustdoc, docstrings, Go doc comments). Comments say why, not what.
+- Match mppx, the reference SDK: its names (Challenge, Credential, Receipt, Method), defaults, errors and behavior, unless the language forces otherwise; say why when it does.
+- The IETF drafts in tempoxyz/mpp-specs (paymentauth.org) are the source of truth for the protocol, and mppx settles what they leave open. Link them instead of restating them.
+- Add no dependency without a reason the pull request states. Prefer the standard library and what the repository already uses.
+- Never log or commit keys, credentials, signatures, authorization headers or raw upstream errors.
+- Tempo chain IDs: mainnet `4217`, Moderato testnet `42431`. Never `98865`.
+
+### Tooling
+
+Use each language's standard toolchain, run through the commands in `## Commands`, and keep it clean with warnings as errors:
+
+| Language | Tooling |
+| --- | --- |
+| TypeScript | pnpm, strict `tsc`, ESM with `.js` relative imports, the repository's configured formatter and linter, Vitest |
+| Python | uv, ruff (format and lint), a strict type checker (pyright or ty), pytest or unittest |
+| Rust | cargo, `cargo fmt`, `cargo clippy -D warnings`, `cargo test` |
+| Go | `gofmt`, `go vet`, golangci-lint, `go test -race` |
+| Swift | SwiftPM, `swift test -Xswiftc -warnings-as-errors` |
+
+- Run the checks that cover your change before opening a pull request, and add tests for behavior that matters, next to the existing ones.
+- Pin GitHub Actions by full commit SHA. Workflows start with `tempoxyz/gh-actions/actions/secure-runner` and get write tokens from GitHub STS policies in `.github/sts/`, never stored secrets.
+
+### Changes
+
+- Commits and pull request titles use Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`, optionally scoped.
+- Never edit `CHANGELOG.md` by hand. Record a release note the way `## Conventions` says (changeset, `.changelog/` fragment, or none when a workflow writes it), in the past tense.
+- Before 1.0, bump `patch` for everything except a breaking public API change, which is `minor`.
+- Don't edit README files unless asked.
+- Never force-push.
+
+### Docs and prose
+
+- Active voice, present tense, second person. Sentence-case headings. No filler (just, simply, easily) and no Latin abbreviations.
+- Capitalize Challenge, Credential and Receipt as MPP concepts. Say stablecoins, not crypto, and USDC.e for bridged USDC on Tempo. Write `mppx` in lowercase.
