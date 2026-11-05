@@ -41,6 +41,7 @@ jobs:
           version: "0.12.11"
           python-version: "3.12"
           enable-cache: true
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
           cache-dependency-glob: uv.lock
 
       - name: Install Agricola development environment
@@ -104,6 +105,7 @@ jobs:
         with:
           version: "0.12.11"
           enable-cache: true
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
           cache-dependency-glob: conformance/uv.lock
 
       - name: Install runner dependencies

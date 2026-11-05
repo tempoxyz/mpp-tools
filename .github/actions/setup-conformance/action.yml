@@ -18,9 +18,9 @@ inputs:
     required: false
     default: "true"
   rust-cache-save:
-    description: Save the Rust adapter build cache after the job ("true" or "false").
+    description: Save the Rust adapter build cache after the job ("true" or "false"). Defaults to saving only on main, so pull requests restore the cache without evicting it.
     required: false
-    default: "true"
+    default: ${{ github.ref == 'refs/heads/main' }}
 
 runs:
   using: composite
@@ -36,6 +36,7 @@ runs:
         version: "0.12.11"
         python-version: "3.12"
         enable-cache: true
+        save-cache: ${{ github.ref == 'refs/heads/main' }}
         cache-dependency-glob: |
           ${{ inputs.conformance-directory }}/uv.lock
           ${{ inputs.conformance-directory }}/adapters/python/uv.lock

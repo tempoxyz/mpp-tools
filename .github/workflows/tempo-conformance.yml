@@ -49,6 +49,7 @@ jobs:
           version: "0.12.11"
           python-version: "3.12"
           enable-cache: true
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
           cache-dependency-glob: |
             conformance/uv.lock
             tempo-conformance/adapters/python/uv.lock
@@ -67,6 +68,7 @@ jobs:
         uses: tempoxyz/gh-actions/vendor/Swatinem/rust-cache@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
         with:
           workspaces: tempo-conformance/adapters/rust -> target
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Setup Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
