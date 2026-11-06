@@ -37,6 +37,7 @@ SDKS: dict[str, Sdk] = {
     "sdk-python": Sdk("python", "tempoxyz/pympp", "python"),
     "sdk-go": Sdk("go", "tempoxyz/mpp-go", "go"),
     "sdk-typescript": Sdk("typescript", "wevm/mppx", "javascript"),
+    "sdk-ruby": Sdk("ruby", "stripe/mpp-rb", "ruby"),
 }
 
 
@@ -189,7 +190,8 @@ def main() -> None:
             failed = failed_steps(repository, run_id, sdk)
             if existing:
                 seen = gh("issue", "view", str(existing), "--json", "body,comments", "--jq", ".body, .comments[].body")
-                if sha in seen:
+                # Without a recorded commit, comment on every failing run.
+                if sha and sha in seen:
                     continue
                 gh("issue", "comment", str(existing), "--body", failure_comment(sdk, sha, run_url, failed))
             else:

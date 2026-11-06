@@ -86,6 +86,11 @@ class ReportTest(unittest.TestCase):
         self.assertIn(("issue", "comment"), fake.verbs())
         self.assertNotIn(("issue", "create"), fake.verbs())
 
+    def test_comments_when_the_failing_commit_is_unknown(self) -> None:
+        fake = FakeGh([{"number": 7, "title": RUST_TITLE}], seen="earlier body")
+        self.run_report(fake, **{"sdk-rust": ("failure", "")})
+        self.assertIn(("issue", "comment"), fake.verbs())
+
     def test_closes_the_issue_once_the_sdk_passes(self) -> None:
         fake = FakeGh([{"number": 7, "title": RUST_TITLE}])
         self.run_report(fake, **{"sdk-rust": ("success", "a" * 40)})

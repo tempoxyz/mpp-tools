@@ -272,6 +272,7 @@ against the head of each SDK repository's default branch:
 | [`tempoxyz/pympp`](https://github.com/tempoxyz/pympp) | `python` |
 | [`tempoxyz/mpp-go`](https://github.com/tempoxyz/mpp-go) | `go` |
 | [`wevm/mppx`](https://github.com/wevm/mppx) | `typescript` |
+| [`stripe/mpp-rb`](https://github.com/stripe/mpp-rb) | `ruby` |
 
 A failing SDK gets one open issue in this repository, labeled
 `conformance-failure` and titled `Conformance failing: <repo> (<adapter>)`,

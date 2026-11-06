@@ -68,6 +68,17 @@ jobs:
       sdk-repository: wevm/mppx
       conformance-ref: ${{ github.sha }}
 
+  sdk-ruby:
+    name: mpp-rb
+    uses: ./.github/workflows/sdk-conformance.yml # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      adapter: ruby
+      sdk-repository: stripe/mpp-rb
+      conformance-ref: ${{ github.sha }}
+
   report-sdks:
     name: report SDK conformance
     runs-on: ubuntu-latest
@@ -76,6 +87,7 @@ jobs:
       - sdk-python
       - sdk-go
       - sdk-typescript
+      - sdk-ruby
     if: always()
     permissions:
       actions: read
