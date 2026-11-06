@@ -1,5 +1,10 @@
 name: SDK Conformance Monitor
 
+# Runs the conformance suite once a day: against the pinned SDK releases, and
+# against the head of each SDK repository's default branch. SDK repositories do
+# not run conformance in their own CI; a failing SDK gets one open issue here
+# (label conformance-failure), updated while it fails and closed once it passes.
+
 on:
   schedule:
     - cron: "0 8 * * *"
@@ -19,6 +24,81 @@ jobs:
       id-token: write
       pull-requests: read
 
+  sdk-rust:
+    name: mpp-rs
+    uses: ./.github/workflows/sdk-conformance.yml # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      adapter: rust
+      sdk-repository: tempoxyz/mpp-rs
+      conformance-ref: ${{ github.sha }}
+
+  sdk-python:
+    name: pympp
+    uses: ./.github/workflows/sdk-conformance.yml # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      adapter: python
+      sdk-repository: tempoxyz/pympp
+      conformance-ref: ${{ github.sha }}
+
+  sdk-go:
+    name: mpp-go
+    uses: ./.github/workflows/sdk-conformance.yml # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      adapter: go
+      sdk-repository: tempoxyz/mpp-go
+      conformance-ref: ${{ github.sha }}
+
+  sdk-typescript:
+    name: mppx
+    uses: ./.github/workflows/sdk-conformance.yml # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      adapter: typescript
+      sdk-repository: wevm/mppx
+      conformance-ref: ${{ github.sha }}
+
+  report-sdks:
+    name: report SDK conformance
+    runs-on: ubuntu-latest
+    needs:
+      - sdk-rust
+      - sdk-python
+      - sdk-go
+      - sdk-typescript
+    if: always()
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      issues: write
+    steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Open, update, or close SDK issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NEEDS: ${{ toJSON(needs) }}
+          RUN_ID: ${{ github.run_id }}
+          TOOLS_SHA: ${{ github.sha }}
+        run: python3 conformance/scripts/report_sdk_conformance.py
+
   report:
     runs-on: ubuntu-latest
     needs: conformance
@@ -35,7 +115,8 @@ jobs:
       - name: Check existing issues
         id: check-issue
         run: |
-          existing=$(gh issue list --label conformance-failure --state open --limit 1 --json number -q '.[0].number')
+          gh label create conformance-failure --color B60205 --description "Daily conformance run failing" --force
+          existing=$(gh issue list --label conformance-failure --state open --limit 100 --json number,title -q '[.[] | select(.title | startswith("Conformance tests failing"))][0].number // empty')
           echo "existing=$existing" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
@@ -82,7 +163,7 @@ jobs:
             gh issue comment "${{ steps.check-issue.outputs.existing }}" --body "$body"
           else
             gh issue create \
-              --title "Conformance tests failing" \
+              --title "Conformance tests failing (pinned SDK releases)" \
               --body "$body" \
               --label conformance-failure
           fi

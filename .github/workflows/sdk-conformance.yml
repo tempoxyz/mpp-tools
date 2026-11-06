@@ -17,6 +17,20 @@ on:
         required: false
         type: boolean
         default: true
+      sdk-repository:
+        description: SDK repository (owner/name) to test. Defaults to the calling repository.
+        required: false
+        type: string
+        default: ""
+      sdk-ref:
+        description: SDK branch, tag, or SHA to test. Defaults to the triggering ref, or the repository's default branch for sdk-repository.
+        required: false
+        type: string
+        default: ""
+    outputs:
+      sdk_sha:
+        description: SDK commit that was tested.
+        value: ${{ jobs.conformance.outputs.sdk_sha }}
 
 permissions: {}
 
@@ -30,6 +44,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    outputs:
+      sdk_sha: ${{ steps.sdk.outputs.sha }}
     defaults:
       run:
         working-directory: mpp-tools/conformance
@@ -40,8 +56,15 @@ jobs:
       - name: Checkout SDK
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          repository: ${{ inputs.sdk-repository || github.repository }}
+          ref: ${{ inputs.sdk-ref }}
           path: sdk
           persist-credentials: false
+
+      - name: Record SDK commit
+        id: sdk
+        working-directory: sdk
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Resolve inputs
         id: resolve
