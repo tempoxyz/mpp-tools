@@ -81,10 +81,14 @@ jobs:
       actions: read
       contents: read
       id-token: write
-      issues: write
     steps:
       - name: Secure runner
         uses: tempoxyz/gh-actions/actions/secure-runner@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+      - name: Mint issue token
+        id: sts
+        uses: tempoxyz/gh-actions/actions/github-sts@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+        with:
+          policy: conformance-monitor
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -92,7 +96,8 @@ jobs:
 
       - name: Open, update, or close SDK issues
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.sts.outputs.token }}
+          ACTIONS_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           NEEDS: ${{ toJSON(needs) }}
           RUN_ID: ${{ github.run_id }}
@@ -108,10 +113,15 @@ jobs:
     permissions:
       contents: read
       id-token: write
-      issues: write
+      issues: read
     steps:
       - name: Secure runner
         uses: tempoxyz/gh-actions/actions/secure-runner@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+      - name: Mint issue token
+        id: sts
+        uses: tempoxyz/gh-actions/actions/github-sts@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+        with:
+          policy: conformance-monitor
       - name: Check existing issues
         id: check-issue
         run: |
@@ -119,12 +129,12 @@ jobs:
           existing=$(gh issue list --label conformance-failure --state open --limit 100 --json number,title -q '[.[] | select(.title | startswith("Conformance tests failing"))][0].number // empty')
           echo "existing=$existing" >> "$GITHUB_OUTPUT"
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.sts.outputs.token }}
 
       - name: Open or update GitHub issue on failure
         if: needs.conformance.result != 'success'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.sts.outputs.token }}
           SDK_SUMMARY: ${{ needs.conformance.outputs.sdk_summary }}
           VECTOR_PASSED: ${{ needs.conformance.outputs.vector_passed }}
           VECTOR_FAILED: ${{ needs.conformance.outputs.vector_failed }}
@@ -171,7 +181,7 @@ jobs:
       - name: Close issue on recovery
         if: needs.conformance.result == 'success' && steps.check-issue.outputs.existing != ''
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.sts.outputs.token }}
           SDK_SUMMARY: ${{ needs.conformance.outputs.sdk_summary }}
         run: |
           gh issue close "${{ steps.check-issue.outputs.existing }}" \

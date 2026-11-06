@@ -67,6 +67,19 @@ def failed_step_lines(failed: list[tuple[str, str, str]]) -> str:
     return "\n".join(f"- [{job}]({url}): {step}" for job, step, url in failed)
 
 
+# Commands the reusable workflow runs around use_local_sdk.py for an adapter, so
+# the reproduction exercises the SDK checkout rather than the pinned release.
+SDK_PREPARE: dict[str, str] = {
+    "typescript": "(cd ../../sdk && corepack enable && pnpm install --frozen-lockfile && pnpm build)\n",
+}
+ADAPTER_INSTALL: dict[str, str] = {
+    "typescript": "npm install\n",
+    "go": "(cd adapters/go && GOTOOLCHAIN=auto go mod download)\n",
+    "python": "(cd adapters/python && uv sync --python 3.12)\n",
+    "rust": "(cd adapters/rust && cargo fetch)\n",
+}
+
+
 def failure_body(
     sdk: Sdk,
     sha: str,
@@ -95,8 +108,8 @@ git clone https://github.com/{sdk.repository} sdk
 git clone https://github.com/{tools_repository} mpp-tools
 cd mpp-tools/conformance
 make install-runner
-make use-local-sdk ADAPTER={sdk.adapter} SDK_PATH="$(cd ../../sdk && pwd)"
-make test-sdk ADAPTER={sdk.adapter}
+{SDK_PREPARE.get(sdk.adapter, "")}make use-local-sdk ADAPTER={sdk.adapter} SDK_PATH="$(cd ../../sdk && pwd)"
+{ADAPTER_INSTALL.get(sdk.adapter, "")}make test-sdk ADAPTER={sdk.adapter}
 make flow-sdk ADAPTER={sdk.adapter}
 ```
 """
@@ -112,8 +125,11 @@ def failure_comment(sdk: Sdk, sha: str, run_url: str, failed: list[tuple[str, st
 """
 
 
-def gh(*args: str) -> str:
-    return subprocess.run(["gh", *args], check=True, capture_output=True, text=True).stdout
+def gh(*args: str, token: str | None = None) -> str:
+    env = None
+    if token:
+        env = {**os.environ, "GH_TOKEN": token}
+    return subprocess.run(["gh", *args], check=True, capture_output=True, text=True, env=env).stdout
 
 
 def failed_steps(repository: str, run_id: str, sdk: Sdk) -> list[tuple[str, str, str]]:
@@ -125,6 +141,7 @@ def failed_steps(repository: str, run_id: str, sdk: Sdk) -> list[tuple[str, str,
             f"repos/{repository}/actions/runs/{run_id}/jobs",
             "--jq",
             ".jobs[] | @json",
+            token=os.environ.get("ACTIONS_TOKEN"),
         )
     except subprocess.CalledProcessError:
         return []

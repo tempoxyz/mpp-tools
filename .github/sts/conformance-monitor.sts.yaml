@@ -1,0 +1,9 @@
+# Allow the SDK Conformance Monitor (schedule / workflow_dispatch on main) to
+# mint a short-lived token that opens, comments on, and closes its
+# conformance-failure issues and creates that label. Replaces the built-in
+# GITHUB_TOKEN for issue writes.
+subject: repo:tempoxyz@211589300/mpp-tools@1255838786:ref:refs/heads/main
+claim_pattern:
+  job_workflow_ref: tempoxyz/mpp-tools/\.github/workflows/conformance-monitor\.yml@refs/heads/main
+permissions:
+  issues: write

@@ -21,7 +21,7 @@ class FakeGh:
         self.seen = seen
         self.calls: list[tuple[str, ...]] = []
 
-    def __call__(self, *args: str) -> str:
+    def __call__(self, *args: str, token: str | None = None) -> str:
         self.calls.append(args)
         if args[:2] == ("issue", "list"):
             return json.dumps(self.open_issues)
@@ -66,6 +66,15 @@ class ReportTest(unittest.TestCase):
         self.assertIn("Run vector conformance", body)
         self.assertIn("make use-local-sdk ADAPTER=rust", body)
         self.assertIn(("label", "create"), fake.verbs())
+        self.assertIn("(cd adapters/rust && cargo fetch)", body)
+
+    def test_typescript_reproduction_builds_the_sdk_checkout(self) -> None:
+        fake = FakeGh([])
+        self.run_report(fake, **{"sdk-typescript": ("failure", "d" * 40)})
+        create = next(call for call in fake.calls if call[:2] == ("issue", "create"))
+        body = create[create.index("--body") + 1]
+        self.assertLess(body.index("pnpm build"), body.index("make use-local-sdk"))
+        self.assertLess(body.index("make use-local-sdk"), body.index("\nnpm install\n"))
 
     def test_comments_once_per_new_failing_commit(self) -> None:
         fake = FakeGh([{"number": 7, "title": RUST_TITLE}], seen="earlier " + "a" * 40)
