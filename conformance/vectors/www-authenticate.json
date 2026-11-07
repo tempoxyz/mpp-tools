@@ -666,6 +666,97 @@
           "error_type": "parse_error"
         }
       }
+    },
+    {
+      "name": "tempo_zones_any_method_details",
+      "description": "Tempo charge challenge accepting a Zone withdrawal from any Zone: methodDetails.zones is the literal true (wevm/mppx#1216). The boolean must survive parse and format, not become a string or list.",
+      "tags": [
+        "happy-path",
+        "nested-object",
+        "tempo",
+        "zones"
+      ],
+      "adapters": [
+        "typescript",
+        "rust",
+        "python",
+        "go"
+      ],
+      "sdkVersions": {
+        "typescript": ">0.17.3",
+        "rust": ">0.19.0",
+        "python": ">0.20.0",
+        "go": ">0.8.0"
+      },
+      "object": {
+        "id": "ch_zones_any",
+        "realm": "api.example.com",
+        "method": "tempo",
+        "intent": "charge",
+        "request": {
+          "amount": "1000",
+          "currency": "0x20c0000000000000000000000000000000000000",
+          "methodDetails": {
+            "chainId": 4217,
+            "zones": true
+          },
+          "recipient": "0x742d35Cc6634c0532925a3b844bC9e7595F8fE00"
+        },
+        "expires": "2099-01-01T00:00:00Z"
+      },
+      "wire": "Payment id=\"ch_zones_any\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJtZXRob2REZXRhaWxzIjp7ImNoYWluSWQiOjQyMTcsInpvbmVzIjp0cnVlfSwicmVjaXBpZW50IjoiMHg3NDJkMzVDYzY2MzRjMDUzMjkyNWEzYjg0NGJDOWU3NTk1RjhmRTAwIn0\", expires=\"2099-01-01T00:00:00Z\"",
+      "tests": {
+        "parse": true,
+        "format": true,
+        "roundtrip": true
+      }
+    },
+    {
+      "name": "tempo_zones_list_method_details",
+      "description": "Tempo charge challenge listing the Zone IDs it accepts withdrawals from: methodDetails.zones is a non-empty list of positive integer Zone IDs (wevm/mppx#1216). Order and integer type must survive parse and format.",
+      "tags": [
+        "happy-path",
+        "nested-object",
+        "tempo",
+        "zones"
+      ],
+      "adapters": [
+        "typescript",
+        "rust",
+        "python",
+        "go"
+      ],
+      "sdkVersions": {
+        "typescript": ">0.17.3",
+        "rust": ">0.19.0",
+        "python": ">0.20.0",
+        "go": ">0.8.0"
+      },
+      "object": {
+        "id": "ch_zones_list",
+        "realm": "api.example.com",
+        "method": "tempo",
+        "intent": "charge",
+        "request": {
+          "amount": "1000",
+          "currency": "0x20c0000000000000000000000000000000000000",
+          "methodDetails": {
+            "chainId": 4217,
+            "zones": [
+              3,
+              7
+            ]
+          },
+          "recipient": "0x742d35Cc6634c0532925a3b844bC9e7595F8fE00"
+        },
+        "expires": "2099-01-01T00:00:00Z"
+      },
+      "wire": "Payment id=\"ch_zones_list\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJtZXRob2REZXRhaWxzIjp7ImNoYWluSWQiOjQyMTcsInpvbmVzIjpbMyw3XX0sInJlY2lwaWVudCI6IjB4NzQyZDM1Q2M2NjM0YzA1MzI5MjVhM2I4NDRiQzllNzU5NUY4ZkUwMCJ9\", expires=\"2099-01-01T00:00:00Z\"",
+      "tests": {
+        "parse": true,
+        "format": true,
+        "roundtrip": true
+      }
     }
   ]
 }
