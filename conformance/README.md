@@ -257,94 +257,29 @@ JSON output includes a `checks` array. Each check has a stable `id`, `name`,
 `description`, `status`, `timestamp`, `specReferences`, `details`, and
 `errorMessage`.
 
-## Gating SDK Repositories
+## Daily SDK Conformance
 
-SDK pull requests can call the reusable workflow in this repository and run the
-same vector and flow conformance suite against the SDK checkout from the PR,
-instead of the pinned package release.
-
-Example `.github/workflows/conformance.yml` in `mpp-rs`:
-
-```yaml
-name: Conformance
-
-on:
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - edited
-      - labeled
-      - unlabeled
-  push:
-    branches:
-      - main
-
-jobs:
-  conformance:
-    uses: tempoxyz/mpp-tools/.github/workflows/sdk-conformance.yml@main
-    with:
-      adapter: rust
-```
-
-Use the matching adapter name in each SDK repository:
+SDK repositories do not run conformance in their own CI. The
+[SDK Conformance Monitor](../.github/workflows/conformance-monitor.yml) runs
+every day at 08:00 UTC (and on `workflow_dispatch`): it runs the suite against
+the pinned SDK releases, and calls the reusable
+[`sdk-conformance.yml`](../.github/workflows/sdk-conformance.yml) workflow
+against the head of each SDK repository's default branch:
 
 | SDK Repo | Adapter |
 |----------|---------|
 | [`tempoxyz/mpp-rs`](https://github.com/tempoxyz/mpp-rs) | `rust` |
-| [`stripe/mpp-rb`](https://github.com/stripe/mpp-rb) | `ruby` |
-| [`tempoxyz/mpp-go`](https://github.com/tempoxyz/mpp-go) | `go` |
 | [`tempoxyz/pympp`](https://github.com/tempoxyz/pympp) | `python` |
+| [`tempoxyz/mpp-go`](https://github.com/tempoxyz/mpp-go) | `go` |
 | [`wevm/mppx`](https://github.com/wevm/mppx) | `typescript` |
+| [`stripe/mpp-rb`](https://github.com/stripe/mpp-rb) | `ruby` |
 
-Then make the called `conformance` job a required branch-protection or ruleset
-check in the SDK repository.
-
-For protocol-sensitive SDK paths, add the policy gate before the behavior gate.
-When those paths change, the policy gate chooses the conformance ref used by
-the behavior gate. By default it uses `mpp-tools` `main`, which lets SDK PRs pass
-when existing conformance coverage already exercises the behavior. If new
-coverage is still pending in `mpp-tools`, reference that conformance PR in the
-SDK PR body. Maintainers can apply the `conformance-not-needed` label when a
-protocol-sensitive SDK change intentionally does not need conformance coverage.
-Include the `edited`, `labeled`, and `unlabeled` pull request event types so
-updates to those fields rerun the policy check.
-
-```yaml
-jobs:
-  conformance-policy:
-    uses: tempoxyz/mpp-tools/.github/workflows/sdk-conformance-policy.yml@main
-    with:
-      protocol-paths: |
-        src/**
-        Cargo.toml
-
-  conformance:
-    needs: conformance-policy
-    uses: tempoxyz/mpp-tools/.github/workflows/sdk-conformance.yml@main
-    with:
-      adapter: rust
-      conformance-ref: ${{ needs.conformance-policy.outputs.conformance_ref }}
-```
-
-When a PR needs pending conformance coverage that has not landed on
-`mpp-tools` `main`, include this in the PR body:
-
-```text
-Conformance-PR: tempoxyz/mpp-tools#123
-```
-
-The referenced `mpp-tools` PR must be open or merged, and it must touch one of
-the configured conformance coverage paths. The SDK behavior gate will run
-against `refs/pull/<number>/head` for that conformance PR. By default the
-coverage paths are
-`conformance/adapters/**`, `conformance/vectors/**`, `conformance/flows/**`,
-`conformance/schemas/**`, and `conformance/operations.json`.
-
-Set `require-conformance-reference: true` if an SDK repository wants to keep the
-stricter policy where every protocol-sensitive PR must reference a conformance
-PR or carry the skip label.
+A failing SDK gets one open issue in this repository, labeled
+`conformance-failure` and titled `Conformance failing: <repo> (<adapter>)`,
+with the SDK commit, the failing steps and the commands to reproduce it. A newer
+SDK commit that still fails adds a comment, and the issue closes itself once
+the SDK passes. To add an SDK, add a job for it to the monitor and an entry to
+`SDKS` in [`scripts/report_sdk_conformance.py`](./scripts/report_sdk_conformance.py).
 
 To run the same mode locally:
 
