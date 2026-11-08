@@ -12,7 +12,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -186,9 +185,6 @@ func handleParseWWWAuthenticate(input string) {
 	printJSON(commandResponse{Success: true, Result: result})
 }
 
-// opaqueParam matches the opaque auth-param of a formatted challenge.
-var opaqueParam = regexp.MustCompile(`(?:^|[\s,])opaque="([^"]*)"`)
-
 // wireOpaque returns the challenge's opaque auth-param as mpp-go puts it on
 // the wire: the issuer's encoding while it still decodes to the parsed map.
 func wireOpaque(challenge *mpp.Challenge) (string, error) {
@@ -196,11 +192,55 @@ func wireOpaque(challenge *mpp.Challenge) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	match := opaqueParam.FindStringSubmatch(header)
-	if match == nil {
+	opaque, ok := authParam(header, "opaque")
+	if !ok {
 		return "", fmt.Errorf("formatted challenge has no opaque parameter")
 	}
-	return match[1], nil
+	return opaque, nil
+}
+
+// authParam returns the value of the named auth-param in a formatted
+// challenge. It scans parameter by parameter, skipping quoted strings and
+// their backslash escapes, so text inside another parameter's value (such as
+// a realm ending in ` opaque=`) never matches.
+func authParam(header, name string) (string, bool) {
+	rest := strings.TrimPrefix(strings.TrimLeft(header, " "), "Payment")
+	for {
+		rest = strings.TrimLeft(rest, " \t,")
+		if rest == "" {
+			return "", false
+		}
+		eq := strings.IndexByte(rest, '=')
+		if eq < 0 {
+			return "", false
+		}
+		key := strings.TrimSpace(rest[:eq])
+		rest = strings.TrimLeft(rest[eq+1:], " \t")
+		var value string
+		if strings.HasPrefix(rest, "\"") {
+			var b strings.Builder
+			i := 1
+			for ; i < len(rest) && rest[i] != '"'; i++ {
+				if rest[i] == '\\' && i+1 < len(rest) {
+					i++
+				}
+				b.WriteByte(rest[i])
+			}
+			if i >= len(rest) {
+				return "", false
+			}
+			value, rest = b.String(), rest[i+1:]
+		} else {
+			end := strings.IndexAny(rest, " \t,")
+			if end < 0 {
+				end = len(rest)
+			}
+			value, rest = rest[:end], rest[end:]
+		}
+		if strings.EqualFold(key, name) {
+			return value, true
+		}
+	}
 }
 
 func handleParseAuthorization(input string) {

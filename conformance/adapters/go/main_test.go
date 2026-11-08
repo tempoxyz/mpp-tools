@@ -171,3 +171,19 @@ func TestWireOpaquePreservesIssuerEncoding(t *testing.T) {
 		t.Fatalf("wireOpaque = %q, want %q", got, opaque)
 	}
 }
+
+func TestWireOpaqueIgnoresOpaqueTextInsideOtherParams(t *testing.T) {
+	opaque := base64.RawURLEncoding.EncodeToString([]byte(`{"_mppx_scope":"GET /paid"}`))
+	header := fmt.Sprintf(`Payment id="ch", realm="x opaque=", method="tempo", intent="charge", request="e30", description="a, opaque=\"y\"", opaque="%s"`, opaque)
+	challenge, err := mpp.ParseChallenge(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := wireOpaque(challenge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != opaque {
+		t.Fatalf("wireOpaque = %q, want %q", got, opaque)
+	}
+}
