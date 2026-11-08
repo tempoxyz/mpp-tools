@@ -116,14 +116,6 @@
           "reason": "pympp answers a replayed credential with 403 verification-failed and no challenge (CredentialReplayedError, so auto-paying clients do not pay again); mppx answers 402 verification-failed with a fresh challenge."
         },
         {
-          "client": "go",
-          "server": "python",
-          "steps": [
-            "paid"
-          ],
-          "reason": "The go adapter's challenge.parse returns opaque as a decoded object instead of its wire string, so it cannot echo a challenge that carries opaque (route meta, or pympp's per-challenge nonce)."
-        },
-        {
           "client": "rust",
           "server": "python",
           "steps": [
@@ -534,14 +526,6 @@
       ],
       "expectedFailures": [
         {
-          "client": "go",
-          "server": "python",
-          "steps": [
-            "credential_in_authorization"
-          ],
-          "reason": "The go adapter's challenge.parse returns opaque as a decoded object instead of its wire string, so it cannot echo a challenge that carries opaque (route meta, or pympp's per-challenge nonce)."
-        },
-        {
           "client": "rust",
           "server": "python",
           "steps": [
@@ -640,14 +624,6 @@
         }
       ],
       "expectedFailures": [
-        {
-          "client": "go",
-          "server": "*",
-          "steps": [
-            "bob_with_alice_credential"
-          ],
-          "reason": "The go adapter's challenge.parse returns opaque as a decoded object instead of its wire string, so it cannot echo a challenge that carries opaque (route meta, or pympp's per-challenge nonce)."
-        },
         {
           "client": "rust",
           "server": "*",

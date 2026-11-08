@@ -1,5 +1,5 @@
 use hmac::{Hmac, KeyInit, Mac};
-use mpp::client::{Fetch, PaymentProvider};
+use mpp::client::{send_with_exchange, Exchange, FlowError, HttpError, PaymentProvider};
 use mpp::protocol::core::{
     base64url_decode, base64url_encode, format_authorization, format_receipt,
     format_www_authenticate, parse_authorization, parse_receipt, parse_www_authenticate,
@@ -497,7 +497,47 @@ impl PaymentProvider for ConformancePaymentProvider {
     }
 }
 
-/// Run an HTTP request through the SDK's 402 client (`Fetch`).
+/// Sends the payment flow's requests, never following a redirect with a
+/// `Payment-Authorization` credential.
+///
+/// The SDK's `Fetch` refuses `Payment-Authorization` challenges on a
+/// caller-owned client, because the client may forward that header across a
+/// redirect (reqwest strips only `Authorization`). Requests carrying it go out
+/// on a client that does not follow redirects, so the flow can pay either
+/// credential header, as mppx's fetch does. Every other request follows
+/// redirects as before, so the flow still detects a redirect before the 402.
+struct RedirectSafeExchange {
+    client: reqwest::Client,
+    no_redirect: reqwest::Client,
+}
+
+impl Exchange for RedirectSafeExchange {
+    type Error = reqwest::Error;
+
+    fn check_challenge(&self, challenge: &PaymentChallenge) -> Result<(), HttpError> {
+        let header = challenge.credential_header();
+        if header.eq_ignore_ascii_case("Authorization")
+            || header.eq_ignore_ascii_case("Payment-Authorization")
+        {
+            Ok(())
+        } else {
+            Err(HttpError::UnsafeCredentialHeader)
+        }
+    }
+
+    async fn send(
+        &mut self,
+        request: reqwest::Request,
+    ) -> Result<reqwest::Response, reqwest::Error> {
+        if request.headers().contains_key("payment-authorization") {
+            self.no_redirect.execute(request).await
+        } else {
+            self.client.execute(request).await
+        }
+    }
+}
+
+/// Run an HTTP request through the SDK's 402 payment flow.
 /// Returns `(error_type, message)` on failure.
 fn run_http_payment_request(input: &Value) -> Result<Value, (&'static str, String)> {
     let http_err = |message: String| ("http_error", message);
@@ -530,7 +570,8 @@ fn run_http_payment_request(input: &Value) -> Result<Value, (&'static str, Strin
         }
     };
 
-    let mut request = reqwest::Client::new().request(method, url);
+    let client = reqwest::Client::new();
+    let mut request = client.request(method, url);
     if let Some(headers) = input.get("headers").and_then(Value::as_object) {
         for (name, value) in headers {
             let value = value
@@ -549,10 +590,29 @@ fn run_http_payment_request(input: &Value) -> Result<Value, (&'static str, Strin
         .map_err(|e| http_err(e.to_string()))?;
     runtime.block_on(async move {
         let response = match provider {
-            Some(provider) => request
-                .send_with_payment_policy(&provider, &mpp::client::AcceptPaymentPolicy::Always)
+            Some(provider) => {
+                let request = request.build().map_err(|e| http_err(e.to_string()))?;
+                let no_redirect = reqwest::Client::builder()
+                    .redirect(reqwest::redirect::Policy::none())
+                    .build()
+                    .map_err(|e| http_err(e.to_string()))?;
+                send_with_exchange(
+                    &mut RedirectSafeExchange {
+                        client,
+                        no_redirect,
+                    },
+                    request,
+                    &provider,
+                    &mpp::client::AcceptPaymentPolicy::Always,
+                    &mpp::client::ClientEvents::default(),
+                    mpp::client::DEFAULT_MAX_PAYMENT_RETRIES,
+                )
                 .await
-                .map_err(|e| http_err(e.to_string()))?,
+                .map_err(|e| match e {
+                    FlowError::Payment(e) => http_err(e.to_string()),
+                    FlowError::Send(e) => http_err(e.to_string()),
+                })?
+            }
             None => request.send().await.map_err(|e| http_err(e.to_string()))?,
         };
         let status = response.status().as_u16();
