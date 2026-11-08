@@ -53,9 +53,11 @@ MASK = "<masked>"
 ADAPTER_TIMEOUT = 60
 
 # SDK-reserved challenge extensions that are not compared: per-issuance nonces
-# in opaque, and pympp's route scope in the request. Their effect, rejecting
-# credentials outside the route they were issued for, is what the scenarios check.
-RESERVED_OPAQUE_KEYS = frozenset({"_mpp_nonce", "_mppx_nonce"})
+# and the route scope in opaque (mppx's framework middlewares and mpp-go bind
+# _mppx_scope there), and pympp's route scope in the request. Their effect,
+# rejecting credentials outside the route they were issued for, is what the
+# scenarios check.
+RESERVED_OPAQUE_KEYS = frozenset({"_mpp_nonce", "_mppx_nonce", "_mppx_scope"})
 RESERVED_REQUEST_KEYS = frozenset({"_mppx_scope"})
 
 
