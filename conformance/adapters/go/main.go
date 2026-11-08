@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -171,7 +172,35 @@ func handleParseWWWAuthenticate(input string) {
 		printJSON(commandResponse{Success: false, Error: err.Error(), ErrorType: "parse_error"})
 		return
 	}
-	printJSON(commandResponse{Success: true, Result: toMap(challenge)})
+	result := toMap(challenge)
+	if challenge.Opaque != nil {
+		// mpp-go decodes opaque into a map; the conformance ABI returns its
+		// wire string, which a client must echo unchanged in the Credential.
+		opaque, err := wireOpaque(challenge)
+		if err != nil {
+			printJSON(commandResponse{Success: false, Error: err.Error(), ErrorType: "parse_error"})
+			return
+		}
+		result["opaque"] = opaque
+	}
+	printJSON(commandResponse{Success: true, Result: result})
+}
+
+// opaqueParam matches the opaque auth-param of a formatted challenge.
+var opaqueParam = regexp.MustCompile(`(?:^|[\s,])opaque="([^"]*)"`)
+
+// wireOpaque returns the challenge's opaque auth-param as mpp-go puts it on
+// the wire: the issuer's encoding while it still decodes to the parsed map.
+func wireOpaque(challenge *mpp.Challenge) (string, error) {
+	header, err := mpp.FormatChallenge(challenge)
+	if err != nil {
+		return "", err
+	}
+	match := opaqueParam.FindStringSubmatch(header)
+	if match == nil {
+		return "", fmt.Errorf("formatted challenge has no opaque parameter")
+	}
+	return match[1], nil
 }
 
 func handleParseAuthorization(input string) {

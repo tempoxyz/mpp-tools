@@ -153,3 +153,21 @@ func TestGenerateConformanceChallengeIDRejectsNullOpaque(t *testing.T) {
 		t.Fatalf("empty opaque map should be accepted: %v", err)
 	}
 }
+
+// The issuer's opaque encoding (here mppx's insertion order, not sorted)
+// must come back unchanged so a client can echo it in the Credential.
+func TestWireOpaquePreservesIssuerEncoding(t *testing.T) {
+	opaque := base64.RawURLEncoding.EncodeToString([]byte(`{"_mppx_scope":"GET /paid","_mppx_nonce":"0x01"}`))
+	header := fmt.Sprintf(`Payment id="ch", realm="api.example.com", method="tempo", intent="charge", request="e30", opaque="%s"`, opaque)
+	challenge, err := mpp.ParseChallenge(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := wireOpaque(challenge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != opaque {
+		t.Fatalf("wireOpaque = %q, want %q", got, opaque)
+	}
+}
