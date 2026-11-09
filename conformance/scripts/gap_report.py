@@ -33,6 +33,7 @@ from harness import (
     FLOW_CASES_PATH,
     VECTORS_DIR,
     load_flow_cases,
+    load_flow_results,
     load_json,
     load_vector,
     validate_value,
@@ -1099,6 +1100,14 @@ def load_claims(
     # Last case wins for a shared path, as in flow_runner's cases_by_path.
     cases_by_path = {str(flow_case.get("path", "/")): flow_case for flow_case in flow_cases}
     flow_paths = set(cases_by_path)
+    # flow_runner fails a case with no entry in golden-results.json for every adapter
+    # ("missing golden case"). Without the file (a test fixture) nothing is checked.
+    golden_path = flow_cases_path.parent / "golden-results.json"
+    golden = (
+        {str(entry.get("name")) for entry in load_flow_results(golden_path)}
+        if golden_path.exists()
+        else None
+    )
     for flow_case in flow_cases:
         if flow_case.get("requirements"):
             challenge_path = flow_case.get("challenge_path")
@@ -1107,6 +1116,10 @@ def load_claims(
                 flow_error = (
                     f"challenge_path {challenge_path} names no flow case's path, "
                     "so flow_runner fails it before any request"
+                )
+            elif golden is not None and str(flow_case["name"]) not in golden:
+                flow_error = (
+                    "it has no golden result, so flow_runner fails it for every adapter"
                 )
             claims.append(
                 Claim(
@@ -1156,7 +1169,27 @@ def flow_mode(
     # flow_runner sends that first request with the method of the case it goes to
     # (perform_request(url, challenge_case)), the challenge_path case's when one is named.
     method = str((first or flow_case).get("http_method", "GET")).upper()
-    return "ordinary" if answers_challenge(first, cases_by_path, method=method) else "raw_http"
+    # flow_runner appends that case's initial_query to its path (flow_case_url).
+    query = str((first or {}).get("initial_query") or "")
+    return "ordinary" if answers_challenge(first, cases_by_path, method=method, query=query) else "raw_http"
+
+
+def lookup_path(path: str, query: str = "") -> str | None:
+    """The pathname the compliance server looks a request for path + query up by.
+
+    None when no case can match it: the server keys cases by the WHATWG-normalized
+    pathname, so dot segments, backslashes, spaces, controls and non-ASCII text
+    (which urllib refuses or the URL parser rewrites) never find the declared path.
+    """
+    pathname = urllib.parse.urlsplit(path + query).path
+    if not pathname.startswith("/") or "\\" in pathname:
+        return None
+    if any(ord(char) <= 0x20 or ord(char) >= 0x7F for char in pathname):
+        return None
+    dots = {".", "..", "%2e", ".%2e", "%2e.", "%2e%2e"}
+    if any(segment.lower() in dots for segment in pathname.split("/")):
+        return None
+    return pathname
 
 
 def answers_challenge(
@@ -1164,6 +1197,7 @@ def answers_challenge(
     cases_by_path: dict[str, dict[str, Any]] | None,
     hops: int = 0,
     method: str = "GET",
+    query: str = "",
 ) -> bool:
     """Whether the compliance server answers flow_runner's first request with a 402 challenge.
 
@@ -1180,7 +1214,10 @@ def answers_challenge(
     if flow_case is None or hops > len(cases_by_path or {}):
         return False
     path = str(flow_case.get("path", "/"))
-    if "?" in path or "#" in path:
+    # The request must reach this case: its path plus any initial_query has to normalize
+    # back to the path itself (a query or fragment in path, or an initial_query that adds
+    # path segments, sends it to another pathname, usually a 404).
+    if lookup_path(path, query) != path:
         return False
     # The server's order (compliance-server.ts): discovery, json_rpc and force_status answer
     # first, then redirect_to, and only then no_payment, so a redirect wins over no_payment.
@@ -1190,7 +1227,12 @@ def answers_challenge(
     # a port offset with no target) is no redirect and the case answers as if unset.
     target = flow_case.get("redirect_to")
     if not target:
-        return not flow_case.get("no_payment")
+        if flow_case.get("no_payment"):
+            return False
+        # A case with expect_problem_details answers the first request with that
+        # problem's status; only a 402 carries the challenge flow_runner parses.
+        problem = flow_case.get("expect_problem_details")
+        return not problem or problem.get("status") == 402
     if method not in {"GET", "HEAD", "POST"}:
         return False
     split = urllib.parse.urlsplit(str(target))

@@ -1330,6 +1330,39 @@ class FlowModeForcedStatusTest(unittest.TestCase):
             case = {"name": "r", "path": "/r", "redirect_to": "/t", "http_method": method}
             self.assertEqual(flow_mode(case, cases), mode, method)
 
+    def test_flow_case_must_be_found_and_answer_402(self) -> None:
+        cases = {"/t": {"name": "t", "path": "/t"}}
+        # flow_runner appends initial_query; a query keeps the pathname, a path does not.
+        self.assertEqual(flow_mode({"name": "q", "path": "/q", "initial_query": "?a=1"}, cases), "ordinary")
+        self.assertEqual(flow_mode({"name": "q", "path": "/q", "initial_query": "/missing"}, cases), "raw_http")
+        via = {"name": "v", "path": "/v", "challenge_path": "/c"}
+        bad = {"/c": {"name": "c", "path": "/c", "initial_query": "/x"}, **cases}
+        self.assertEqual(flow_mode(via, bad), "raw_http")
+        # The server keys cases by the normalized pathname: these never match.
+        for path in ["/a/../b", "/a/./b", "/a/%2e%2e/b", "/a\\b", "/a b", "/caf\u00e9"]:
+            self.assertEqual(flow_mode({"name": "u", "path": path}, cases), "raw_http", path)
+        self.assertEqual(flow_mode({"name": "p", "path": "/a%20b"}, cases), "ordinary")
+        # A problem-details case answers with its own status; only 402 has a challenge.
+        for status, mode in [(402, "ordinary"), (400, "raw_http"), (500, "raw_http")]:
+            case = {"name": "pd", "path": "/pd", "expect_problem_details": {"status": status}}
+            self.assertEqual(flow_mode(case, cases), mode, status)
+
+    def test_flow_case_without_golden_result_is_not_coverage(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            vectors = Path(directory) / "vectors"
+            vectors.mkdir()
+            flows = Path(directory) / "flows.json"
+            cases = [
+                {"name": "kept", "path": "/k", "requirements": ["req-core-001"]},
+                {"name": "lost", "path": "/l", "requirements": ["req-core-001"]},
+            ]
+            flows.write_text(json.dumps({"version": "1.0.0", "cases": cases}), encoding="utf-8")
+            golden = {"results": [{"name": "kept", "outcome": {"ok": True, "status": 200}}]}
+            (Path(directory) / "golden-results.json").write_text(json.dumps(golden), encoding="utf-8")
+            claims = {claim.source: claim for claim in load_claims(vectors, flows)}
+        self.assertIsNone(claims["flows/flows.json#kept"].runner_error)
+        self.assertIn("no golden result", claims["flows/flows.json#lost"].runner_error or "")
+
     def test_empty_redirect_to_is_no_redirect(self) -> None:
         # compliance-server.ts checks if (flowCase.redirect_to), so "" never redirects.
         cases = {"/t": {"name": "t", "path": "/t"}}
