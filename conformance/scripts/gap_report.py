@@ -798,6 +798,10 @@ def flow_mode(flow_case: dict[str, Any]) -> str:
         return "client_flow"
     if flow_case.get("no_payment"):
         return "raw_http"
+    # A forced non-402 status (a server-error case) ends the case on the first response,
+    # before flow_runner calls the adapter: it checks the reference server, not an SDK.
+    if flow_case.get("force_status") and flow_case["force_status"] != 402:
+        return "raw_http"
     return "ordinary"
 
 
@@ -1248,11 +1252,20 @@ def clone_specs(destination: Path, ref: str) -> Path:
 
 def generate(specs_dir: Path, source: str) -> dict[str, Any]:
     """Build the report for one mpp-specs checkout against this suite's fixtures."""
+    # Sample the checkout's commit before and after reading the drafts: if it moved (or
+    # its drafts changed) in between, the rules counted may not match either commit, so
+    # refuse to name one rather than attest the wrong source.
+    commit_before = git_commit(specs_dir)
     requirements, warnings, table_rows, draft_files = extract_all(specs_dir)
+    commit = git_commit(specs_dir)
+    if commit != commit_before:
+        raise ValueError(
+            f"{specs_dir} changed while it was read ({commit_before} -> {commit}); run again"
+        )
     claims = load_claims()
     profiles = load_profiles()
     adapters = load_capabilities()
-    specs: dict[str, str | None] = {"source": source, "commit": git_commit(specs_dir)}
+    specs: dict[str, str | None] = {"source": source, "commit": commit}
     return build_report(
         requirements,
         claims,

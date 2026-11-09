@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 import time
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from gap_report import (
@@ -22,6 +23,7 @@ from gap_report import (
     draft_short_name,
     extract_all,
     extract_requirements,
+    flow_mode,
     git_commit,
     ial_req_id,
     parse_heading,
@@ -1165,6 +1167,32 @@ class CyclopsFindingTests(unittest.TestCase):
         )
         markdown = render_markdown(report)
         self.assertIn("req-core-998\x60: flows/flows.json#s", markdown)
+
+class FlowModeForcedStatusTest(unittest.TestCase):
+    def test_forced_non_402_status_is_server_only_coverage(self) -> None:
+        # flow_runner stops at the first non-402 response, before any adapter call.
+        self.assertEqual(flow_mode({"name": "e", "path": "/e", "force_status": 500}), "raw_http")
+        self.assertEqual(flow_mode({"name": "p", "path": "/p", "force_status": 402}), "ordinary")
+        self.assertEqual(
+            flow_mode({"name": "c", "path": "/c", "force_status": 500, "client_flow": True}),
+            "client_flow",
+        )
+
+
+class GenerateCommitStabilityTest(unittest.TestCase):
+    def test_checkout_moving_while_read_fails(self) -> None:
+        import gap_report
+
+        commits = iter(["a" * 40, "b" * 40])
+        with (
+            unittest.mock.patch.object(gap_report, "git_commit", lambda _p: next(commits)),
+            unittest.mock.patch.object(
+                gap_report, "extract_all", lambda _p: ([], [], {}, {})
+            ),
+            self.assertRaisesRegex(ValueError, "changed while it was read"),
+        ):
+            gap_report.generate(Path("."), "x")
+
 
 if __name__ == "__main__":
     unittest.main()
