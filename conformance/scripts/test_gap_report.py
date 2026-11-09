@@ -1499,6 +1499,15 @@ class SetextAndEscapeTest(unittest.TestCase):
         self.assertEqual([r.section for r in requirements][0], "heading-must-x")
         self.assertEqual([r.keywords for r in requirements], [["MAY"], ["MUST"]])
 
+    def test_held_ial_on_a_setext_heading_tags_nothing(self) -> None:
+        # The held ID goes on the heading; the next paragraph's rule gets none.
+        requirements, warnings, _ = read_draft(
+            "{: #req-tempo-charge-001}\nTitle\n=====\n\nX MUST hold.\n"
+        )
+        self.assertEqual([r.req_id for r in requirements], [None])
+        self.assertEqual(len(warnings), 1)
+        self.assertIn(":14: req-tempo-charge-001 goes on a heading", warnings[0])
+
     def test_escaped_brace_in_ial_value(self) -> None:
         requirements, _, _ = read_draft('P MUST a.\n{: title="a\\}" id="req-tempo-charge-001"}\n')
         self.assertEqual([r.req_id for r in requirements], ["req-tempo-charge-001"])

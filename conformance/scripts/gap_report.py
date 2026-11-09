@@ -496,6 +496,8 @@ def extract_requirements(
     held: tuple[str, int] | None = None
     # The held ID the current unit took when it started, applied when it is flushed.
     unit_held: str | None = None
+    # Line of the IAL that unit_held came from, for the warning when it tags no rule.
+    unit_held_line = 0
 
     def drop_held(where: str) -> None:
         """Discard the held IAL at a block that is no rule, warning if it named one."""
@@ -760,6 +762,13 @@ def extract_requirements(
             # the paragraph, as kramdown only reads a setext heading at a block's start.
             heading = parse_heading("# " + unit[0])
             unit.clear()
+            # An IAL held for this block goes on the heading, not the next paragraph
+            # (as for an ATX heading, see drop_held), so it tags no rule.
+            if unit_held and unit_held.startswith("req-"):
+                warnings.append(
+                    f"{relative}:{unit_held_line}: {unit_held} goes on a heading, so it tags nothing"
+                )
+            unit_held = None
             section = (heading[1] or slugify(heading[0])) if heading else section
             continue
         heading = parse_heading(line)
@@ -790,7 +799,7 @@ def extract_requirements(
             if item:
                 drop_held("the list, not its item")
             elif held:
-                unit_held, held = held[0], None
+                unit_held, unit_held_line, held = held[0], held[1], None
             unit_line = number
         unit.append(stripped)
     apply_ials()
