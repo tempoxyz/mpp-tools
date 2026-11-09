@@ -59,7 +59,7 @@ Clients SHOULD NOT retry.
 
 - The `amount` MUST be a string.
   {: #req-tempo-charge-002}
-- The `memo` MAY be omitted. {: #req-tempo-charge-003}
+- {: #req-tempo-charge-003} The `memo` MAY be omitted.
 - Plain item without keywords.
 
 | Field | Status |
@@ -147,7 +147,7 @@ class ExtractTests(unittest.TestCase):
                 "Y MUST hold.\n{: #req-tempo-charge-001}\n\nZ MAY hold.\n{: #req-core-001}\n",
             },
         )
-        requirements, warnings, _ = extract_all(specs)
+        requirements, warnings, _, _ = extract_all(specs)
         self.assertEqual(len(requirements), 3)
         self.assertTrue(any("already used" in warning for warning in warnings))
         self.assertTrue(
@@ -369,9 +369,10 @@ class ReportTests(unittest.TestCase):
         warnings: list[str] = []
         applies = version_checker(warnings, resolver=lambda adapter: "1.0.0")
         claim = Claim("vectors/a.json#x", ["req-core-001"], sdk_versions={"go": "=>1.0.0"})
-        # The runner raises on the constraint and aborts the file; the report warns instead.
+        # The runner parses go's expression only when it runs the file for go, and raises
+        # there, aborting the file for go alone; other adapters still run the scenario.
         self.assertFalse(claim_applies(claim, "go", [], applies))
-        self.assertFalse(claim_applies(claim, "python", [], applies))
+        self.assertTrue(claim_applies(claim, "python", [], applies))
         self.assertEqual(len(warnings), 1)
         self.assertIn("=>1.0.0", warnings[0])
 
@@ -417,7 +418,14 @@ class ReportTests(unittest.TestCase):
 
     def test_parse_format_scenarios_need_each_tested_command(self) -> None:
         vector = {"commands": {"parse": "parse-www-authenticate", "format": "format-www-authenticate"}}
-        self.assertEqual(scenario_operations(vector, {"tests": {"format": True}}), ("challenge.format",))
+        # A format test expecting success compares semantically, parsing both wire values.
+        self.assertEqual(
+            scenario_operations(vector, {"tests": {"format": True}}),
+            ("challenge.parse", "challenge.format"),
+        )
+        self.assertEqual(
+            scenario_operations(vector, {"tests": {"format": "exact"}}), ("challenge.format",)
+        )
         self.assertEqual(
             scenario_operations(vector, {"tests": {"roundtrip": True}}),
             ("challenge.parse", "challenge.format"),
@@ -435,7 +443,9 @@ class ReportTests(unittest.TestCase):
         applies = version_checker(warnings, resolver=missing)
         # This scenario has no constraint itself, but a sibling pins rust: the runner
         # resolves rust's version for the file and aborts it for rust when it can't.
-        claim = Claim("vectors/a.json#x", ["req-core-001"], file_constrained=frozenset({"rust"}))
+        claim = Claim(
+            "vectors/a.json#x", ["req-core-001"], file_constraints={"rust": (">=0.1.0",)}
+        )
         self.assertFalse(claim_applies(claim, "rust", [], applies))
         self.assertTrue(claim_applies(claim, "python", [], applies))
         self.assertEqual(len(warnings), 1)
@@ -617,7 +627,7 @@ class HelperTests(unittest.TestCase):
             body = "---\ntitle: T\n---\n\n--- middle\n\nClients MUST do {0}.\n"
             (specs / "draft-x-charge-00.md").write_text(body.format("old"))
             (specs / "draft-x-charge-01.md").write_text(body.format("new"))
-            requirements, warnings, _ = extract_all(Path(directory))
+            requirements, warnings, _, _ = extract_all(Path(directory))
         self.assertEqual([r.file for r in requirements], ["specs/methods/draft-x-charge-01.md"])
         self.assertTrue(any("skipped" in w for w in warnings))
 
@@ -694,6 +704,288 @@ class HelperTests(unittest.TestCase):
         start = time.monotonic()
         parse_heading("# a" + " " * 20000 + "b" + " " * 20000 + "{")
         self.assertLess(time.monotonic() - start, 1)
+
+
+# kramdown-rfc output for each case below was checked with kramdown-rfc 1.7.39
+# (docker image ietf-spec-tools); the expected rules mirror what it renders as prose.
+HEADER = "---\ntitle: T\ndocname: draft-tempo-charge-00\n---\n\n--- abstract\n\nAbs.\n\n--- middle\n\n# A\n\n"
+
+
+def read_draft(body: str, header: str = HEADER) -> tuple[list[Requirement], list[str], int]:
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "draft-tempo-charge-00.md"
+        path.write_text(header + body, encoding="utf-8")
+        return extract_requirements(path, "specs/x.md")
+
+
+def rules_in(body: str) -> list[Requirement]:
+    """The rules in body, leaving out the abstract's own paragraph (which has none)."""
+    return read_draft(body)[0]
+
+
+class KramdownReadingTests(unittest.TestCase):
+    def test_wrapped_two_word_keywords_keep_their_strength(self) -> None:
+        first, second = rules_in(
+            "Clients MUST\nNOT retry.\n\nIt is NOT\nRECOMMENDED; servers SHOULD\nNOT x.\n"
+        )
+        self.assertEqual(first.keywords, ["MUST NOT"])
+        self.assertEqual(second.keywords, ["NOT RECOMMENDED", "SHOULD NOT"])
+
+    def test_comments_are_removed_where_they_open_and_close(self) -> None:
+        # A comment line inside a paragraph stays inside it, so the IAL still tags it.
+        (rule,) = rules_in(
+            "P MUST three\n<!-- hidden MAY x -->\ncontinues here.\n{: #req-tempo-charge-003}\n"
+        )
+        self.assertEqual(
+            (rule.text, rule.keywords, rule.req_id),
+            ("P MUST three continues here.", ["MUST"], "req-tempo-charge-003"),
+        )
+        cases = {
+            # text after a comment on the same line is prose
+            "<!-- c --> Trailing SHALL four.\n": [["SHALL"]],
+            "<!-- open\nmore -->Tail MUST x.\n": [["MUST"]],
+            # a comment that opens mid-line hides its keywords
+            "Mid <!-- inline OPTIONAL --> text REQUIRED five.\n": [["REQUIRED"]],
+            # kramdown {::comment} blocks and spans
+            "{::comment}\nCommented MUST NOT six.\n{:/comment}\n\n"
+            "Inline {::comment}MAY{:/comment} plain SHOULD.\n": [["SHOULD"]],
+            "{::comment}\nGone MUST.\n{:/}\n": [],
+            # a '<!--' in a code span opens no comment
+            "Quoted \x60<!--\x60 MUST stay.\n\nNext MAY.\n": [["MUST"], ["MAY"]],
+        }
+        for body, expected in cases.items():
+            with self.subTest(body=body):
+                self.assertEqual([r.keywords for r in rules_in(body)], expected)
+
+    def test_ids_come_only_from_real_ial_id_tokens(self) -> None:
+        cases = {
+            # an escaped brace is literal text
+            "Escaped MUST eight. \\{: #req-tempo-charge-008}\n": None,
+            # a quoted value is not an ID
+            'Title MUST nine.\n{: title="#req-tempo-charge-009"}\n': None,
+            # kramdown keeps the last #id
+            "P MUST a.\n{: #req-tempo-charge-001 .x #req-tempo-charge-002}\n": "req-tempo-charge-002",
+            # an IAL at the start of a list item's text tags the item
+            "- {: #req-tempo-charge-005} Item MUST x.\n": "req-tempo-charge-005",
+        }
+        for body, expected in cases.items():
+            with self.subTest(body=body):
+                requirements, warnings, _ = read_draft(body)
+                self.assertEqual([r.req_id for r in requirements], [expected])
+                self.assertEqual(warnings, [])
+        (item,) = rules_in("- {: #req-tempo-charge-005} Item MUST x.\n")
+        self.assertEqual(item.text, "Item MUST x.")
+        # At the end of a text line kramdown-rfc prints the IAL: no ID, and a warning.
+        requirements, warnings, _ = read_draft("Para MUST x. {: #req-tempo-charge-003}\n")
+        self.assertEqual([r.req_id for r in requirements], [None])
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("put it on the next line", warnings[0])
+        # Extension tags such as {::boilerplate} set no ID and draw no warning.
+        requirements, warnings, _ = read_draft("{::boilerplate bcp14-tagged}\n\nP MUST.\n")
+        self.assertEqual((len(requirements), warnings), (1, []))
+
+    def test_keywords_in_code_spans_and_links_are_ignored(self) -> None:
+        cases = {
+            # a double-backtick span may hold a backtick
+            "Code \x60\x60a \x60 MUST\x60\x60 and MAY b.\n": [["MAY"]],
+            # an unmatched backtick is literal text, so the MUST after it is prose
+            "A \x60 MUST b and \x60c\x60 MAY.\n": [["MAY", "MUST"]],
+            "Link [x](https://e.com/MUST) ten MAY.\n": [["MAY"]],
+            "Only [x](https://e.com/MUST \"MUST\") and <https://e.com/MUST>.\n": [],
+        }
+        for body, expected in cases.items():
+            with self.subTest(body=body):
+                self.assertEqual([r.keywords for r in rules_in(body)], expected)
+
+    def test_tables_follow_kramdown(self) -> None:
+        # body: (rules, keyword table rows)
+        cases = {
+            # a pipe on a block's first line makes a table, with no leading pipe needed
+            "Value MUST be a|b here.\n\nP MAY.\n": (1, 1),
+            "a | b\nx | REQUIRED\n\nafter MAY.\n": (1, 1),
+            # but not inside a code span, or when escaped
+            "Value MUST be \x60a|b\x60 here.\n": (1, 0),
+            "Value MUST be a\\|b here.\n": (1, 0),
+            # pipe lines continuing a paragraph stay in it
+            "Para MUST a\n| a | b |\n|---|---|\n| c | REQUIRED |\n": (1, 0),
+            # rows not followed by a block boundary are a paragraph after all
+            "| a | b |\n| c | REQUIRED |\nAfter MUST x.\n": (1, 0),
+            # a list item's text may itself be a table
+            "- item MUST a | b.\n- other MAY\n": (1, 1),
+            # a table ending its section still counts
+            "| a | REQUIRED |\n": (0, 1),
+        }
+        for body, expected in cases.items():
+            with self.subTest(body=body):
+                requirements, _, rows = read_draft(body)
+                self.assertEqual((len(requirements), rows), expected)
+
+    def test_sections_follow_kramdown_rfc(self) -> None:
+        requirements = rules_in(
+            "Mid MUST.\n\n---\n\nAfter MAY.\n\n--- back\n\nBack SHOULD.\n\n--- fluff\n\nFluff MUST.\n"
+        )
+        # A bare '---' pops back to the abstract, which renders; 'fluff' never does.
+        self.assertEqual(
+            [r.text for r in requirements], ["Mid MUST.", "After MAY.", "Back SHOULD."]
+        )
+        # Text between the front matter's closing '---' and the first named section
+        # belongs to no section, so kramdown-rfc drops it.
+        requirements, _, _ = read_draft(
+            "", header="---\ntitle: T\n---\n\nLoose MUST.\n\n--- middle\n\nKept MUST.\n"
+        )
+        self.assertEqual([r.text for r in requirements], ["Kept MUST."])
+
+
+class CoverageCorrectnessTests(unittest.TestCase):
+    def test_duplicate_and_foreign_ids_are_never_covered(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            specs = write_specs(
+                Path(directory),
+                {
+                    "specs/a/draft-tempo-charge-00.md": "# A\n\nX MUST hold.\n{: #req-tempo-charge-001}\n\n"
+                    "Y MUST hold.\n{: #req-tempo-charge-001}\n\nZ MAY hold.\n{: #req-core-001}\n\n"
+                    "W MUST hold.\n{: #req-tempo-charge-002}\n",
+                },
+            )
+            requirements, warnings, table_rows, files = extract_all(specs)
+        claims = [
+            Claim("vectors/a.json#x", ["req-tempo-charge-001", "req-core-001", "req-tempo-charge-002"])
+        ]
+        profiles = {"go": {"profile": ["tempo-charge"], "capabilities": []}}
+        report = build_report(
+            requirements, claims, profiles, warnings, {}, table_rows, draft_files=files
+        )
+        (draft,) = report["drafts"]
+        # Only W's ID is its own: one claim on a shared or foreign ID covers nothing.
+        self.assertEqual((draft["rules"], draft["tagged"], draft["covered"]), (4, 4, 1))
+        self.assertEqual(report["profiles"]["go"]["drafts"]["tempo-charge"]["covered"], 1)
+        self.assertEqual(
+            sorted(rule.get("id_problem") for rule in draft["uncovered"]),
+            ["duplicate", "duplicate", "foreign"],
+        )
+        self.assertIn("[duplicate ID, not credited]", render_markdown(report))
+
+    def test_drafts_without_prose_rules_are_listed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            specs = write_specs(
+                Path(directory),
+                {
+                    "specs/a/draft-tempo-charge-00.md": "# A\n\n| Field | Status |\n|---|---|\n| a | REQUIRED |\n",
+                    "specs/b/draft-httpauth-payment-00.md": "# B\n\nX MUST hold.\n",
+                },
+            )
+            requirements, warnings, table_rows, files = extract_all(specs)
+        profiles = {"go": {"profile": ["tempo-charge"], "capabilities": []}}
+        report = build_report(
+            requirements, [], profiles, warnings, {}, table_rows, draft_files=files
+        )
+        entries = {entry["draft"]: entry for entry in report["drafts"]}
+        self.assertEqual((entries["tempo-charge"]["rules"], entries["tempo-charge"]["table_rows"]), (0, 1))
+        self.assertEqual(report["totals"]["table_rows"], 1)
+        self.assertEqual(report["profiles"]["go"]["unknown_drafts"], [])
+        self.assertEqual(report["profiles"]["go"]["drafts"]["tempo-charge"], {"rules": 0, "covered": 0})
+
+    def load_vector_claims(self, vector: dict) -> list[Claim]:
+        with tempfile.TemporaryDirectory() as directory:
+            vectors = Path(directory) / "vectors"
+            vectors.mkdir()
+            (vectors / "v.json").write_text(json.dumps(vector), encoding="utf-8")
+            flows = Path(directory) / "flows.json"
+            flows.write_text(
+                json.dumps({"version": "1.0.0", "cases": [{"name": "a", "path": "/a"}]}),
+                encoding="utf-8",
+            )
+            return load_claims(vectors, flows)
+
+    def www_authenticate_vector(self, **commands: str) -> dict:
+        vector = json.loads((VECTORS_DIR / "www-authenticate.json").read_text(encoding="utf-8"))
+        scenario = {
+            key: value
+            for key, value in vector["scenarios"][0].items()
+            if key not in ("adapters", "sdkVersions")
+        }
+        scenario.update(name="tagged", tests={"parse": True}, requirements=["req-core-001"])
+        vector["commands"] = commands or vector["commands"]
+        vector["scenarios"] = [scenario]
+        return vector
+
+    def test_unmapped_legacy_commands_credit_nothing(self) -> None:
+        (claim,) = self.load_vector_claims(self.www_authenticate_vector(parse="parse-nonsense"))
+        self.assertIn("maps to no adapter operation", claim.runner_error or "")
+        requirement = Requirement(
+            draft="core", file="specs/x.md", line=1, section="",
+            text="A MUST b.", req_id="req-core-001", keywords=["MUST"],
+        )
+        warnings: list[str] = []
+        profiles = {"go": {"profile": ["core"], "capabilities": ["challenge.parse"]}}
+        report = build_report([requirement], [claim], profiles, warnings, {})
+        self.assertEqual(report["totals"]["covered"], 0)
+        self.assertEqual(report["profiles"]["go"]["drafts"]["core"]["covered"], 0)
+
+    def test_version_resolution_follows_sibling_adapter_selection(self) -> None:
+        vector = self.www_authenticate_vector()
+        sibling = dict(
+            vector["scenarios"][0], name="sibling", adapters=["go"],
+            sdkVersions={"rust": ">=1.0.0", "go": ">=0.1.0"},
+        )
+        del sibling["requirements"]
+        vector["scenarios"].append(sibling)
+        (claim,) = self.load_vector_claims(vector)
+        # The runner skips the sibling for rust before it looks at its versions.
+        self.assertEqual(claim.file_constraints, {"go": (">=0.1.0",)})
+
+        def missing(adapter: str) -> str:
+            raise subprocess.CalledProcessError(1, ["cargo"])
+
+        applies = version_checker([], resolver=missing)
+        self.assertTrue(claim_applies(claim, "rust", ["challenge.parse"], applies))
+        self.assertFalse(claim_applies(claim, "go", ["challenge.parse"], applies))
+
+    def test_sibling_constraints_only_need_to_resolve_and_parse(self) -> None:
+        # A prerelease SDK fails a sibling's range, but only that sibling is skipped.
+        applies = version_checker([], resolver=lambda adapter: "1.0.0-beta.1")
+        claim = Claim(
+            "vectors/a.json#x", ["req-core-001"], file_constraints={"rust": (">=2.0.0",)}
+        )
+        self.assertTrue(claim_applies(claim, "rust", [], applies))
+
+    def test_failing_resolver_runs_once_per_adapter(self) -> None:
+        calls: list[str] = []
+
+        def missing(adapter: str) -> str:
+            calls.append(adapter)
+            raise subprocess.CalledProcessError(1, ["cargo"])
+
+        warnings: list[str] = []
+        applies = version_checker(warnings, resolver=missing)
+        for name in ("x", "y", "z"):
+            claim = Claim(f"vectors/{name}.json#x", ["req-core-001"], sdk_versions={"rust": ">=0.1.0"})
+            self.assertFalse(claim_applies(claim, "rust", [], applies))
+        self.assertEqual((calls, len(warnings)), (["rust"], 1))
+
+    def test_git_commit_ignores_eol_conversion_and_symlinks(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory) / "specs-repo"
+            repo.mkdir()
+
+            def run(*args: str) -> str:
+                return subprocess.run(
+                    ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", *args],
+                    check=True, capture_output=True, text=True,
+                ).stdout.strip()
+
+            run("init", "-q")
+            run("config", "core.autocrlf", "true")
+            (repo / "specs").mkdir()
+            (repo / "specs" / "a.md").write_bytes(b"x\r\ny\r\n")
+            (repo / "specs" / "link.md").symlink_to("a.md")
+            run("add", "-A")
+            run("commit", "-qm", "init")
+            head = run("rev-parse", "HEAD")
+            # The blob holds LF endings and the working file CRLF: still clean.
+            self.assertEqual(git_commit(repo), head)
+            (repo / "specs" / "a.md").write_bytes(b"x\r\nchanged\r\n")
+            self.assertEqual(git_commit(repo), f"{head}-dirty")
 
 
 if __name__ == "__main__":

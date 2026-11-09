@@ -26,7 +26,6 @@ from typing import Any, Callable
 
 from harness import (
     ADAPTERS_DIR,
-    AdapterConfig,
     COMMAND_TO_OPERATION,
     CONFORMANCE_DIR,
     FLOW_CASES_PATH,
@@ -42,16 +41,35 @@ from version_constraints import matches_constraint
 SPECS_REPOSITORY = "https://github.com/tempoxyz/mpp-specs"
 EXCERPT_LENGTH = 160
 
-# Longest alternatives first so "MUST NOT" is not read as "MUST".
+# Longest alternatives first so "MUST NOT" is not read as "MUST". keywords_in collapses
+# whitespace before matching, so a two-word keyword hard-wrapped across lines ("MUST" at
+# the end of one line, "NOT" at the start of the next) still matches as "MUST NOT".
 KEYWORD_RE = re.compile(
     r"(?<![A-Za-z\"'])(?:MUST NOT|SHALL NOT|SHOULD NOT|NOT RECOMMENDED|MUST|REQUIRED|SHALL|SHOULD|RECOMMENDED|MAY|OPTIONAL)(?![A-Za-z\"'])"
 )
 REQ_ID_RE = re.compile(r"^req-[a-z0-9-]+-[0-9]{3}$")
+# A block IAL alone on its line, such as '{: #req-core-001}'. kramdown extension tags
+# ('{::boilerplate ...}', '{:/}') match too; ial_req_id reads no ID from them.
 IAL_LINE_RE = re.compile(r"^\s*\{:(?P<body>[^}]*)\}\s*$")
-# A trailing IAL: '{:' then no '{' or '}' up to the closing '}' at the end. Anchored on
-# its own '{:' (no leading whitespace quantifier) so a search stays linear.
-INLINE_IAL_RE = re.compile(r"\{:(?P<body>[^{}]*)\}\s*$")
-IAL_ID_RE = re.compile(r"#(req-[A-Za-z0-9_-]+)")
+# An IAL at the very start of a list item's text, '- {: #req-core-001} Clients MUST ...':
+# kramdown-rfc gives the list item that ID.
+LEADING_IAL_RE = re.compile(r"\{:(?P<body>[^{}]*)\}[ \t]*")
+# An IAL at the end of a line of text, after a space or punctuation rather than right
+# after a span element (*em*, `code`, [link]). kramdown-rfc renders it as literal
+# text and the rule gets no ID (checked with kramdown-rfc 1.7.39), so the report warns
+# rather than reading an ID from it. A backslash-escaped '\{:' is literal text as well.
+TRAILING_IAL_RE = re.compile(r"(?<![\\*_\x60\])>])\{:(?P<body>[^{}]*)\}\s*$")
+# One attribute of an IAL body, scanned the way kramdown's parse_attribute_list does:
+# key="value" (or 'value'), one or more #id and .class names run together, or a bare
+# reference name, each separated by whitespace. Only a '#name' token sets the ID, so
+# '#req-...' inside a quoted value such as title="#req-core-001" sets nothing.
+IAL_TOKEN_RE = re.compile(
+    r"""(?:^|(?<=\s))(?:\w[\w-]*=(?P<quote>["'])(?:\\.|(?!(?P=quote)).)*(?P=quote)|(?P<names>(?:[#.]\w[\w-]*)+)|\w[\w-]*)(?=\s|$)"""
+)
+IAL_ID_NAME_RE = re.compile(r"#(\w[\w-]*)")
+# '{:name: attributes}' is an attribute list definition: it names attributes for later
+# reference and attaches nothing to the block before it.
+ALD_RE = re.compile(r"^\w[\w-]*:")
 # Headings are parsed in two linear steps (see parse_heading) rather than with one regex
 # whose lazy title and optional whitespace runs backtrack on long whitespace.
 HEADING_RE = re.compile(r"^#{1,6}\s+(?P<rest>.*)$")
@@ -64,6 +82,32 @@ FENCE_RE = re.compile(r"^( *)(~{3,})(.*)$")
 QUOTE_RE = re.compile(r"^ {0,3}> ?")
 # A table delimiter row, with or without outer pipes: | --- | :---: | or --- | ---
 TABLE_DELIMITER_RE = re.compile(r"^\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?$")
+# kramdown starts a table at a block boundary on a line with a pipe that is neither
+# backslash-escaped nor inside a code span (TABLE_PIPE_CHECK in kramdown's table.rb);
+# neither a leading pipe nor a delimiter row is needed.
+UNESCAPED_PIPE_RE = re.compile(r"(?<!\\)\|")
+# kramdown-rfc splits a sectionized draft (one whose first line starts with '---') into
+# sections on these lines before it parses any Markdown (RE_SECTION in its command.rb):
+# '--- name' pushes section 'name' (a trailing '-' only keeps the section out of
+# Markdown) and a bare '---' pops back to the previous section, whose text the lines
+# after it then continue.
+SECTION_RE = re.compile(r"^---(?: +(?P<name>\w+)-?)? *$")
+# The sections kramdown-rfc2629.erb renders. Text in any other section is never
+# published: 'fluff' is kramdown-rfc's commented-out section, other names are left over
+# with a warning, and text after a '---' that empties the stack belongs to no section.
+RENDERED_SECTION_RE = re.compile(
+    r"^(?:abstract|middle|back|contributor|normative|informative|(?:to_be_removed_)?note_\w*)$"
+)
+# kramdown comments: an HTML comment, or a {::comment} extension that '{:/comment}' or
+# '{:/}' closes. Either can open and close mid-line or run over several lines. A run of
+# backticks is matched too, so strip_comments can step over code spans.
+COMMENT_CLOSERS = {"<!--": ("-->",), "{::comment}": ("{:/comment}", "{:/}")}
+COMMENT_OPEN_RE = re.compile(r"<!--|\{::comment\}|(?<!\\)\x60+")
+BACKTICKS_RE = re.compile(r"(?<!\\)\x60+")
+# A link's destination (and title) and an autolink are attributes, not text: a capital
+# keyword in a URL, as in [spec](https://example.com/MUST), is not a rule.
+LINK_DESTINATION_RE = re.compile(r"\]\([^()\s]*(?:\s+(?:\"[^\"]*\"|'[^']*'))?\s*\)")
+AUTOLINK_RE = re.compile(r"<[A-Za-z][A-Za-z0-9+.-]*:[^\s<>]*>")
 
 
 def parse_heading(line: str) -> tuple[str, str | None] | None:
@@ -90,6 +134,12 @@ class Requirement:
     req_id: str | None = None
     fallback_key: str = ""
     keywords: list[str] = field(default_factory=list)
+    # Why no claim may cover this rule through its ID: "duplicate" when another rule
+    # carries the same ID, "foreign" when the ID has another draft's prefix. Coverage is
+    # matched by ID, so without this one claim on a shared ID would mark every rule that
+    # carries it covered (and a mis-prefixed rule would be credited by another draft's
+    # tests). Such a rule counts as uncovered until its ID is fixed.
+    id_problem: str | None = None
 
     @property
     def key(self) -> str:
@@ -118,15 +168,138 @@ def normalize(text: str) -> str:
     return " ".join(text.split())
 
 
+def code_span_end(text: str, start: int, end: int) -> int | None:
+    """Return where the code span opened by the backtick run text[start:end] ends.
+
+    Mirrors kramdown's parse_codespan (kramdown 2.4): the span closes at the first later
+    occurrence of the same backtick string, and None means the run is literal text:
+    either nothing closes it, or it is a single backtick with whitespace (or the start
+    of the text) before it and whitespace after it.
+    """
+    run = end - start
+    if (
+        run == 1
+        and (start == 0 or text[start - 1].isspace())
+        and end < len(text)
+        and text[end].isspace()
+    ):
+        return None
+    close = text.find("\x60" * run, end)
+    return None if close < 0 else close + run
+
+
+def strip_code_spans(text: str) -> str:
+    """Replace each kramdown code span with a space; its text is verbatim, never a rule.
+
+    A span opens at a run of backticks that is not backslash-escaped and ends as
+    code_span_end says, so a double-backtick span may hold a single backtick, and a run
+    that opens no span is literal text and stays. Pairing single backticks with one
+    regex instead would misalign after such a span or a stray backtick and delete
+    ordinary text, keywords included, up to the next code span.
+    """
+    pieces: list[str] = []
+    position = 0
+    while True:
+        match = BACKTICKS_RE.search(text, position)
+        if not match:
+            pieces.append(text[position:])
+            return "".join(pieces)
+        close = code_span_end(text, match.start(), match.end())
+        if close is None:
+            pieces.append(text[position : match.end()])
+            position = match.end()
+            continue
+        pieces.append(text[position : match.start()])
+        pieces.append(" ")
+        position = close
+
+
 def keywords_in(text: str) -> list[str]:
-    """Return the BCP 14 keywords in text, ignoring quoted ones such as "MUST"."""
-    unquoted = re.sub(r"\x60[^\x60]*\x60", "", text)
-    return sorted(set(KEYWORD_RE.findall(unquoted)))
+    """Return the BCP 14 keywords in text as a reader of the rendered draft sees them.
+
+    Ignored: keywords in code spans (quoted ones such as "MUST" are excluded by
+    KEYWORD_RE itself) and in link destinations or autolinks. Whitespace, newlines
+    included, is collapsed first so a keyword pair wrapped across lines still reads as
+    one keyword ("MUST NOT", not "MUST").
+    """
+    visible = strip_code_spans(text)
+    visible = LINK_DESTINATION_RE.sub("]", visible)
+    visible = AUTOLINK_RE.sub(" ", visible)
+    visible = " ".join(visible.split())
+    return sorted(set(KEYWORD_RE.findall(visible)))
+
+
+def is_table_line(text: str) -> bool:
+    """Whether kramdown reads this line as a table row: an unescaped pipe outside code."""
+    return bool(UNESCAPED_PIPE_RE.search(strip_code_spans(text)))
+
+
+def table_row_keywords(text: str) -> int:
+    """1 when a table row (not a delimiter row) has a BCP 14 keyword, otherwise 0."""
+    return 1 if keywords_in(text) and not TABLE_DELIMITER_RE.match(text) else 0
+
+
+def strip_comments(
+    line: str, closers: tuple[str, ...] | None
+) -> tuple[str, tuple[str, ...] | None, bool]:
+    """Remove kramdown comments (HTML and {::comment}) from one line.
+
+    closers holds the closing delimiters of a comment left open by an earlier line, or
+    None. Returns the line's visible text, the closers of a comment still open at its
+    end, and whether the line held any comment. A comment may open and close anywhere
+    on a line, so text before an opener or after a closer stays visible. Code spans on
+    the line are copied as they are: a '<!--' quoted in backticks opens nothing.
+    """
+    visible: list[str] = []
+    position = 0
+    touched = closers is not None
+    while position < len(line):
+        if closers is not None:
+            ends = [
+                (index, closer)
+                for closer in closers
+                if (index := line.find(closer, position)) >= 0
+            ]
+            if not ends:
+                return "".join(visible), closers, True
+            index, closer = min(ends)
+            position = index + len(closer)
+            closers = None
+            continue
+        match = COMMENT_OPEN_RE.search(line, position)
+        if not match:
+            visible.append(line[position:])
+            break
+        token = match.group()
+        if token.startswith("\x60"):
+            close = code_span_end(line, match.start(), match.end())
+            end = close if close is not None else match.end()
+            visible.append(line[position:end])
+            position = end
+            continue
+        visible.append(line[position : match.start()])
+        touched = True
+        closers = COMMENT_CLOSERS[token]
+        position = match.end()
+    return "".join(visible), closers, touched
 
 
 def ial_req_id(body: str) -> str | None:
-    match = IAL_ID_RE.search(body)
-    return match.group(1) if match else None
+    """Return the requirement ID an IAL body sets, or None when it sets none.
+
+    The ID is the last '#name' token (kramdown keeps the last one), read only from a
+    real token (IAL_TOKEN_RE), and only when it starts with 'req-'; whether the rest
+    matches req-<draft>-<nnn> is warned about separately. Extension tags ('{::name}',
+    '{:/name}') and attribute list definitions ('{:name: ...}') set no ID.
+    """
+    if body.startswith((":", "/")) or ALD_RE.match(body):
+        return None
+    identifier = None
+    for token in IAL_TOKEN_RE.finditer(body):
+        if token.group("names"):
+            for name in IAL_ID_NAME_RE.findall(token.group("names")):
+                identifier = name
+    return identifier if identifier and identifier.startswith("req-") else None
 
 
 def extract_requirements(
@@ -134,8 +307,24 @@ def extract_requirements(
 ) -> tuple[list[Requirement], list[str], int]:
     """Extract every requirement in one draft, with warnings and the keyword table rows.
 
-    Table rows (field tables with REQUIRED or OPTIONAL columns) cannot carry an
-    IAL each, so they are counted rather than extracted; schemas cover them.
+    The draft is read the way kramdown-rfc renders it, so that a rule is counted only
+    when it appears as prose in the published draft:
+
+    - Sections: a draft whose first line starts with '---' is split into sections on
+      '---' lines first (SECTION_RE), and only text in a rendered section is read
+      (RENDERED_SECTION_RE). The first section is the YAML front matter.
+    - Code: ~~~ fences and indented code blocks are skipped.
+    - Comments: HTML and {::comment} comments are removed wherever they open and close.
+      A line holding only comment text neither adds text nor ends a paragraph: kramdown
+      keeps a comment between two lines of a paragraph inside that paragraph.
+    - Tables: a block that starts at a block boundary with a line holding an unescaped
+      pipe is a table, provided the rows are followed by a block boundary (a blank line,
+      a block IAL or the end of the section); otherwise kramdown reads the rows as a
+      paragraph. Table rows (field tables with REQUIRED or OPTIONAL columns) cannot carry
+      an IAL each, so they are counted rather than extracted; schemas cover them.
+    - IDs: a rule's ID comes from a block IAL on the line right after it, or from an IAL
+      at the very start of a list item's text. One at the end of a text line renders as
+      literal text in kramdown-rfc, so it sets no ID and is warned about.
     """
     draft = draft_short_name(path.name)
     lines = path.read_text(encoding="utf-8").splitlines()
@@ -145,8 +334,14 @@ def extract_requirements(
     unit: list[str] = []
     unit_line = 0
     fence: str | None = None
-    in_comment = False
+    # The closing delimiters of a comment still open from an earlier line, or None.
+    comment: tuple[str, ...] | None = None
     table_rows = 0
+    # Rows of a table kramdown may yet back out of: (line number, the line as a unit
+    # holds it, the row's text). They count as a table once a block boundary follows
+    # them, or become a paragraph when another line of text does.
+    pending: list[tuple[int, str, str]] = []
+    pending_in_item = False
 
     def flush(req_id: str | None = None) -> None:
         nonlocal unit
@@ -154,10 +349,20 @@ def extract_requirements(
             return
         text = "\n".join(unit)
         unit = []
-        inline = INLINE_IAL_RE.search(text)
-        if inline:
-            req_id = req_id or ial_req_id(inline.group("body"))
-            text = text[: inline.start()].rstrip()
+        item = LIST_ITEM_RE.match(text)
+        if item:
+            leading = LEADING_IAL_RE.match(text, item.end())
+            if leading:
+                # '- {: #req-...} text': kramdown-rfc gives the list item this ID. A block
+                # IAL on the line after the item (req_id) also tags it and wins.
+                req_id = req_id or ial_req_id(leading.group("body"))
+                text = text[: item.end()] + text[leading.end() :]
+        trailing = TRAILING_IAL_RE.search(text)
+        if trailing and ial_req_id(trailing.group("body")):
+            warnings.append(
+                f"{relative}:{unit_line}: {ial_req_id(trailing.group('body'))} ends a line of text, "
+                "where kramdown-rfc renders it as text, so it tags nothing; put it on the next line"
+            )
         found = keywords_in(text)
         if not found:
             if req_id:
@@ -184,22 +389,51 @@ def extract_requirements(
             )
         )
 
-    start = 0
-    if lines and lines[0].strip() == "---":
-        # kramdown-rfc front matter ends at a bare --- or at the first "--- abstract"-style marker.
-        for index in range(1, len(lines)):
-            closing = lines[index].strip()
-            if closing == "---":
-                start = index + 1
-                break
-            if closing.startswith("--- "):
-                start = index
-                break
+    def commit_table() -> None:
+        nonlocal table_rows
+        table_rows += sum(table_row_keywords(row) for _, _, row in pending)
+        pending.clear()
 
+    def revert_table() -> None:
+        # No block boundary after the rows: kramdown backs out of the table and parses
+        # its lines as the start of a paragraph, which the current line then continues.
+        nonlocal unit_line
+        if pending:
+            unit_line = pending[0][0]
+            unit.extend(text for _, text, _ in pending)
+            pending.clear()
+
+    # A sectionized draft starts with '---' and its first section, the YAML front matter,
+    # runs to the next section line. Any other file is plain kramdown and is read whole.
+    sectionized = bool(lines) and lines[0].startswith("---")
+    in_front_matter = sectionized
+    rendered = not sectionized
+    sections: list[str] = []  # kramdown-rfc's stack of section names
     item_indent = 0  # text column of the latest list item, for its fences and code
     fence_base = 0
-    in_table = False
-    for number, raw in enumerate(lines[start:], start=start + 1):
+    boundary = True  # whether the next line starts at a kramdown block boundary
+    for number, raw in enumerate(lines, start=1):
+        if sectionized:
+            if number == 1:
+                continue
+            marker = SECTION_RE.match(raw)
+            if marker:
+                # kramdown-rfc cuts the draft here before parsing any Markdown, so no
+                # paragraph, fence, comment, table or list carries across this line, and
+                # the section's end is a block boundary for a table that ends it.
+                commit_table()
+                flush()
+                fence, comment, item_indent, boundary = None, None, 0, True
+                in_front_matter = False
+                if marker.group("name"):
+                    sections.append(marker.group("name"))
+                elif sections:
+                    sections.pop()
+                rendered = bool(sections) and bool(RENDERED_SECTION_RE.match(sections[-1]))
+                continue
+            if in_front_matter or not rendered:
+                continue
+        at_boundary, boundary = boundary, False
         # Tabs stop every 4 columns as kramdown counts them; a blockquote marker is removed
         # before any boundary is decided, so a bare '>' separates quoted paragraphs.
         line = QUOTE_RE.sub("", raw.expandtabs(4))
@@ -215,23 +449,34 @@ def extract_requirements(
             ):
                 fence = None
             continue
-        if in_comment:
-            if "-->" in line:
-                in_comment = False
-            continue
-        if not unit and stripped and column < item_indent and not LIST_ITEM_RE.match(line):
-            item_indent = 0  # a line left of the item's text ends its list
-        if fence_match and len(fence_match.group(1)) <= item_indent + 3:
-            flush()
-            in_table = False
-            fence, fence_base = fence_match.group(2), item_indent
-            continue
-        if stripped and not unit and column >= item_indent + 4:
-            continue  # indented code block: kramdown renders it as code, not prose
-        if stripped.startswith("<!--"):
-            flush()
-            in_comment = "-->" not in stripped
-            continue
+        if pending and comment is None:
+            # Decide the pending table first: kramdown checks for its end before anything
+            # else on this line. A new list item ends a table inside the previous item.
+            ends_item = pending_in_item and LIST_ITEM_RE.match(line)
+            if not stripped or IAL_LINE_RE.match(line) or ends_item:
+                commit_table()
+            elif is_table_line(stripped):
+                pending.append((number, stripped, stripped))
+                continue
+            else:
+                revert_table()
+        if comment is None:
+            if not unit and stripped and column < item_indent and not LIST_ITEM_RE.match(line):
+                item_indent = 0  # a line left of the item's text ends its list
+            if fence_match and len(fence_match.group(1)) <= item_indent + 3:
+                flush()
+                fence, fence_base = fence_match.group(2), item_indent
+                continue
+            if stripped and not unit and column >= item_indent + 4:
+                continue  # indented code block: kramdown renders it as code, not prose
+        visible, comment, had_comment = strip_comments(line, comment)
+        if had_comment:
+            if not visible.strip():
+                continue  # only comment text: no prose, and no paragraph break either
+            line = visible
+            stripped = line.strip()
+            # Text right after a comment is no block boundary for a table still pending.
+            revert_table()
         ial = IAL_LINE_RE.match(line)
         if ial:
             req_id = ial_req_id(ial.group("body"))
@@ -240,21 +485,11 @@ def extract_requirements(
                     f"{relative}:{number}: {req_id} is not on the line right after a rule, so it tags nothing"
                 )
             flush(req_id)
+            boundary = True
             continue
-        if TABLE_DELIMITER_RE.match(stripped) and len(unit) == 1 and "|" in unit[0]:
-            # The unit so far was a table header written without a leading pipe.
-            table_rows += 1 if keywords_in(unit[0]) else 0
-            unit = []
-            in_table = True
-            continue
-        if stripped.startswith("|") or (in_table and "|" in stripped):
+        if not stripped:
             flush()
-            in_table = True
-            table_rows += 1 if keywords_in(stripped) and not TABLE_DELIMITER_RE.match(stripped) else 0
-            continue
-        in_table = False
-        if not stripped or stripped.startswith("--- "):
-            flush()
+            boundary = True
             continue
         heading = parse_heading(line)
         if heading:
@@ -267,8 +502,15 @@ def extract_requirements(
             flush()
             item_indent = item.end()
         if not unit:
+            # A list item's text starts its own block boundary; other text needs one.
+            row = line[item.end() :] if item else stripped
+            if (item or at_boundary) and is_table_line(row):
+                pending.append((number, stripped, row.strip()))
+                pending_in_item = bool(item)
+                continue
             unit_line = number
         unit.append(stripped)
+    commit_table()
     flush()
 
     seen: dict[str, int] = {}
@@ -278,8 +520,9 @@ def extract_requirements(
         if count > 1:
             requirement.fallback_key = f"{requirement.fallback_key}-{count}"
         if requirement.req_id and not requirement.req_id.startswith(f"req-{draft}-"):
+            requirement.id_problem = "foreign"
             warnings.append(
-                f"{relative}:{requirement.line}: {requirement.req_id} does not use this draft's prefix req-{draft}-"
+                f"{relative}:{requirement.line}: {requirement.req_id} does not use this draft's prefix req-{draft}-; not counted as covered"
             )
     return requirements, warnings, table_rows
 
@@ -301,8 +544,15 @@ def draft_paths(specs_dir: Path) -> list[Path]:
     return paths
 
 
-def extract_all(specs_dir: Path) -> tuple[list[Requirement], list[str], dict[str, int]]:
-    """Extract requirements from every draft under specs/, flagging duplicate IDs."""
+def extract_all(
+    specs_dir: Path,
+) -> tuple[list[Requirement], list[str], dict[str, int], dict[str, str]]:
+    """Extract requirements from every draft under specs/, flagging duplicate IDs.
+
+    Returns the requirements, the warnings, each draft's keyword table rows and each
+    draft's file. The last two list every draft read, including one with no prose rules
+    (such as a draft whose keywords are all in tables), so the report still shows it.
+    """
     requirements: list[Requirement] = []
     warnings: list[str] = []
     table_rows: dict[str, int] = {}
@@ -321,19 +571,25 @@ def extract_all(specs_dir: Path) -> tuple[list[Requirement], list[str], dict[str
         found, found_warnings, rows = extract_requirements(path, relative)
         requirements.extend(found)
         warnings.extend(found_warnings)
-        table_rows[draft_short_name(path.name)] = rows
-    owners: dict[str, Requirement] = {}
+        table_rows[short] = rows
+    # Coverage is matched by ID, so one claim on an ID that several rules carry would
+    # cover all of them. Every rule sharing an ID is marked, the first one included,
+    # since nothing says which of them the claim's author meant.
+    sharing: dict[str, list[Requirement]] = {}
     for requirement in requirements:
-        if not requirement.req_id:
+        if requirement.req_id:
+            sharing.setdefault(requirement.req_id, []).append(requirement)
+    for req_id, users in sharing.items():
+        if len(users) < 2:
             continue
-        other = owners.get(requirement.req_id)
-        if other:
+        first = users[0]
+        for other in users[1:]:
             warnings.append(
-                f"{requirement.file}:{requirement.line}: {requirement.req_id} already used at {other.file}:{other.line}"
+                f"{other.file}:{other.line}: {req_id} already used at {first.file}:{first.line}; neither is counted as covered"
             )
-        else:
-            owners[requirement.req_id] = requirement
-    return requirements, warnings, table_rows
+        for requirement in users:
+            requirement.id_problem = requirement.id_problem or "duplicate"
+    return requirements, warnings, table_rows, first_path
 
 
 @dataclass
@@ -347,58 +603,76 @@ class Claim:
     sdk_versions: dict[str, str] | None = None
     # Flow cases only: server_only, raw_http, client_flow or ordinary, as flow_runner runs them.
     flow_mode: str | None = None
-    # Vector claims only: why the vector runner refuses this claim's whole file, if it does.
+    # Vector claims only: why no SDK can pass this claim for real, if none can: the vector
+    # runner refuses the claim's whole file, or the scenario calls a legacy command that
+    # maps to no adapter operation (the runner fails it before starting any SDK, so it
+    # could only "pass" by expecting that failure).
     runner_error: str | None = None
     # Vector claims only: further operations the scenario's tests call (a parse and format
-    # scenario needs both), and adapters any scenario in the file pins an SDK version for:
-    # the runner resolves that adapter's version for the file and aborts it if it can't.
+    # scenario needs both), each of which the adapter must advertise.
     operations: tuple[str, ...] = ()
-    file_constrained: frozenset[str] = frozenset()
+    # Vector claims only: per adapter, the sdkVersions expressions of every scenario in this
+    # claim's file that selects the adapter (this scenario included), in file order. As the
+    # runner walks the file for an adapter it resolves the adapter's SDK version and parses
+    # each such expression; if either raises, the whole file is aborted for that adapter.
+    file_constraints: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
-def vector_operation(vector: dict[str, Any]) -> str | None:
-    commands = vector["commands"]
-    if "operation" in commands:
-        return commands["operation"]
-    for command in ("parse", "format", "generate"):
-        if command in commands:
-            return COMMAND_TO_OPERATION.get(commands[command])
-    return None
+def scenario_commands(vector: dict[str, Any], scenario: dict[str, Any]) -> tuple[str, ...]:
+    """Return the legacy commands a scenario's tests call, as _run_scenario dispatches them.
 
-
-def scenario_operations(vector: dict[str, Any], scenario: dict[str, Any]) -> tuple[str, ...]:
-    """Return the operations a scenario's tests call, as the vector runner dispatches them.
-
-    An explicit commands.operation (or a generate command) is the only one. Otherwise
-    each of the parse and format tests the scenario selects calls its own command, and a
-    roundtrip calls both, so the adapter needs each of them for the scenario to pass.
+    commands.operation calls no legacy command; a generate command is the only one called
+    when present. Otherwise a parse test calls the parse command, a format test the format
+    command, and a roundtrip (which runs only when both exist) calls both. A format test
+    expecting success (true, not "exact") compares the formatted value semantically, by
+    parsing both wire values with the parse command (except for base64url-encode), so it
+    calls the parse command as well.
     """
     commands = vector["commands"]
-    if "operation" in commands or "generate" in commands:
-        operation = vector_operation(vector)
-        return (operation,) if operation else ()
+    if "operation" in commands:
+        return ()
+    if "generate" in commands:
+        return (commands["generate"],)
     tests = scenario.get("tests") or {}
+    parse, format_ = commands.get("parse"), commands.get("format")
+    roundtrip = tests.get("roundtrip") is True and bool(parse) and bool(format_)
+    semantic_format = (
+        tests.get("format") is True and bool(parse) and format_ != "base64url-encode"
+    )
     needed = []
-    for test, command in (("parse", "parse"), ("format", "format")):
-        if command in commands and (tests.get(test) is not None or tests.get("roundtrip") is True):
-            operation = COMMAND_TO_OPERATION.get(commands[command])
-            if operation:
-                needed.append(operation)
+    if parse and (tests.get("parse") is not None or roundtrip or semantic_format):
+        needed.append(parse)
+    if format_ and (tests.get("format") is not None or roundtrip):
+        needed.append(format_)
     return tuple(needed)
 
 
-def check_scenario(runner: VectorRunner, scenario: dict[str, Any]) -> None:
-    """Raise ValueError if the vector runner would refuse this scenario.
+def scenario_operations(vector: dict[str, Any], scenario: dict[str, Any]) -> tuple[str, ...]:
+    """Return the adapter operations a scenario's tests call; the adapter needs each one.
 
-    Structure (sdkVersions keys and value types, adapters names) is checked as the
-    runner checks it before running anything. Each constraint is also parsed: the
-    runner parses it as it decides whether the scenario applies, and a malformed one
-    (such as "=>1.0.0") raises there and aborts the file.
+    An explicit commands.operation is the only one. Legacy commands are mapped through
+    COMMAND_TO_OPERATION; an unmapped one is left out here and caught by load_claims.
     """
-    constraints = runner.scenario_version_constraints(scenario)
+    commands = vector["commands"]
+    if "operation" in commands:
+        return (commands["operation"],)
+    return tuple(
+        COMMAND_TO_OPERATION[command]
+        for command in scenario_commands(vector, scenario)
+        if command in COMMAND_TO_OPERATION
+    )
+
+
+def check_scenario(runner: VectorRunner, scenario: dict[str, Any]) -> None:
+    """Raise ValueError if the vector runner refuses this scenario for every adapter.
+
+    That is its structure: sdkVersions keys and value types, and adapters names, which
+    the runner checks for every scenario in a file before running any of them. A
+    malformed constraint expression only aborts the file for the adapter it is keyed by,
+    when the runner reaches it for that adapter; version_checker models that.
+    """
+    runner.scenario_version_constraints(scenario)
     runner.scenario_adapters(scenario)
-    for expression in constraints.values():
-        matches_constraint("0.0.0", expression)
 
 
 def load_claims(
@@ -411,12 +685,6 @@ def load_claims(
         if path.name == "package.json":
             continue
         vector = load_vector(path)
-        constrained = frozenset(
-            name
-            for scenario in vector["scenarios"]
-            if isinstance(scenario.get("sdkVersions"), dict)
-            for name in scenario["sdkVersions"]
-        )
         # The vector runner validates every scenario's sdkVersions and adapters as it loops
         # over a file, and one invalid scenario aborts the whole file for every adapter. So
         # one bad scenario, tagged or not, makes every claim in the file coverage for nothing.
@@ -425,22 +693,50 @@ def load_claims(
             try:
                 check_scenario(runner, scenario)
             except ValueError as error:
-                file_error = f"vectors/{path.name}#{scenario['name']}: {error}"
+                file_error = f"the runner refuses its file (vectors/{path.name}#{scenario['name']}: {error})"
                 break
+        file_constraints: dict[str, tuple[str, ...]] = {}
+        if not file_error:
+            for scenario in vector["scenarios"]:
+                selected = scenario.get("adapters")
+                for adapter, expression in (scenario.get("sdkVersions") or {}).items():
+                    # The runner skips a scenario whose adapters list leaves the adapter
+                    # out before it looks at the scenario's versions (an empty list, which
+                    # the schema forbids anyway, selects every adapter, as in the runner).
+                    if not selected or adapter in selected:
+                        file_constraints[adapter] = file_constraints.get(adapter, ()) + (
+                            expression,
+                        )
         for scenario in vector["scenarios"]:
-            if scenario.get("requirements"):
-                claims.append(
-                    Claim(
-                        source=f"vectors/{path.name}#{scenario['name']}",
-                        requirements=scenario["requirements"],
-                        operation=(scenario_operations(vector, scenario) or (None,))[0],
-                        operations=scenario_operations(vector, scenario)[1:],
-                        adapters=scenario.get("adapters"),
-                        sdk_versions=scenario.get("sdkVersions"),
-                        runner_error=file_error,
-                        file_constrained=constrained,
-                    )
+            if not scenario.get("requirements"):
+                continue
+            source = f"vectors/{path.name}#{scenario['name']}"
+            operations = scenario_operations(vector, scenario)
+            unmapped = [
+                command
+                for command in scenario_commands(vector, scenario)
+                if command not in COMMAND_TO_OPERATION
+            ]
+            error = file_error
+            if not error and unmapped:
+                error = (
+                    f"command '{unmapped[0]}' maps to no adapter operation, "
+                    "so the runner fails it before any SDK runs"
                 )
+            elif not error and not operations:
+                error = "its tests call none of the vector's commands"
+            claims.append(
+                Claim(
+                    source=source,
+                    requirements=scenario["requirements"],
+                    operation=operations[0] if operations else None,
+                    operations=operations[1:],
+                    adapters=scenario.get("adapters"),
+                    sdk_versions=scenario.get("sdkVersions"),
+                    runner_error=error,
+                    file_constraints=file_constraints,
+                )
+            )
     for flow_case in load_flow_cases(flow_cases_path):
         if flow_case.get("requirements"):
             claims.append(
@@ -492,7 +788,13 @@ def claim_applies(
     capabilities: list[str],
     version_applies: VersionCheck | None = None,
 ) -> bool:
-    """Whether the runners would run this claim against the adapter."""
+    """Whether the runners would run this claim against the adapter.
+
+    This is what profile coverage means: the adapter takes part in a case that claims
+    the rule. It does not judge whether the rule is client- or server-side; an ordinary
+    flow runs the adapter as the client against the fixed mppx server, so a server-side
+    rule should be claimed by server_only cases or server-verification, not by flows.
+    """
     if claim.flow_mode is not None:
         # server_only and raw_http cases never call the adapter; only client_flow
         # cases drive the adapter's http.payment_request.
@@ -511,22 +813,28 @@ def claim_applies(
 
 
 def rejected_by_runner(claim: Claim, warnings: list[str]) -> bool:
-    """Whether the vector runner refuses this claim's scenario outright.
+    """Whether no SDK can pass this claim, so it is coverage for none of them.
 
-    The runner rejects a scenario whose sdkVersions has unknown adapter keys (or
-    non-string values) before running it for any adapter, and aborts the whole file
-    when any scenario in it is invalid (runner_error), so such a claim is coverage
-    for no SDK and for no suite-wide total. Warns once per claim.
+    That is when the runner refuses the claim's scenario outright, for every adapter:
+    its sdkVersions has unknown adapter keys or non-string values, or its adapters list
+    names an unknown adapter; or when it refuses the whole file because another scenario
+    in it is invalid, or the scenario calls an unmapped command (runner_error). Such a
+    claim counts for no SDK and for no suite-wide total. Warns once per claim.
     """
     if claim.runner_error:
-        message = f"{claim.source}: the runner refuses its file ({claim.runner_error}); not counted as coverage"
+        message = f"{claim.source}: {claim.runner_error}; not counted as coverage"
         if message not in warnings:
             warnings.append(message)
         return True
-    if not claim.sdk_versions:
+    if not claim.sdk_versions and claim.adapters is None:
         return False
+    scenario: dict[str, Any] = {}
+    if claim.sdk_versions:
+        scenario["sdkVersions"] = claim.sdk_versions
+    if claim.adapters is not None:
+        scenario["adapters"] = claim.adapters
     try:
-        check_scenario(VectorRunner(), {"sdkVersions": claim.sdk_versions})
+        check_scenario(VectorRunner(), scenario)
     except ValueError as error:
         message = f"{claim.source}: {error}; not counted as coverage"
         if message not in warnings:
@@ -538,42 +846,63 @@ def rejected_by_runner(claim: Claim, warnings: list[str]) -> bool:
 def version_checker(
     warnings: list[str], resolver: Callable[[str], str] | None = None
 ) -> VersionCheck:
-    """Evaluate a claim's sdkVersions with the vector runner's own version logic.
+    """Evaluate a claim's sdkVersions for an adapter the way the vector runner does.
 
-    An adapter whose pinned SDK version cannot be resolved (its toolchain is
-    missing) counts none of its version-constrained claims, with a warning.
+    For an adapter, run_vector_file walks every scenario in the file. On each scenario
+    that selects the adapter and pins a version for it, it resolves the adapter's SDK
+    version (once, then cached) and matches it against the expression, which parses the
+    expression. A resolver failure or a malformed expression raises out of the loop and
+    aborts the whole file for that adapter only, before any scenario in it runs, so:
+
+    - every expression in claim.file_constraints for the adapter must resolve and parse,
+      whatever its match result, or no claim in the file counts for that adapter;
+    - then the claim's own expression for the adapter, if any, must match.
+
+    An adapter whose SDK version cannot be resolved (its toolchain is missing) is tried
+    once and then counts none of the claims in files that pin it, with one warning.
     """
     runner = VectorRunner(sdk_version_resolver=resolver)
     unresolved: set[str] = set()
 
-    def applies(claim: Claim, adapter: str) -> bool:
-        if rejected_by_runner(claim, warnings):
-            return False
-        # Own constraint for this adapter, or (with "*") just the version resolution the
-        # runner does for any scenario in the file that pins one for this adapter.
-        if claim.sdk_versions and adapter in claim.sdk_versions:
-            constraints = claim.sdk_versions
-        elif adapter in claim.file_constrained:
-            constraints = {adapter: "*"}
-        else:
-            return True
-        config = AdapterConfig(name=adapter, command=[], capabilities=[])
-        try:
-            matched, _ = runner.scenario_version_applies({"sdkVersions": constraints}, config)
-        except (
-            OSError,
-            subprocess.CalledProcessError,
-            RuntimeError,
-            StopIteration,
-            KeyError,
-        ):
-            if adapter not in unresolved:
+    def matches(adapter: str, expression: str, source: str) -> bool | None:
+        """The match result, or None when the runner would raise and abort the file."""
+        if adapter in unresolved:
+            return None
+        if adapter not in runner.sdk_versions:
+            try:
+                runner.sdk_versions[adapter] = runner.sdk_version_resolver(adapter)
+            except (
+                OSError,
+                subprocess.CalledProcessError,
+                RuntimeError,
+                StopIteration,
+                KeyError,
+                ValueError,
+            ):
                 unresolved.add(adapter)
                 warnings.append(
                     f"{adapter}: pinned SDK version unknown; claims in vector files that pin it are not counted"
                 )
+                return None
+        try:
+            return matches_constraint(runner.sdk_versions[adapter], expression)
+        except ValueError as error:
+            message = f"{source}: {error}; the runner aborts this file for {adapter}, so its claims are not counted for {adapter}"
+            if message not in warnings:
+                warnings.append(message)
+            return None
+
+    def applies(claim: Claim, adapter: str) -> bool:
+        if rejected_by_runner(claim, warnings):
             return False
-        return matched
+        source = claim.source.split("#", 1)[0]
+        for expression in claim.file_constraints.get(adapter, ()):
+            if matches(adapter, expression, source) is None:
+                return False
+        own = (claim.sdk_versions or {}).get(adapter)
+        if own is None:
+            return True
+        return bool(matches(adapter, own, source))
 
     return applies
 
@@ -594,8 +923,15 @@ def build_report(
     specs: dict[str, str | None],
     table_rows: dict[str, int] | None = None,
     version_applies: VersionCheck | None = None,
+    draft_files: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Assemble the JSON report: per-draft counts, uncovered rules and profile coverage."""
+    """Assemble the JSON report: per-draft counts, uncovered rules and profile coverage.
+
+    draft_files lists every draft read (short name to file), so a draft without prose
+    rules, such as one whose keywords are all in tables, still gets an entry, its table
+    rows still count in the totals, and a profile claiming it does not call it unknown.
+    A rule whose ID is a duplicate or another draft's (id_problem) is never covered.
+    """
     # Claims the runner refuses outright count nowhere: not in the suite-wide coverage,
     # the per-draft and total counts, or any SDK profile.
     claims = [claim for claim in claims if not rejected_by_runner(claim, warnings)]
@@ -607,34 +943,41 @@ def build_report(
     unknown = sorted(req_id for req_id in coverage if req_id not in known)
 
     drafts: dict[str, dict[str, Any]] = {}
-    for requirement in requirements:
-        entry = drafts.setdefault(
-            requirement.draft,
+
+    def draft_entry(draft: str, file: str) -> dict[str, Any]:
+        return drafts.setdefault(
+            draft,
             {
-                "draft": requirement.draft,
-                "file": requirement.file,
+                "draft": draft,
+                "file": file,
                 "rules": 0,
                 "tagged": 0,
                 "covered": 0,
-                "table_rows": (table_rows or {}).get(requirement.draft, 0),
+                "table_rows": (table_rows or {}).get(draft, 0),
                 "uncovered": [],
             },
         )
+
+    for draft, file in (draft_files or {}).items():
+        draft_entry(draft, file)
+    for requirement in requirements:
+        entry = draft_entry(requirement.draft, requirement.file)
         entry["rules"] += 1
         if requirement.req_id:
             entry["tagged"] += 1
-        if requirement.req_id in coverage:
+        if requirement.req_id in coverage and not requirement.id_problem:
             entry["covered"] += 1
         else:
-            entry["uncovered"].append(
-                {
-                    "key": requirement.key,
-                    "line": requirement.line,
-                    "section": requirement.section,
-                    "keywords": requirement.keywords,
-                    "excerpt": excerpt(requirement.text),
-                }
-            )
+            uncovered = {
+                "key": requirement.key,
+                "line": requirement.line,
+                "section": requirement.section,
+                "keywords": requirement.keywords,
+                "excerpt": excerpt(requirement.text),
+            }
+            if requirement.id_problem:
+                uncovered["id_problem"] = requirement.id_problem
+            entry["uncovered"].append(uncovered)
 
     profile_report: dict[str, Any] = {}
     for adapter, manifest in sorted(profiles.items()):
@@ -654,7 +997,9 @@ def build_report(
             per_draft[draft] = {
                 "rules": len(rules),
                 "covered": sum(
-                    1 for requirement in rules if requirement.req_id in applicable
+                    1
+                    for requirement in rules
+                    if requirement.req_id in applicable and not requirement.id_problem
                 ),
             }
         profile_report[adapter] = {
@@ -732,7 +1077,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         lines += ["", f"### {entry['draft']} ({entry['file']})", ""]
         for rule in entry["uncovered"]:
             text = rule["excerpt"].replace("|", "\\|")
-            lines.append(f"- \x60{rule['key']}\x60 (line {rule['line']}): {text}")
+            problem = f" [{rule['id_problem']} ID, not credited]" if rule.get("id_problem") else ""
+            lines.append(f"- \x60{rule['key']}\x60 (line {rule['line']}){problem}: {text}")
     return "\n".join(lines) + "\n"
 
 
@@ -750,6 +1096,12 @@ def git_commit(path: Path) -> str | None:
     working tree are compared, by path and blob id, with the ones in HEAD's tree.
     Comparing the files themselves rather than parsing 'git status' also covers
     untracked, gitignored, oddly named and nested-repository files.
+
+    Symlinked drafts are left out on both sides, as draft discovery skips them. A file
+    whose raw bytes do not hash to HEAD's blob is hashed again by 'git hash-object',
+    which applies the checkout's clean filters (such as CRLF conversion under
+    core.autocrlf or .gitattributes) the way 'git add' would, so a clean checkout with
+    converted line endings is not called dirty.
     """
 
     def git(*args: str) -> str:
@@ -767,13 +1119,18 @@ def git_commit(path: Path) -> str | None:
             if not entry:
                 continue
             meta, name = entry.split("\t", 1)
-            if name.endswith(".md"):
-                head[name] = meta.split()[2]
-        working = {
-            file.relative_to(path).as_posix(): git_blob_sha(file.read_bytes())
-            for file in (path / "specs").rglob("*.md")
-            if file.is_file()
-        }
+            mode, kind, sha = meta.split()
+            if name.endswith(".md") and kind == "blob" and mode != "120000":
+                head[name] = sha
+        working: dict[str, str] = {}
+        for file in (path / "specs").rglob("*.md"):
+            if file.is_symlink() or not file.is_file():
+                continue
+            name = file.relative_to(path).as_posix()
+            sha = git_blob_sha(file.read_bytes())
+            if name in head and head[name] != sha:
+                sha = git("hash-object", "--", name).strip()
+            working[name] = sha
     except (OSError, subprocess.CalledProcessError, ValueError, IndexError):
         return None
     if not commit:
@@ -801,7 +1158,7 @@ def clone_specs(destination: Path, ref: str) -> Path:
 
 def generate(specs_dir: Path, source: str) -> dict[str, Any]:
     """Build the report for one mpp-specs checkout against this suite's fixtures."""
-    requirements, warnings, table_rows = extract_all(specs_dir)
+    requirements, warnings, table_rows, draft_files = extract_all(specs_dir)
     claims = load_claims()
     profiles = load_profiles()
     specs: dict[str, str | None] = {"source": source, "commit": git_commit(specs_dir)}
@@ -812,7 +1169,8 @@ def generate(specs_dir: Path, source: str) -> dict[str, Any]:
         warnings,
         specs,
         table_rows,
-        version_checker(warnings),
+        version_applies=version_checker(warnings),
+        draft_files=draft_files,
     )
 
 
