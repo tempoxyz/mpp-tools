@@ -1162,6 +1162,7 @@ def load_claims(
         if golden_path.exists()
         else None
     )
+    names = [str(flow_case.get("name")) for flow_case in flow_cases]
     for flow_case in flow_cases:
         if flow_case.get("requirements"):
             challenge_path = flow_case.get("challenge_path")
@@ -1170,6 +1171,11 @@ def load_claims(
                 flow_error = (
                     f"challenge_path {challenge_path} names no flow case's path, "
                     "so flow_runner fails it before any request"
+                )
+            elif names.count(str(flow_case["name"])) > 1:
+                flow_error = (
+                    "another flow case has its name, and flow_runner checks every case "
+                    "against the one golden result recorded under that name"
                 )
             elif golden is not None and str(flow_case["name"]) not in golden:
                 flow_error = (
@@ -1269,7 +1275,12 @@ def lookup_path(path: str, query: str = "") -> str | None:
     # and cannot encode non-ASCII text, so such a path or initial_query is never sent.
     if any(ord(char) <= 0x20 or ord(char) >= 0x7F for char in path + query):
         return None
-    pathname = urllib.parse.urlsplit(path + query).path
+    try:
+        pathname = urllib.parse.urlsplit(path + query).path
+    except ValueError:
+        # An invalid IPv6 netloc such as "//[" makes urlsplit raise; urllib cannot
+        # send such a request either.
+        return None
     if not pathname.startswith("/") or "\\" in pathname:
         return None
     # The WHATWG path percent-encode set: the server's URL parser encodes these, so the
@@ -1354,7 +1365,11 @@ def answers_challenge(
             return charge_request_fits(flow_case.get("request"))
         if method not in {"GET", "HEAD", "POST"}:
             return False
-        split = urllib.parse.urlsplit(str(target))
+        try:
+            split = urllib.parse.urlsplit(str(target))
+        except ValueError:
+            # A target urllib cannot parse (such as "http://[") is never followed.
+            return False
         # compliance-server.ts listens on port and port + 1 with the same handler; only offset 1
         # (a JSON integer, not a bool) reaches a listener. Other offsets get connection refused.
         offset = flow_case.get("redirect_to_port_offset")
@@ -1385,6 +1400,10 @@ def load_profiles(adapters_dir: Path = ADAPTERS_DIR) -> dict[str, dict[str, Any]
                 "profile": manifest["profile"],
                 "capabilities": manifest["capabilities"],
             }
+        else:
+            # The last manifest with a name wins, as in harness's discover_adapters and
+            # load_capabilities, so a later one without a profile drops an earlier one's.
+            profiles.pop(manifest["name"], None)
     return profiles
 
 

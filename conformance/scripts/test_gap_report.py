@@ -1390,6 +1390,49 @@ class LookupPathEncodingTest(unittest.TestCase):
         self.assertEqual(lookup_path("/a", "?x=1"), "/a")
 
 
+class ManifestAndFlowEdgeCasesTest(unittest.TestCase):
+    def test_duplicate_flow_case_names_cover_nothing(self) -> None:
+        # flow_runner checks each case against the one golden result under its name,
+        # so cases sharing a name are not checked against their own results.
+        with tempfile.TemporaryDirectory() as directory:
+            flows = Path(directory) / "flows.json"
+            cases = [
+                {"name": "dup", "path": "/a", "requirements": ["req-core-001"]},
+                {"name": "dup", "path": "/b", "requirements": ["req-core-002"]},
+                {"name": "solo", "path": "/c", "requirements": ["req-core-003"]},
+            ]
+            flows.write_text(json.dumps({"version": "1.0.0", "cases": cases}), encoding="utf-8")
+            vectors = Path(directory) / "vectors"
+            vectors.mkdir()
+            claims = load_claims(vectors, flows)
+        self.assertEqual(
+            [claim.runner_error is None for claim in claims], [False, False, True]
+        )
+
+    def test_unparsable_redirect_target_is_not_followed(self) -> None:
+        cases = {"/a": {"path": "/a", "redirect_to": "http://["}}
+        self.assertFalse(answers_challenge(cases["/a"], cases))
+        self.assertIsNone(lookup_path("//[", ""))
+
+    def test_later_manifest_without_profile_drops_earlier_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for folder, profile in (("a", ["core"]), ("b", None)):
+                (root / folder).mkdir()
+                manifest = {
+                    "schema": 1,
+                    "name": "dup",
+                    "language": "go",
+                    "command": ["true"],
+                    "capabilities": ["challenge.parse"],
+                }
+                if profile:
+                    manifest["profile"] = profile
+                (root / folder / "adapter.json").write_text(json.dumps(manifest), encoding="utf-8")
+            profiles = load_profiles(root)
+        self.assertNotIn("dup", profiles)
+
+
 class MarkdownEscapingTest(unittest.TestCase):
     def test_values_from_specs_cannot_add_rows_headings_or_break_code_spans(self) -> None:
         # Draft names, paths, keys and excerpts come from the specs checkout: a newline
