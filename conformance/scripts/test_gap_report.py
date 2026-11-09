@@ -1922,8 +1922,11 @@ class FlowModeForcedStatusTest(unittest.TestCase):
         bad = {"/c": {"name": "c", "path": "/c", "initial_query": "/x"}, **cases}
         self.assertEqual(flow_mode(via, bad), "raw_http")
         # The server keys cases by the normalized pathname: these never match.
-        for path in ["/a/../b", "/a/./b", "/a/%2e%2e/b", "/a\\b", "/a b", "/caf\u00e9"]:
+        for path in ["/a/../b", "/a/./b", "/a/%2e%2e/b", "/a\\b"]:
             self.assertEqual(flow_mode({"name": "u", "path": path}, cases), "raw_http", path)
+        # urllib never sends these at all.
+        for path in ["/a b", "/caf\u00e9"]:
+            self.assertEqual(flow_mode({"name": "u", "path": path}, cases), "unsent", path)
         self.assertEqual(flow_mode({"name": "p", "path": "/a%20b"}, cases), "ordinary")
         # A problem-details case answers with its own status; only 402 has a challenge.
         for status, mode in [(402, "ordinary"), (400, "raw_http"), (500, "raw_http")]:
