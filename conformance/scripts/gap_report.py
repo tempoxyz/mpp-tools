@@ -821,7 +821,8 @@ def claim_applies(
     This is what profile coverage means: the adapter takes part in a case that claims
     the rule. It does not judge whether the rule is client- or server-side; an ordinary
     flow runs the adapter as the client against the fixed mppx server, so a server-side
-    rule should be claimed by server_only cases or server-verification, not by flows.
+    rule should be claimed by server-verification, not by flows. server_only cases are
+    never run (flow_runner skips them), so they apply to no adapter.
     """
     if claim.flow_mode is not None:
         # server_only and raw_http cases never call the adapter; only client_flow
@@ -974,8 +975,15 @@ def build_report(
         # as vector_runner decides per adapter: the scenario's adapters list selects it,
         # it advertises every operation the scenario calls, and the scenario's
         # sdkVersions (and its file's) let it run. Otherwise every adapter skips the
-        # scenario and nothing checks the rule. Flow cases are left alone: server_only
-        # and raw_http cases check the reference server without any adapter.
+        # scenario and nothing checks the rule. A server_only flow case is never run:
+        # flow_runner skips it (it only defines a route other cases reach), so it checks
+        # nothing either. Other flow cases run against the reference server; raw_http ones
+        # need no adapter, so they count suite-wide as they are.
+        if claim.flow_mode == "server_only":
+            message = f"{claim.source}: server_only flow cases are not run; not counted as coverage"
+            if message not in warnings:
+                warnings.append(message)
+            continue
         if claim.flow_mode is None and not any(
             claim_applies(claim, adapter, capabilities, version_applies)
             for adapter, capabilities in sorted(adapters.items())

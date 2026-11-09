@@ -1061,8 +1061,10 @@ class CyclopsFindingTests(unittest.TestCase):
                 "vectors/a.json#ver", ["req-core-004"], operation="challenge.format",
                 sdk_versions={"rust": ">=9.0.0"},
             ),
-            # flow cases check the reference server without an adapter
-            Claim("flows/flows.json#s", ["req-core-005"], flow_mode="server_only"),
+            # raw_http flow cases check the reference server without an adapter
+            Claim("flows/flows.json#r", ["req-core-005"], flow_mode="raw_http"),
+            # server_only flow cases are never run by flow_runner, so they cover nothing
+            Claim("flows/flows.json#s", ["req-core-006"], flow_mode="server_only"),
         ]
         warnings: list[str] = []
         applies = version_checker(warnings, resolver=lambda adapter: "1.0.0")
@@ -1075,6 +1077,7 @@ class CyclopsFindingTests(unittest.TestCase):
             sorted(w.split(":")[0] for w in warnings if "no adapter runs it" in w),
             ["vectors/a.json#op", "vectors/a.json#sel", "vectors/a.json#ver"],
         )
+        self.assertTrue(any(w.startswith("flows/flows.json#s: server_only") for w in warnings))
 
 if __name__ == "__main__":
     unittest.main()
