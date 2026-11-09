@@ -1122,6 +1122,30 @@ class HelperTests(unittest.TestCase):
             requirements, _, _, _ = extract_all(Path(directory), RENDER)
         self.assertEqual([r.file for r in requirements], ["specs/methods/draft-x-charge-10.md"])
 
+    def test_git_commit_counts_the_renderer_lockfile(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory) / "specs"
+            repo.mkdir()
+
+            def run(*args: str) -> str:
+                return subprocess.run(
+                    ["git", "-C", str(repo), *args], check=True, capture_output=True, text=True
+                ).stdout.strip()
+
+            run("init", "-q")
+            (repo / "specs").mkdir()
+            (repo / "specs" / "a.md").write_text("x\n")
+            (repo / "Gemfile.lock").write_text("    kramdown-rfc (1.7.0)\n")
+            run("add", "specs/a.md", "Gemfile.lock")
+            run("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init")
+            head = run("rev-parse", "HEAD")
+            self.assertEqual(git_commit(repo), head)
+            # A changed pin renders with a version HEAD does not name.
+            (repo / "Gemfile.lock").write_text("    kramdown-rfc (1.8.0)\n")
+            self.assertEqual(git_commit(repo), f"{head}-dirty")
+            (repo / "Gemfile.lock").unlink()
+            self.assertEqual(git_commit(repo), f"{head}-dirty")
+
     def test_git_commit_root_dirty_and_nested(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory) / "specs"

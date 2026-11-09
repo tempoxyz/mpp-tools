@@ -2053,13 +2053,18 @@ def git_blob_sha(data: bytes) -> str:
     return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
 
 
+# The file that pins the checkout's kramdown-rfc version (locked_kramdown_rfc_version).
+LOCKFILE = "Gemfile.lock"
+
+
 def git_commit(path: Path) -> str | None:
     """Return the commit the specs at path were read from, or None if unknown.
 
     None when path is not the root of a git checkout (its HEAD would belong to an
     enclosing repository). A "-dirty" suffix when the drafts the report reads
     differ from HEAD's: the specs/**/*.md files draft discovery finds in the
-    working tree are compared, by path and blob id, with the ones in HEAD's tree.
+    working tree, and Gemfile.lock (which pins the renderer), are compared, by path
+    and blob id, with the ones in HEAD's tree.
     Comparing the files themselves rather than parsing 'git status' also covers
     untracked, gitignored, oddly named and nested-repository files.
 
@@ -2081,15 +2086,17 @@ def git_commit(path: Path) -> str | None:
         commit = git("rev-parse", "HEAD").strip()
         # "<mode> <type> <sha>\t<path>" per entry, NUL-separated so any name is exact.
         head: dict[str, str] = {}
-        for entry in git("ls-tree", "-r", "-z", "HEAD", "--", "specs").split("\0"):
+        for entry in git("ls-tree", "-r", "-z", "HEAD", "--", "specs", LOCKFILE).split("\0"):
             if not entry:
                 continue
             meta, name = entry.split("\t", 1)
             mode, kind, sha = meta.split()
-            if name.endswith(".md") and kind == "blob" and mode != "120000":
+            if (name.endswith(".md") or name == LOCKFILE) and kind == "blob" and mode != "120000":
                 head[name] = sha
         working: dict[str, str] = {}
-        for file in (path / "specs").rglob("*.md"):
+        # Gemfile.lock pins the kramdown-rfc version the drafts render with, so a changed
+        # or missing one makes the checkout dirty too.
+        for file in [*(path / "specs").rglob("*.md"), path / LOCKFILE]:
             if file.is_symlink() or not file.is_file():
                 continue
             name = file.relative_to(path).as_posix()
