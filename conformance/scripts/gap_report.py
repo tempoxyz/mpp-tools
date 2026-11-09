@@ -1631,6 +1631,41 @@ def build_report(
     }
 
 
+# ASCII punctuation that Markdown can read as syntax inside a line: emphasis, code,
+# links and images, HTML and entities, strikethrough and table pipes. Line-start syntax
+# (list markers, numbered lists, headings) needs no escape, as render_markdown never
+# starts a line with a value; '#' is still escaped so a heading cannot gain levels.
+MD_SPECIAL = frozenset("\\" + "\x60" + "*_[]<>#!|~&")
+
+
+def md_text(value: object) -> str:
+    """Return value as one line of literal Markdown text, safe in a table cell or heading.
+
+    Draft names, paths, keys, excerpts and warnings come from the specs checkout, so
+    a newline could start a fake table row or heading, and a pipe, bracket, backtick
+    or other Markdown punctuation could change the table or add links. Line breaks
+    become spaces and every ASCII punctuation character Markdown can treat as syntax
+    is backslash-escaped (CommonMark section 2.4 lets any ASCII punctuation be escaped).
+    """
+    text = " ".join(str(value).split())
+    return "".join("\\" + ch if ch in MD_SPECIAL else ch for ch in text)
+
+
+def md_code(value: object) -> str:
+    """Return value as a single-line Markdown code span that it cannot break out of.
+
+    The fence is one backtick longer than the longest backtick run inside, and a
+    space pads a value that starts or ends with a backtick or is blank (CommonMark
+    section 6.1), so a backtick in a key cannot close the span early. GitHub tables
+    still split a cell at a pipe inside a code span, so callers use it outside tables.
+    """
+    text = " ".join(str(value).split())
+    longest = max((len(run) for run in re.findall("\x60+", text)), default=0)
+    fence = "\x60" * (longest + 1)
+    pad = " " if text.startswith("\x60") or text.endswith("\x60") or not text else ""
+    return f"{fence}{pad}{text}{pad}{fence}"
+
+
 def render_markdown(report: dict[str, Any]) -> str:
     """Render the report as a Markdown summary with the uncovered rules per draft."""
     specs = report["specs"]
@@ -1638,7 +1673,7 @@ def render_markdown(report: dict[str, Any]) -> str:
     lines = [
         "# MPP requirement gap report",
         "",
-        f"Specs: {specs.get('source')} at {specs.get('commit') or 'unknown commit'}.",
+        f"Specs: {md_text(specs.get('source'))} at {md_text(specs.get('commit') or 'unknown commit')}.",
         "",
         f"{totals['rules']} rules, {totals['tagged']} tagged with an ID, {totals['covered']} covered by a vector or flow.",
         f"{totals['table_rows']} table rows also carry a keyword; they are counted, not extracted.",
@@ -1648,7 +1683,7 @@ def render_markdown(report: dict[str, Any]) -> str:
     ]
     for entry in report["drafts"]:
         lines.append(
-            f"| {entry['draft']} | {entry['rules']} | {entry['tagged']} | {entry['covered']} | {entry['table_rows']} |"
+            f"| {md_text(entry['draft'])} | {entry['rules']} | {entry['tagged']} | {entry['covered']} | {entry['table_rows']} |"
         )
     if report["profiles"]:
         lines += [
@@ -1661,26 +1696,26 @@ def render_markdown(report: dict[str, Any]) -> str:
         for adapter, entry in report["profiles"].items():
             for draft, counts in entry["drafts"].items():
                 lines.append(
-                    f"| {adapter} | {draft} | {counts['rules']} | {counts['covered']} |"
+                    f"| {md_text(adapter)} | {md_text(draft)} | {counts['rules']} | {counts['covered']} |"
                 )
     if report["unknown_references"]:
         lines += ["", "## Unknown requirement IDs", ""]
         lines += [
-            f"- \x60{req_id}\x60: {', '.join(report['unknown_reference_sources'][req_id])}"
+            f"- {md_code(req_id)}: {', '.join(md_text(source) for source in report['unknown_reference_sources'][req_id])}"
             for req_id in report["unknown_references"]
         ]
     if report["warnings"]:
         lines += ["", "## Warnings", ""]
-        lines += [f"- {warning}" for warning in report["warnings"]]
+        lines += [f"- {md_text(warning)}" for warning in report["warnings"]]
     lines += ["", "## Uncovered rules"]
     for entry in report["drafts"]:
         if not entry["uncovered"]:
             continue
-        lines += ["", f"### {entry['draft']} ({entry['file']})", ""]
+        lines += ["", f"### {md_text(entry['draft'])} ({md_text(entry['file'])})", ""]
         for rule in entry["uncovered"]:
-            text = rule["excerpt"].replace("|", "\\|")
-            problem = f" [{rule['id_problem']} ID, not credited]" if rule.get("id_problem") else ""
-            lines.append(f"- \x60{rule['key']}\x60 (line {rule['line']}){problem}: {text}")
+            text = md_text(rule["excerpt"])
+            problem = f" [{md_text(rule['id_problem'])} ID, not credited]" if rule.get("id_problem") else ""
+            lines.append(f"- {md_code(rule['key'])} (line {rule['line']}){problem}: {text}")
     return "\n".join(lines) + "\n"
 
 

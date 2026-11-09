@@ -30,6 +30,7 @@ from gap_report import (
     load_claims,
     load_profiles,
     main,
+    md_code,
     render_markdown,
     scenario_commands,
     scenario_operations,
@@ -1298,7 +1299,50 @@ class CyclopsFindingTests(unittest.TestCase):
             {"req-core-998": ["flows/flows.json#s"], "req-core-999": ["vectors/a.json#op"]},
         )
         markdown = render_markdown(report)
-        self.assertIn("req-core-998\x60: flows/flows.json#s", markdown)
+        self.assertIn("req-core-998\x60: flows/flows.json\\#s", markdown)
+
+class MarkdownEscapingTest(unittest.TestCase):
+    def test_values_from_specs_cannot_add_rows_headings_or_break_code_spans(self) -> None:
+        # Draft names, paths, keys and excerpts come from the specs checkout: a newline
+        # and pipes must not add a table row or heading, and a backtick in a key must
+        # not close its code span.
+        hostile = "evil\n| fake | 1 | 1 | 1 | 1 |\n# Heading"
+        report = {
+            "specs": {"source": "s", "commit": "c"},
+            "totals": {"rules": 1, "tagged": 0, "covered": 0, "table_rows": 0},
+            "drafts": [
+                {
+                    "draft": hostile,
+                    "file": "specs/x|y.md",
+                    "rules": 1,
+                    "tagged": 0,
+                    "covered": 0,
+                    "table_rows": 0,
+                    "uncovered": [
+                        {"key": "a\x60b", "line": 3, "excerpt": "MUST <b>x</b> [l](u)"}
+                    ],
+                }
+            ],
+            "profiles": {},
+            "unknown_references": [],
+            "unknown_reference_sources": {},
+            "warnings": ["w\n## injected"],
+        }
+        lines = render_markdown(report).splitlines()
+        self.assertIn(
+            "| evil \\| fake \\| 1 \\| 1 \\| 1 \\| 1 \\| \\# Heading | 1 | 0 | 0 | 0 |", lines
+        )
+        self.assertIn("### evil \\| fake \\| 1 \\| 1 \\| 1 \\| 1 \\| \\# Heading (specs/x\\|y.md)", lines)
+        self.assertIn("- w \\#\\# injected", lines)
+        self.assertIn("- \x60\x60a\x60b\x60\x60 (line 3): MUST \\<b\\>x\\</b\\> \\[l\\](u)", lines)
+        # Only the lines render_markdown writes start a heading or a table row.
+        self.assertEqual([line for line in lines if line.startswith("#")][-1], lines[-3])
+        self.assertEqual(sum(line.startswith("| ") for line in lines), 2)
+
+    def test_code_span_pads_backtick_edges(self) -> None:
+        self.assertEqual(md_code("\x60x"), "\x60\x60 \x60x \x60\x60")
+        self.assertEqual(md_code("a\n b"), "\x60a b\x60")
+
 
 class FlowModeForcedStatusTest(unittest.TestCase):
     def test_forced_non_402_status_is_server_only_coverage(self) -> None:
