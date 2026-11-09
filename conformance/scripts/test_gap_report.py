@@ -599,6 +599,8 @@ class ReportTests(unittest.TestCase):
         for extra, fits in (
             ({"description": "Coffee"}, True),
             ({"description": 1}, False),
+            ({"description": "a\r\nb"}, False),
+            ({"description": "a\nb"}, False),
             ({"meta": {"a": "b"}}, True),
             ({"meta": {"a": 1}}, False),
             ({"meta": "x"}, False),

@@ -1490,6 +1490,9 @@ def charge_request_fits(request: Any) -> bool:
     # that conflicts with meta._mppx_scope. Only the plainly valid forms count.
     if "description" in request and not isinstance(request["description"], str):
         return False
+    # Challenge.serialize throws on a CR or LF in a quoted-string value, so no 402 is sent.
+    if re.search(r"[\r\n]", request.get("description") or ""):
+        return False
     meta = request.get("meta")
     if "meta" in request and not (
         isinstance(meta, dict) and all(isinstance(value, str) for value in meta.values())
