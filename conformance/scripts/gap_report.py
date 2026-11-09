@@ -415,12 +415,18 @@ def extract_requirements(
         if item:
             leading = LEADING_IAL_RE.match(text, item.end())
             if leading:
-                # '- {: #req-...} text': kramdown-rfc gives the list item this ID. A
-                # requirement ID in a block IAL on the line after the item (req_id) is
-                # read as the item's and wins. One without a requirement ID ('{: #note}')
-                # leaves the leading ID: kramdown puts that IAL on the enclosing list, and
-                # the item keeps its own anchor (checked with kramdown-rfc 1.7.39).
-                req_id = req_id or ial_req_id(leading.group("body"))
+                # '- {: #req-...} text': kramdown-rfc gives the list item this ID, and it
+                # keeps it. A block IAL on the line after the item goes on the enclosing
+                # list instead (checked with kramdown-rfc 1.7.39), so a requirement ID
+                # there must not replace the item's: warn and keep the leading one.
+                leading_id = ial_req_id(leading.group("body"))
+                if leading_id:
+                    if req_id and req_id != leading_id:
+                        warnings.append(
+                            f"{relative}:{unit_line}: {req_id} follows a list item that already "
+                            f"has {leading_id}; kramdown-rfc puts it on the list, not the item"
+                        )
+                    req_id = leading_id
                 text = text[: item.end()] + text[leading.end() :]
         trailing = TRAILING_IAL_RE.search(text)
         if trailing and ial_req_id(trailing.group("body")):

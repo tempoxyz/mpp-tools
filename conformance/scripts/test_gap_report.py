@@ -1302,5 +1302,21 @@ class ReviewFindingTests(unittest.TestCase):
             self.assertEqual(git_commit(repo), label)
 
 
+class LeadingListItemIdTest(unittest.TestCase):
+    def test_block_ial_after_item_does_not_replace_leading_id(self) -> None:
+        # kramdown-rfc anchors the item with its leading IAL; the block IAL on the next
+        # line goes on the enclosing list.
+        with tempfile.TemporaryDirectory() as directory:
+            draft = Path(directory) / "draft-tempo-charge-00.md"
+            draft.write_text(
+                "# Rules\n\n- {: #req-tempo-charge-001} Clients MUST pay.\n"
+                "{: #req-tempo-charge-002}\n",
+                encoding="utf-8",
+            )
+            requirements, warnings, _rows = extract_requirements(draft, draft.name)
+        self.assertEqual([r.req_id for r in requirements], ["req-tempo-charge-001"])
+        self.assertTrue(any("req-tempo-charge-002 follows a list item" in w for w in warnings))
+
+
 if __name__ == "__main__":
     unittest.main()
