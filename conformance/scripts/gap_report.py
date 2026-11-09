@@ -864,7 +864,8 @@ def scenario_commands(vector: dict[str, Any], scenario: dict[str, Any]) -> tuple
     """Return the legacy commands a scenario's tests call, as _run_scenario dispatches them.
 
     commands.operation calls no legacy command; a generate command is the only one called
-    when present. Otherwise a parse test calls the parse command, a format test the format
+    when present. A test whose input is null (no wire value to parse, no object to
+    format) is skipped by the runner and calls nothing. Otherwise a parse test calls the parse command, a format test the format
     command, and a roundtrip (which runs only when both exist) calls both. A format test
     expecting success (true, not "exact") compares the formatted value semantically, by
     parsing both wire values with the parse command (except for base64url-encode), so it
@@ -877,14 +878,21 @@ def scenario_commands(vector: dict[str, Any], scenario: dict[str, Any]) -> tuple
         return (commands["generate"],)
     tests = scenario.get("tests") or {}
     parse, format_ = commands.get("parse"), commands.get("format")
-    roundtrip = tests.get("roundtrip") is True and bool(parse) and bool(format_)
-    semantic_format = (
-        tests.get("format") is True and bool(parse) and format_ != "base64url-encode"
-    )
+    # The runner reads its inputs as _run_scenario does: a base64url vector's decoded and
+    # encoded values, otherwise object and wire. It skips a parse test with no wire value
+    # and a format or roundtrip test with no object, so such a test checks nothing.
+    if parse and parse.startswith("base64url-"):
+        obj, wire = scenario.get("decoded"), scenario.get("encoded")
+    else:
+        obj, wire = scenario.get("object"), scenario.get("wire")
+    runs_parse = tests.get("parse") is not None and bool(parse) and wire is not None
+    runs_format = tests.get("format") is not None and bool(format_) and obj is not None
+    roundtrip = tests.get("roundtrip") is True and bool(parse) and bool(format_) and obj is not None
+    semantic_format = runs_format and tests.get("format") is True and bool(parse) and format_ != "base64url-encode"
     needed = []
-    if parse and (tests.get("parse") is not None or roundtrip or semantic_format):
+    if parse and (runs_parse or roundtrip or semantic_format):
         needed.append(parse)
-    if format_ and (tests.get("format") is not None or roundtrip):
+    if format_ and (runs_format or roundtrip):
         needed.append(format_)
     return tuple(needed)
 
@@ -1005,6 +1013,11 @@ def load_claims(
     return claims
 
 
+# Flow case flags under which the compliance server answers without a Payment challenge
+# (flows/compliance-server.ts handles each before it builds one).
+NO_CHALLENGE_FLAGS = ("force_status", "no_payment", "discovery", "json_rpc")
+
+
 def flow_mode(
     flow_case: dict[str, Any], cases_by_path: dict[str, dict[str, Any]] | None = None
 ) -> str:
@@ -1025,14 +1038,15 @@ def flow_mode(
     if flow_case.get("no_payment"):
         return "raw_http"
     # The first request goes to challenge_path's case when one is named. The compliance
-    # server answers any force_status case, 402 included, with that bare status and no
-    # WWW-Authenticate header, so flow_runner stops (unexpected_status or
+    # server answers that case without a challenge when it is a force_status (any status,
+    # 402 included, with no WWW-Authenticate header), no_payment (200), discovery or
+    # json_rpc (both 200) case, so flow_runner stops (unexpected_status or
     # missing_challenge) before it calls the adapter: it checks the reference server,
     # not an SDK.
     first = flow_case
     if flow_case.get("challenge_path") and cases_by_path is not None:
         first = cases_by_path.get(str(flow_case["challenge_path"]), flow_case)
-    if first.get("force_status"):
+    if any(first.get(flag) for flag in NO_CHALLENGE_FLAGS):
         return "raw_http"
     return "ordinary"
 

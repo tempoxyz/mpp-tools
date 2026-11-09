@@ -31,6 +31,7 @@ from gap_report import (
     load_profiles,
     main,
     render_markdown,
+    scenario_commands,
     scenario_operations,
     version_checker,
 )
@@ -466,14 +467,14 @@ class ReportTests(unittest.TestCase):
         vector = {"commands": {"parse": "parse-www-authenticate", "format": "format-www-authenticate"}}
         # A format test expecting success compares semantically, parsing both wire values.
         self.assertEqual(
-            scenario_operations(vector, {"tests": {"format": True}}),
+            scenario_operations(vector, {"object": {}, "tests": {"format": True}}),
             ("challenge.parse", "challenge.format"),
         )
         self.assertEqual(
-            scenario_operations(vector, {"tests": {"format": "exact"}}), ("challenge.format",)
+            scenario_operations(vector, {"object": {}, "tests": {"format": "exact"}}), ("challenge.format",)
         )
         self.assertEqual(
-            scenario_operations(vector, {"tests": {"roundtrip": True}}),
+            scenario_operations(vector, {"object": {}, "tests": {"roundtrip": True}}),
             ("challenge.parse", "challenge.format"),
         )
         claim = Claim("vectors/a.json#x", ["req-core-001"], operation="challenge.parse",
@@ -1179,6 +1180,11 @@ class FlowModeForcedStatusTest(unittest.TestCase):
         via = {"name": "v", "path": "/v", "challenge_path": "/f"}
         self.assertEqual(flow_mode(via, {"/f": forced, "/v": via}), "raw_http")
         self.assertEqual(flow_mode({"name": "o", "path": "/o", "challenge_path": "/v"}, {"/v": via}), "ordinary")
+        # Nor does a no_payment, discovery or JSON-RPC case answer with a challenge.
+        for flag in ("no_payment", "discovery", "json_rpc"):
+            target = {"name": "t", "path": "/t", flag: True}
+            via_flag = {"name": "w", "path": "/w", "challenge_path": "/t"}
+            self.assertEqual(flow_mode(via_flag, {"/t": target, "/w": via_flag}), "raw_http")
         self.assertEqual(
             flow_mode({"name": "c", "path": "/c", "force_status": 500, "client_flow": True}),
             "client_flow",
@@ -1322,6 +1328,18 @@ class LeadingListItemIdTest(unittest.TestCase):
             requirements, warnings, _rows = extract_requirements(draft, draft.name)
         self.assertEqual([r.req_id for r in requirements], ["req-tempo-charge-001"])
         self.assertTrue(any("req-tempo-charge-002 follows a list item" in w for w in warnings))
+
+
+class SkippedTestTest(unittest.TestCase):
+    def test_tests_with_null_inputs_call_nothing(self) -> None:
+        # vector_runner skips a format test with no object and a parse test with no wire.
+        vector = {"commands": {"parse": "parse-challenge", "format": "format-challenge"}}
+        self.assertEqual(scenario_commands(vector, {"object": None, "tests": {"format": True}}), ())
+        self.assertEqual(scenario_commands(vector, {"wire": None, "tests": {"parse": True}}), ())
+        self.assertEqual(
+            scenario_commands(vector, {"object": {}, "tests": {"format": True}}),
+            ("parse-challenge", "format-challenge"),
+        )
 
 
 class ListBoundaryTest(unittest.TestCase):
