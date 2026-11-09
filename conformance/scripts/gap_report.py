@@ -966,6 +966,13 @@ def build_report(
     """
     # Claims the runner refuses outright count nowhere: not in the suite-wide coverage,
     # the per-draft and total counts, or any SDK profile.
+    # Every ID any claim cites, run or not: a typo'd or stale ID is worth reporting even on
+    # a claim that covers nothing (a server_only flow case, a scenario no adapter runs, or
+    # one the runner rejects), or it would hide behind the generic warning.
+    cited: dict[str, list[str]] = {}
+    for claim in claims:
+        for req_id in claim.requirements:
+            cited.setdefault(req_id, []).append(claim.source)
     claims = [claim for claim in claims if not rejected_by_runner(claim, warnings)]
     if adapters is None:
         adapters = load_capabilities()
@@ -995,7 +1002,7 @@ def build_report(
         for req_id in claim.requirements:
             coverage.setdefault(req_id, []).append(claim.source)
     known = {requirement.req_id for requirement in requirements if requirement.req_id}
-    unknown = sorted(req_id for req_id in coverage if req_id not in known)
+    unknown = sorted(req_id for req_id in cited if req_id not in known)
 
     drafts: dict[str, dict[str, Any]] = {}
 
@@ -1079,6 +1086,10 @@ def build_report(
             req_id: sorted(sources) for req_id, sources in sorted(coverage.items())
         },
         "unknown_references": unknown,
+        # Every claim citing each unknown ID, including claims that cover nothing.
+        "unknown_reference_sources": {
+            req_id: sorted(set(cited[req_id])) for req_id in unknown
+        },
         "profiles": profile_report,
         "warnings": warnings,
     }
@@ -1119,7 +1130,7 @@ def render_markdown(report: dict[str, Any]) -> str:
     if report["unknown_references"]:
         lines += ["", "## Unknown requirement IDs", ""]
         lines += [
-            f"- \x60{req_id}\x60: {', '.join(report['coverage'][req_id])}"
+            f"- \x60{req_id}\x60: {', '.join(report['unknown_reference_sources'][req_id])}"
             for req_id in report["unknown_references"]
         ]
     if report["warnings"]:

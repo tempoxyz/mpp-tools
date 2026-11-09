@@ -1079,5 +1079,28 @@ class CyclopsFindingTests(unittest.TestCase):
         )
         self.assertTrue(any(w.startswith("flows/flows.json#s: server_only") for w in warnings))
 
+    def test_unknown_ids_reported_on_claims_that_cover_nothing(self) -> None:
+        requirements = [
+            Requirement("core", "draft-core.md", "x", 1, "MUST", "req-core-001", None),
+        ]
+        claims = [
+            # never run, so it covers nothing, but its unknown ID must still be reported
+            Claim("flows/flows.json#s", ["req-core-998"], flow_mode="server_only"),
+            # no adapter advertises the operation
+            Claim("vectors/a.json#op", ["req-core-999"], operation="receipt.parse"),
+        ]
+        warnings: list[str] = []
+        report = build_report(
+            requirements, claims, {}, warnings, {}, adapters={"go": ["challenge.parse"]}
+        )
+        self.assertEqual(report["coverage"], {})
+        self.assertEqual(report["unknown_references"], ["req-core-998", "req-core-999"])
+        self.assertEqual(
+            report["unknown_reference_sources"],
+            {"req-core-998": ["flows/flows.json#s"], "req-core-999": ["vectors/a.json#op"]},
+        )
+        markdown = render_markdown(report)
+        self.assertIn("req-core-998\x60: flows/flows.json#s", markdown)
+
 if __name__ == "__main__":
     unittest.main()
