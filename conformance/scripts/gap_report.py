@@ -890,8 +890,14 @@ def extract_all(
     warnings: list[str] = []
     table_rows: dict[str, int] = {}
     first_path: dict[str, str] = {}
-    # Highest revision first, so a stray older copy of a draft is the one skipped.
-    for path in sorted(draft_paths(specs_dir), key=lambda p: p.name, reverse=True):
+    # Highest revision first, so a stray older copy of a draft is the one skipped. Sort on
+    # the -NN number, not the name: by name an unversioned draft-x.md ('.' > '-') would beat
+    # draft-x-02.md. A file without a revision ranks below every explicit one.
+    def revision(path: Path) -> tuple[int, str]:
+        match = re.search(r"-(\d{2})\.md$", path.name)
+        return (int(match.group(1)) if match else -1, path.name)
+
+    for path in sorted(draft_paths(specs_dir), key=revision, reverse=True):
         relative = path.relative_to(specs_dir).as_posix()
         short = draft_short_name(path.name)
         if short in first_path:
