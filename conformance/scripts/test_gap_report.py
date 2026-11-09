@@ -1225,6 +1225,10 @@ class FlowModeForcedStatusTest(unittest.TestCase):
         self.assertEqual(flow_mode(via, both), "ordinary")
         loop = {"/a": {"name": "a", "path": "/a", "redirect_to": "/b"}, "/b": {"name": "b", "path": "/b", "redirect_to": "/a"}}
         self.assertEqual(flow_mode(loop["/a"], loop), "raw_http")
+        # urllib follows a 302 only for GET, HEAD and POST.
+        for method, mode in [("POST", "ordinary"), ("HEAD", "ordinary"), ("PUT", "raw_http"), ("DELETE", "raw_http")]:
+            case = {"name": "r", "path": "/r", "redirect_to": "/t", "http_method": method}
+            self.assertEqual(flow_mode(case, cases), mode, method)
 
 
 class GenerateCommitStabilityTest(unittest.TestCase):

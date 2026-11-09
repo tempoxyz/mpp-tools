@@ -1058,13 +1058,16 @@ def flow_mode(
     if flow_case.get("challenge_path") and cases_by_path is not None:
         # flow_runner fails with missing_challenge_case, before any adapter call.
         first = cases_by_path.get(str(flow_case["challenge_path"]))
-    return "ordinary" if answers_challenge(first, cases_by_path) else "raw_http"
+    # flow_runner sends that first request with the case's own method (perform_request).
+    method = str(flow_case.get("http_method", "GET")).upper()
+    return "ordinary" if answers_challenge(first, cases_by_path, method=method) else "raw_http"
 
 
 def answers_challenge(
     flow_case: dict[str, Any] | None,
     cases_by_path: dict[str, dict[str, Any]] | None,
     hops: int = 0,
+    method: str = "GET",
 ) -> bool:
     """Whether the compliance server answers flow_runner's first request with a 402 challenge.
 
@@ -1074,7 +1077,9 @@ def answers_challenge(
     redirect_to case answers 302, and flow_runner's urllib follows it: it reaches the adapter
     only when the target is another case on the same server that answers a challenge. A
     redirect to another port (redirect_to_port_offset) or host, to no case, a loop, or any
-    redirect when cases_by_path is unknown does not count.
+    redirect when cases_by_path is unknown does not count. urllib follows the server's 302
+    only for GET, HEAD and POST (POST turns into GET), so a PUT, PATCH, DELETE or OPTIONS
+    request stops at the 302 before any adapter call.
     """
     if flow_case is None or hops > len(cases_by_path or {}):
         return False
@@ -1088,11 +1093,14 @@ def answers_challenge(
     target = flow_case.get("redirect_to")
     if target is None:
         return not flow_case.get("no_payment")
+    if method not in {"GET", "HEAD", "POST"}:
+        return False
     split = urllib.parse.urlsplit(str(target))
     if cases_by_path is None or flow_case.get("redirect_to_port_offset") or split.scheme or split.netloc:
         return False
     target_path = urllib.parse.urljoin(path, split.path) if split.path else path
-    return answers_challenge(cases_by_path.get(target_path), cases_by_path, hops + 1)
+    next_method = "HEAD" if method == "HEAD" else "GET"
+    return answers_challenge(cases_by_path.get(target_path), cases_by_path, hops + 1, next_method)
 
 
 def load_profiles(adapters_dir: Path = ADAPTERS_DIR) -> dict[str, dict[str, Any]]:
