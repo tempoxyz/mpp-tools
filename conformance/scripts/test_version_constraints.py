@@ -36,6 +36,11 @@ class VersionConstraintTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "Invalid SemVer version"):
                     matches_constraint(version, ">=1.0.0")
 
+    def test_hyphen_range_semantic_version_cannot_parse_is_invalid(self) -> None:
+        # semantic_version raises AttributeError here; it must surface as ValueError.
+        with self.assertRaisesRegex(ValueError, "Invalid SemVer constraint"):
+            matches_constraint("0.5.0", ">=0.4 - 0.6")
+
     def test_invalid_constraints(self) -> None:
         constraints = [
             "",

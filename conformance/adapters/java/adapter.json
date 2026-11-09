@@ -12,6 +12,9 @@
     "installDist"
   ],
   "cwd": ".",
+  "profile": [
+    "core"
+  ],
   "capabilities": [
     "challenge.parse",
     "challenge.format",

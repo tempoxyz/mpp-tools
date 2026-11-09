@@ -1,12 +1,13 @@
 # Conformance Testing Makefile
 # Cross-SDK protocol compatibility testing for MPP implementations
 
-.PHONY: all update-locks update-java install install-runner install-java use-local-sdk test test-all test-sdk test-typescript test-rust test-python test-go test-ruby test-java test-json flow flow-sdk flow-typescript flow-rust flow-python flow-go flow-ruby flow-java server-verify server-verify-sdk server-verify-go pair pair-sdk update-pair-snapshots update-flow-golden clean help
+.PHONY: all update-locks update-java install install-runner install-java use-local-sdk test test-all test-sdk test-typescript test-rust test-python test-go test-ruby test-java test-json flow flow-sdk flow-typescript flow-rust flow-python flow-go flow-ruby flow-java server-verify server-verify-sdk server-verify-go pair pair-sdk update-pair-snapshots update-flow-golden gap-report clean help
 
 RUBY ?= ruby
 BUNDLE ?= bundle
 ADAPTER ?=
 SDK_PATH ?=
+SPECS_PATH ?=
 RUNNER_PYTHON ?= uv run --locked python
 
 # Default target
@@ -188,6 +189,10 @@ test-json:
 	@echo "→ Running conformance tests (JSON output)..."
 	$(RUNNER_PYTHON) scripts/vector_runner.py --output json
 
+gap-report:
+	@echo "→ Writing the requirement gap report..."
+	$(RUNNER_PYTHON) scripts/gap_report.py $(if $(SPECS_PATH),--specs "$(SPECS_PATH)")
+
 #------------------------------------------------------------------------------
 # Individual adapter CLI tests (for debugging)
 #------------------------------------------------------------------------------
@@ -247,6 +252,7 @@ help:
 	@echo "  pair-sdk         Run pair tests for ADAPTER against itself and TypeScript"
 	@echo "  update-pair-snapshots  Regenerate pair snapshots from the TypeScript pair"
 	@echo "  update-flow-golden  Regenerate flow golden results"
+	@echo "  gap-report       Report spec requirements vectors and flows cover (SPECS_PATH=../mpp-specs)"
 	@echo "  test-typescript  Test TypeScript adapter only"
 	@echo "  test-rust        Test Rust adapter only"
 	@echo "  test-python      Test Python adapter only"

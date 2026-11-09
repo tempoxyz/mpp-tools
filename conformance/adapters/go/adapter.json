@@ -14,6 +14,10 @@
     "."
   ],
   "cwd": ".",
+  "profile": [
+    "core",
+    "tempo-charge"
+  ],
   "capabilities": [
     "challenge.parse",
     "challenge.format",
