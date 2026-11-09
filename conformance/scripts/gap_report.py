@@ -47,14 +47,29 @@ KEYWORD_RE = re.compile(
 )
 REQ_ID_RE = re.compile(r"^req-[a-z0-9-]+-[0-9]{3}$")
 IAL_LINE_RE = re.compile(r"^\s*\{:(?P<body>[^}]*)\}\s*$")
-INLINE_IAL_RE = re.compile(r"\s*\{:(?P<body>[^}]*)\}\s*$")
+# A trailing IAL: '{:' then no '{' or '}' up to the closing '}' at the end. Anchored on
+# its own '{:' (no leading whitespace quantifier) so a search stays linear.
+INLINE_IAL_RE = re.compile(r"\{:(?P<body>[^{}]*)\}\s*$")
 IAL_ID_RE = re.compile(r"#(req-[A-Za-z0-9_-]+)")
-HEADING_RE = re.compile(
-    r"^(?P<hashes>#{1,6})\s+(?P<title>.*?)\s*(?:\{#(?P<anchor>[^}\s]+)\})?\s*$"
-)
+# Headings are parsed in two linear steps (see parse_heading) rather than with one regex
+# whose lazy title and optional whitespace runs backtrack on long whitespace.
+HEADING_RE = re.compile(r"^#{1,6}\s+(?P<rest>.*)$")
+HEADING_ANCHOR_RE = re.compile(r"\{#(?P<anchor>[^{}\s]+)\}$")
 LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
 DEFINITION_RE = re.compile(r"^\s*:\s+")
 FENCE_RE = re.compile(r"^\s*(\x60{3,}|~{3,})")
+
+
+def parse_heading(line: str) -> tuple[str, str | None] | None:
+    """Return (title, anchor) for a Markdown heading line, or None."""
+    match = HEADING_RE.match(line)
+    if not match:
+        return None
+    rest = match.group("rest").strip()
+    anchor = HEADING_ANCHOR_RE.search(rest)
+    if anchor:
+        return rest[: anchor.start()].rstrip(), anchor.group("anchor")
+    return rest, None
 
 
 @dataclass
@@ -136,7 +151,7 @@ def extract_requirements(
         inline = INLINE_IAL_RE.search(text)
         if inline:
             req_id = req_id or ial_req_id(inline.group("body"))
-            text = text[: inline.start()]
+            text = text[: inline.start()].rstrip()
         found = keywords_in(text)
         if not found:
             if req_id:
@@ -210,10 +225,10 @@ def extract_requirements(
         if not stripped or stripped.startswith("--- "):
             flush()
             continue
-        heading = HEADING_RE.match(line)
+        heading = parse_heading(line)
         if heading:
             flush()
-            section = heading.group("anchor") or slugify(heading.group("title"))
+            section = heading[1] or slugify(heading[0])
             continue
         if LIST_ITEM_RE.match(line) or DEFINITION_RE.match(line):
             flush()
@@ -573,16 +588,28 @@ def render_markdown(report: dict[str, Any]) -> str:
 
 
 def git_commit(path: Path) -> str | None:
+    """Return the commit the specs at path were read from, or None if unknown.
+
+    None when path is not the root of a git checkout (its HEAD would belong to an
+    enclosing repository); a "-dirty" suffix when the checkout has uncommitted
+    changes, since the counted rules then differ from that commit's tree.
+    """
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(path), *args], capture_output=True, text=True, check=True
+        ).stdout.strip()
+
     try:
-        result = subprocess.run(
-            ["git", "-C", str(path), "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+        if Path(git("rev-parse", "--show-toplevel")).resolve() != path.resolve():
+            return None
+        commit = git("rev-parse", "HEAD")
+        dirty = bool(git("status", "--porcelain", "--untracked-files=no"))
     except (OSError, subprocess.CalledProcessError):
         return None
-    return result.stdout.strip() or None
+    if not commit:
+        return None
+    return f"{commit}-dirty" if dirty else commit
 
 
 def clone_specs(destination: Path, ref: str) -> Path:
