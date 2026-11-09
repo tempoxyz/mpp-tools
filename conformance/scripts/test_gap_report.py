@@ -1172,7 +1172,13 @@ class FlowModeForcedStatusTest(unittest.TestCase):
     def test_forced_non_402_status_is_server_only_coverage(self) -> None:
         # flow_runner stops at the first non-402 response, before any adapter call.
         self.assertEqual(flow_mode({"name": "e", "path": "/e", "force_status": 500}), "raw_http")
-        self.assertEqual(flow_mode({"name": "p", "path": "/p", "force_status": 402}), "ordinary")
+        # A forced 402 carries no WWW-Authenticate either, so the adapter is never called.
+        self.assertEqual(flow_mode({"name": "p", "path": "/p", "force_status": 402}), "raw_http")
+        # The first request goes to challenge_path's case, so its forced status decides.
+        forced = {"name": "f", "path": "/f", "force_status": 500}
+        via = {"name": "v", "path": "/v", "challenge_path": "/f"}
+        self.assertEqual(flow_mode(via, {"/f": forced, "/v": via}), "raw_http")
+        self.assertEqual(flow_mode({"name": "o", "path": "/o", "challenge_path": "/v"}, {"/v": via}), "ordinary")
         self.assertEqual(
             flow_mode({"name": "c", "path": "/c", "force_status": 500, "client_flow": True}),
             "client_flow",
@@ -1341,6 +1347,38 @@ class ListBoundaryTest(unittest.TestCase):
         )
         self.assertEqual([r.req_id for r in requirements], [None, "req-tempo-charge-002"])
         self.assertTrue(any("req-tempo-charge-001 is not indented" in w for w in warnings))
+
+
+class LineSplittingTest(unittest.TestCase):
+    def test_only_lf_cr_and_crlf_end_lines(self) -> None:
+        # kramdown keeps U+2028 or a form feed inside a line, so an IAL after one is inline
+        # text and tags nothing; CRLF and CR end lines as LF does.
+        requirements, _, _ = read_draft(
+            "Client MUST pay.\u2028{: #req-tempo-charge-001}\n\n"
+            "Server MUST charge.\x0c{: #req-tempo-charge-002}\n\n"
+            "Payer MUST sign.\r\n{: #req-tempo-charge-003}\r\n\r\n"
+            "Payee MUST settle.\r{: #req-tempo-charge-004}\r"
+        )
+        self.assertEqual(
+            [r.req_id for r in requirements],
+            [None, None, "req-tempo-charge-003", "req-tempo-charge-004"],
+        )
+
+
+class SetextAndEscapeTest(unittest.TestCase):
+    def test_setext_heading_is_not_a_rule(self) -> None:
+        # kramdown-rfc renders 'Title MUST x' over '===' as a section heading; after two
+        # lines of text the underline is paragraph text instead.
+        requirements, _, _ = read_draft(
+            "Para.\n\nHeading MUST x\n==============\n\nText MAY y.\n\n"
+            "Line one MUST\nline two\n===\n"
+        )
+        self.assertEqual([r.section for r in requirements][0], "heading-must-x")
+        self.assertEqual([r.keywords for r in requirements], [["MAY"], ["MUST"]])
+
+    def test_escaped_brace_in_ial_value(self) -> None:
+        requirements, _, _ = read_draft('P MUST a.\n{: title="a\\}" id="req-tempo-charge-001"}\n')
+        self.assertEqual([r.req_id for r in requirements], ["req-tempo-charge-001"])
 
 
 class AttributeListDefinitionTest(unittest.TestCase):

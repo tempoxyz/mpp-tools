@@ -62,7 +62,12 @@ QUOTED_KEYWORD_RE = re.compile(
 REQ_ID_RE = re.compile(r"^req-[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{3}$")
 # A block IAL alone on its line, such as '{: #req-core-001}'. kramdown extension tags
 # ('{::boilerplate ...}', '{:/}') match too; ial_req_id reads no ID from them.
-IAL_LINE_RE = re.compile(r"^\s*\{:(?P<body>[^}]*)\}\s*$")
+# The body may hold '\}', an escaped brace, as kramdown's ALD_ANY_CHARS allows, so
+# '{: title="a\}" id="req-core-001"}' is one IAL (checked with kramdown-rfc).
+IAL_LINE_RE = re.compile(r"^\s*\{:(?P<body>(?:\\\}|[^}])*)\}\s*$")
+# A setext heading's underline: kramdown makes the single line of text right before it,
+# at a block boundary, a heading rather than a paragraph.
+SETEXT_UNDERLINE_RE = re.compile(r"^ {0,3}(?:=+|-+)[ \t]*$")
 # An IAL at the very start of a list item's text, '- {: #req-core-001} Clients MUST ...':
 # kramdown-rfc gives the list item that ID.
 LEADING_IAL_RE = re.compile(r"\{:(?P<body>[^{}]*)\}[ \t]*")
@@ -450,7 +455,12 @@ def extract_requirements(
       is read a second time with all of them (alds; callers leave it None).
     """
     draft = draft_short_name(path.name)
-    lines = path.read_text(encoding="utf-8").splitlines()
+    # Split only where kramdown does: it turns CRLF and CR into LF, then reads LF-ended
+    # lines. str.splitlines() would also split at U+2028, U+0085, form feed and the like,
+    # which kramdown leaves inside a line, turning an inline '{: #id}' into a block IAL.
+    lines = re.sub(r"\r\n?", "\n", path.read_text(encoding="utf-8")).split("\n")
+    if lines and not lines[-1]:
+        lines.pop()  # the final newline ends the last line rather than starting another
     requirements: list[Requirement] = []
     warnings: list[str] = []
     section = "abstract"
@@ -700,6 +710,14 @@ def extract_requirements(
         if not stripped:
             flush()
             boundary = True
+            continue
+        if len(unit) == 1 and unit_line == number - 1 and not item_indent and SETEXT_UNDERLINE_RE.match(line):
+            # 'Title\n=====': the line above is a setext heading, not a rule (checked with
+            # kramdown-rfc). After two or more lines of text the underline is just more of
+            # the paragraph, as kramdown only reads a setext heading at a block's start.
+            heading = parse_heading("# " + unit[0])
+            unit.clear()
+            section = (heading[1] or slugify(heading[0])) if heading else section
             continue
         heading = parse_heading(line)
         if heading:
@@ -964,7 +982,9 @@ def load_claims(
     flow_cases = load_flow_cases(flow_cases_path)
     # flow_runner looks a challenge_path up among every case's path, server_only ones
     # included, and fails the case before sending anything when none has it.
-    flow_paths = {str(flow_case.get("path", "/")) for flow_case in flow_cases}
+    # Last case wins for a shared path, as in flow_runner's cases_by_path.
+    cases_by_path = {str(flow_case.get("path", "/")): flow_case for flow_case in flow_cases}
+    flow_paths = set(cases_by_path)
     for flow_case in flow_cases:
         if flow_case.get("requirements"):
             challenge_path = flow_case.get("challenge_path")
@@ -978,15 +998,21 @@ def load_claims(
                 Claim(
                     source=f"flows/{flow_cases_path.name}#{flow_case['name']}",
                     requirements=flow_case["requirements"],
-                    flow_mode=flow_mode(flow_case),
+                    flow_mode=flow_mode(flow_case, cases_by_path),
                     runner_error=flow_error,
                 )
             )
     return claims
 
 
-def flow_mode(flow_case: dict[str, Any]) -> str:
-    """Classify a flow case the way flow_runner dispatches it."""
+def flow_mode(
+    flow_case: dict[str, Any], cases_by_path: dict[str, dict[str, Any]] | None = None
+) -> str:
+    """Classify a flow case the way flow_runner dispatches it.
+
+    cases_by_path maps each flow case's path to its case, so a challenge_path resolves
+    to the case whose response the runner actually reads first.
+    """
     if flow_case.get("server_only"):
         return "server_only"
     # Same order as flow_runner's dispatch: discovery and JSON-RPC cases send raw
@@ -998,9 +1024,15 @@ def flow_mode(flow_case: dict[str, Any]) -> str:
         return "client_flow"
     if flow_case.get("no_payment"):
         return "raw_http"
-    # A forced non-402 status (a server-error case) ends the case on the first response,
-    # before flow_runner calls the adapter: it checks the reference server, not an SDK.
-    if flow_case.get("force_status") and flow_case["force_status"] != 402:
+    # The first request goes to challenge_path's case when one is named. The compliance
+    # server answers any force_status case, 402 included, with that bare status and no
+    # WWW-Authenticate header, so flow_runner stops (unexpected_status or
+    # missing_challenge) before it calls the adapter: it checks the reference server,
+    # not an SDK.
+    first = flow_case
+    if flow_case.get("challenge_path") and cases_by_path is not None:
+        first = cases_by_path.get(str(flow_case["challenge_path"]), flow_case)
+    if first.get("force_status"):
         return "raw_http"
     return "ordinary"
 
