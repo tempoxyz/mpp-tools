@@ -4,28 +4,51 @@
 Reads every `specs/**/*.md` draft in a tempoxyz/mpp-specs checkout (a fresh
 clone of main when --specs is omitted) and extracts each paragraph or list item
 that contains an RFC 2119/8174 keyword in capitals. A requirement's key is the
-`{: #req-<draft>-<nnn>}` IAL right after it when present, otherwise
+anchor a `{: #req-<draft>-<nnn>}` IAL gives it when present, otherwise
 `<draft>#<section>:<sha256 prefix>`. Vector scenarios and flow cases claim
 requirement IDs with an optional `requirements` array; adapter manifests claim
 drafts with an optional `profile`. The report lists, per draft, how many rules
 there are, how many carry an ID and how many a vector or flow covers.
+
+Drafts are read from the XML kramdown-rfc renders them to, not from their Markdown:
+kramdown-rfc decides what is a paragraph, a list item, a table, code or a comment,
+and which element an IAL tags, exactly as it does for the published draft. Reading the
+Markdown by hand had to re-implement kramdown's grammar (IALs and attribute list
+definitions, reference links, comments, code spans and blocks, tables, setext
+headings, line splitting) and kept getting corners of it wrong.
+
+The trade-off is a dependency: kramdown-rfc (a Ruby gem) must be installed, at the
+version the checkout's Gemfile.lock pins (KRAMDOWN_RFC_VERSION when it has none), since
+another version may render, and so count, the drafts differently. The report checks
+that version before it reads any draft and fails with an error naming the fix when the
+command is missing or another version answers; rendering through Docker (mpp-specs'
+ietf-spec-tools image) or with RubyGems' `kramdown-rfc _<version>_` selector works
+through --kramdown-rfc. Rendering costs about a second per draft, so the drafts are
+rendered in parallel. The rendered XML carries no source line numbers below the section
+level, so a rule's line is found by matching its words against the Markdown; it is
+only used to point a reader at the rule.
 """
 
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import hashlib
-import html.entities
 import json
+import os
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
+import xml.parsers.expat
+from bisect import bisect_left
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 
 from harness import (
     ADAPTERS_DIR,
@@ -46,9 +69,31 @@ from version_constraints import matches_constraint
 SPECS_REPOSITORY = "https://github.com/tempoxyz/mpp-specs"
 EXCERPT_LENGTH = 160
 
+# The kramdown-rfc version mpp-specs renders its drafts with (its Gemfile.lock at the
+# time of writing). Used when a checkout has no Gemfile.lock pinning one; the rendered
+# fixtures in testdata/ were made with it.
+KRAMDOWN_RFC_VERSION = "1.7.39"
+# The resolved gem in a Gemfile.lock's GEM specs, indented four spaces; the two-space
+# DEPENDENCIES and CHECKSUMS entries name the same version or a constraint.
+GEMFILE_LOCK_RE = re.compile(r"^    kramdown-rfc \(([^()\s]+)\)$", re.MULTILINE)
+# 'kramdown-rfc --version' prints 'kramdown-rfc 1.7.39'.
+KRAMDOWN_VERSION_RE = re.compile(r"^kramdown-rfc (\S+)\s*$", re.MULTILINE)
+# How long one draft may take to render; real drafts take about a second.
+RENDER_TIMEOUT_SECONDS = 300
+# Environment for every render. KRAMDOWN_SAFE turns off {::include}, so a draft cannot
+# copy other files on this machine into the report (no draft includes one; the
+# published build would differ if one did, and that draft's rules would be missed).
+# KRAMDOWN_NO_SOURCE leaves out the gzipped copy of the Markdown kramdown-rfc appends,
+# which the report never reads, and KRAMDOWN_OFFLINE keeps reference lookups off the
+# network (a non-standalone render only declares references as entities anyway).
+RENDER_ENV = {"KRAMDOWN_SAFE": "1", "KRAMDOWN_NO_SOURCE": "1", "KRAMDOWN_OFFLINE": "1"}
+
 # Longest alternatives first so "MUST NOT" is not read as "MUST". keywords_in collapses
-# whitespace before matching, so a two-word keyword hard-wrapped across lines ("MUST" at
-# the end of one line, "NOT" at the start of the next) still matches as "MUST NOT".
+# whitespace before matching, so a two-word keyword wrapped across lines ("MUST" at the
+# end of one line, "NOT" at the start of the next) still matches as "MUST NOT".
+# Matched on the rendered text rather than read from kramdown-rfc's <bcp14> tags: it
+# tags keywords inside autolinks and leaves a keyword written with character references
+# ('&#77;UST') untagged, while readers see the text, and mpp-specs' linter matches it.
 KEYWORD_RE = re.compile(
     r"(?<![A-Za-z0-9])(?:MUST NOT|SHALL NOT|SHOULD NOT|NOT RECOMMENDED|MUST|REQUIRED|SHALL|SHOULD|RECOMMENDED|MAY|OPTIONAL)(?![A-Za-z0-9])"
 )
@@ -56,7 +101,7 @@ KEYWORD_RE = re.compile(
 # the keyword rather than stating a rule. Only that exact form is dropped, the way
 # mpp-specs' scripts/lint_requirements.py does (QUOTED_KEYWORDS), so both tools agree on
 # which blocks are rules: a keyword in a longer quoted phrase ("clients MUST retry") or
-# in single quotes still counts.
+# in single quotes still counts. kramdown-rfc keeps straight quotes as they are.
 QUOTED_KEYWORD_RE = re.compile(
     r'"(?:MUST NOT|SHALL NOT|SHOULD NOT|NOT RECOMMENDED|MUST|REQUIRED|SHALL|SHOULD|RECOMMENDED|MAY|OPTIONAL)"'
 )
@@ -64,125 +109,72 @@ QUOTED_KEYWORD_RE = re.compile(
 # hyphens, so an empty component such as req-core--001 is malformed. The schemas use the
 # same pattern.
 REQ_ID_RE = re.compile(r"^req-[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{3}$")
-# A block IAL alone on its line, such as '{: #req-core-001}'. kramdown extension tags
-# ('{::boilerplate ...}', '{:/}') match too; ial_req_id reads no ID from them.
-# The body may hold '\}', an escaped brace, as kramdown's ALD_ANY_CHARS allows, so
-# '{: title="a\}" id="req-core-001"}' is one IAL (checked with kramdown-rfc).
-IAL_LINE_RE = re.compile(r"^\s*\{:(?P<body>(?:\\\}|[^}])*)\}\s*$")
-# A setext heading's underline: kramdown makes the single line of text right before it,
-# at a block boundary, a heading rather than a paragraph.
-SETEXT_UNDERLINE_RE = re.compile(r"^ {0,3}(?:=+|-+)[ \t]*$")
-# An IAL at the very start of a list item's text, '- {: #req-core-001} Clients MUST ...':
-# kramdown-rfc gives the list item that ID.
-LEADING_IAL_RE = re.compile(r"\{:(?P<body>[^{}]*)\}[ \t]*")
-# An IAL at the end of a line of text, after a space or punctuation rather than right
-# after a span element (*em*, `code`, [link]). kramdown-rfc renders it as literal
-# text and the rule gets no ID (checked with kramdown-rfc 1.7.39), so the report warns
-# rather than reading an ID from it. A backslash-escaped '\{:' is literal text as well.
-TRAILING_IAL_RE = re.compile(r"(?<![\\*_\x60\])>])\{:(?P<body>[^{}]*)\}\s*$")
-# One attribute of an IAL body, scanned the way kramdown's parse_attribute_list does:
-# key="value" (or 'value'), one or more #id and .class names run together, or a bare
-# reference name ('ref': an attribute list definition's name), each separated by
-# whitespace. A '#name' token and a quoted id="..." (or id='...') value set the ID, the
-# last one winning; '#req-...' inside another attribute's value, such as
-# title="#req-core-001", sets nothing, and kramdown ignores an unquoted id=req-core-001.
-# Inside the quotes a backslash is matched only as the start of an escape pair and every
-# other character only on its own ('[^\\]'), so each character has exactly one way to
-# match: a value that never closes fails in linear time instead of backtracking
-# exponentially over a long backslash run (ReDoS).
-IAL_TOKEN_RE = re.compile(
-    r"""(?:^|(?<=\s))(?:(?P<key>\w[\w-]*)=(?P<quote>["'])(?P<value>(?:\\.|(?!(?P=quote))[^\\\n])*)(?P=quote)|(?P<names>(?:[#.]\w[\w-]*)+)|(?P<ref>\w[\w-]*))(?=\s|$)"""
+# An IAL kramdown-rfc left in the text: one at the end of a line of text (a span IAL
+# after text, which kramdown ignores with a warning) renders literally. The ID it meant
+# to set: a '#req-...' name or a quoted id="req-..." value.
+LITERAL_IAL_RE = re.compile(r"\{:[^{}]*\}")
+LITERAL_IAL_ID_RE = re.compile(r"""(?:(?<=[\s:])#|\bid=["'])(req-[\w-]*)""")
+# A word as the line locator compares them: rendering drops Markdown punctuation but
+# keeps every letter and digit run of the text in order.
+WORD_RE = re.compile(r"[A-Za-z0-9]+")
+# How many consecutive words of a rule must match the Markdown to place it: enough that
+# rules opening with the same phrase ("Servers MUST verify that the ...") are told apart.
+LOCATE_WINDOW = 12
+
+# Elements a rule is read from: paragraphs (<t>, also list items in kramdown-rfc's
+# default vocabulary, where a list is <list> holding <t> items), v3 list items and
+# definition list terms and definitions. Their own inline text is the rule; block
+# elements inside them are read on their own.
+RULE_TAGS = frozenset({"t", "li", "dt", "dd"})
+# Elements that start a block of their own inside a paragraph or item: their text is not
+# part of the enclosing rule.
+BLOCK_TAGS = frozenset(
+    {
+        "t",
+        "list",
+        "ul",
+        "ol",
+        "dl",
+        "li",
+        "dt",
+        "dd",
+        "figure",
+        "artwork",
+        "artset",
+        "sourcecode",
+        "table",
+        "texttable",
+        "blockquote",
+        "aside",
+    }
 )
-IAL_ID_NAME_RE = re.compile(r"#(\w[\w-]*)")
-# The escapes kramdown removes from a quoted IAL value: a backslash before '}' or the quote.
-IAL_VALUE_ESCAPE_RE = re.compile(r"\\([}\"'])")
-# '{:name: attributes}' is an attribute list definition: it names attributes for later
-# reference and attaches nothing to the block before it.
-ALD_RE = re.compile(r"^\w[\w-]*:")
-# A whole definition line's name and attributes, as kramdown reads it (ALD_START): an IAL
-# naming it ('{: reqdef}') gets those attributes, wherever in the draft it is defined.
-ALD_DEF_RE = re.compile(r"^\s*\{:(?P<name>\w[\w-]*):(?P<attrs>(?:\\\}|[^}])+)\}\s*$")
-# Headings are parsed in two linear steps (see parse_heading) rather than with one regex
-# whose lazy title and optional whitespace runs backtrack on long whitespace.
-HEADING_RE = re.compile(r"^#{1,6}\s+(?P<rest>.*)$")
-HEADING_ANCHOR_RE = re.compile(r"\{#(?P<anchor>[^{}\s]+)\}$")
-LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
-DEFINITION_RE = re.compile(r"^\s*:\s+")
-# kramdown-rfc fences code with ~~~ only; a ``` pair renders as inline verbatim, whose
-# keywords keywords_in already ignores. A fence line indented 4 or more is code.
-FENCE_RE = re.compile(r"^( *)(~{3,})(.*)$")
-# Every blockquote marker at the start of a line: kramdown parses a quote's content as
-# blocks again, so '> > text' (or '>> text') is a quote nested in a quote, and a block
-# IAL inside it ('> > {: #req-core-001}') tags the nested paragraph.
-QUOTE_RE = re.compile(r"^(?: {0,3}> ?)+")
-# A table delimiter row, with or without outer pipes: | --- | :---: | or --- | ---
-TABLE_DELIMITER_RE = re.compile(r"^\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?$")
-# kramdown starts a table at a block boundary on a line with a pipe that is neither
-# backslash-escaped nor inside a code span (TABLE_PIPE_CHECK in kramdown's table.rb);
-# neither a leading pipe nor a delimiter row is needed.
-UNESCAPED_PIPE_RE = re.compile(r"(?<!\\)\|")
-# kramdown-rfc splits a sectionized draft (one whose first line starts with '---') into
-# sections on these lines before it parses any Markdown (RE_SECTION in its command.rb):
-# '--- name' pushes section 'name' (a trailing '-' only keeps the section out of
-# Markdown) and a bare '---' pops back to the previous section, whose text the lines
-# after it then continue.
-SECTION_RE = re.compile(r"^---(?: +(?P<name>\w+)-?)? *$")
-# The sections kramdown-rfc2629.erb renders. Text in any other section is never
-# published: 'fluff' is kramdown-rfc's commented-out section, other names are left over
-# with a warning, and text after a '---' that empties the stack belongs to no section.
-RENDERED_SECTION_RE = re.compile(
-    r"^(?:abstract|middle|back|contributor|normative|informative|(?:to_be_removed_)?note_\w*)$"
+# Code and art are never prose. A figure holds code or art (its name is a caption).
+CODE_TAGS = frozenset({"figure", "artwork", "artset", "sourcecode"})
+TABLE_TAGS = frozenset({"table", "texttable"})
+# Inline elements whose text is never read: an index entry renders nothing, and a cref
+# is an editor's comment, not part of the draft's text.
+HIDDEN_INLINE_TAGS = frozenset({"iref", "cref"})
+# Inline elements: an anchor on one (a span IAL) tags a span, not a rule.
+SPAN_TAGS = frozenset(
+    {"em", "strong", "bcp14", "sub", "sup", "tt", "spanx", "eref", "xref", "u"}
 )
-# kramdown comments: an HTML comment, or a {::comment} extension that '{:/comment}' or
-# '{:/}' closes. Either can open and close mid-line or run over several lines. A run of
-# backticks is matched too, so strip_comments can step over code spans: as in BACKTICKS_RE,
-# after an even number of backslashes (group 1 is the run), since a doubled backslash is a
-# literal one and the backtick after it opens a span.
-COMMENT_CLOSERS = {"<!--": ("-->",), "{::comment}": ("{:/comment}", "{:/}")}
-COMMENT_OPEN_RE = re.compile(r"<!--|\{::comment\}|(?<!\\)(?:\\\\)*(\x60+)")
-# A backtick run (group 2) after an even number of backslashes (group 1), as kramdown
-# reads it: two backslashes and a backtick open a span (the first backslash escapes the
-# second), one backslash and a backtick is an escaped backtick.
-BACKTICKS_RE = re.compile(r"(?<!\\)((?:\\\\)*)(\x60+)")
-# A link's destination (and title) and an autolink are attributes, not text: a capital
-# keyword in a URL, as in [spec](https://example.com/MUST), is not a rule.
-LINK_DESTINATION_RE = re.compile(r"\]\([^()\s]*(?:\s+(?:\"[^\"]*\"|'[^']*'))?\s*\)")
-AUTOLINK_RE = re.compile(r"<[A-Za-z][A-Za-z0-9+.-]*:[^\s<>]*>")
-# A character reference as kramdown 2.4 reads one (HTML_ENTITY_RE in its parser/html.rb):
-# the ';' is required and a hex reference takes a lowercase 'x', so '&#77;UST' and
-# '&#x4d;UST' render as MUST while '&#77UST' and '&#X4d;UST' stay literal text
-# (checked with kramdown-rfc 1.7.39).
-CHAR_REF_RE = re.compile(r"&([\w:][\-\w.:]*);|&#(\d+);|&#x([0-9a-fA-F]+);")
-
-
-def decode_char_refs(text: str) -> str:
-    """Replace each character reference with the character kramdown renders for it.
-
-    An unknown name (such as '&MUST;') or an out-of-range code point is left as it is.
-    """
-
-    def decode(match: re.Match[str]) -> str:
-        name, decimal, hexadecimal = match.groups()
-        if name is not None:
-            return html.entities.html5.get(name + ";", match.group())
-        try:
-            return chr(int(decimal) if decimal is not None else int(hexadecimal, 16))
-        except (ValueError, OverflowError):
-            return match.group()
-
-    return CHAR_REF_RE.sub(decode, text)
-
-
-def parse_heading(line: str) -> tuple[str, str | None] | None:
-    """Return (title, anchor) for a Markdown heading line, or None."""
-    match = HEADING_RE.match(line)
-    if not match:
-        return None
-    rest = match.group("rest").strip()
-    anchor = HEADING_ANCHOR_RE.search(rest)
-    if anchor:
-        return rest[: anchor.start()].rstrip(), anchor.group("anchor")
-    return rest, None
+# Front matter elements other than these (title, authors, dates) hold no rules.
+FRONT_RULE_TAGS = frozenset({"abstract", "note"})
+# What a misplaced requirement anchor went on, for the warning.
+ANCHOR_PLACES = {
+    "section": "a heading",
+    "list": "a list",
+    "ul": "a list",
+    "ol": "a list",
+    "dl": "a list",
+    "table": "a table",
+    "texttable": "a table",
+    "figure": "a code block or figure",
+    "artwork": "a code block or figure",
+    "sourcecode": "a code block or figure",
+    "blockquote": "a quote",
+    "aside": "an aside",
+}
 
 
 @dataclass
@@ -221,356 +213,413 @@ def draft_short_name(docname: str) -> str:
 
 
 def slugify(text: str) -> str:
-    """Slug a heading the way kramdown-rfc derives an anchor from it."""
+    """Slug a title the way kramdown derives an anchor from a heading."""
     text = re.sub(r"[\x60*_]", "", text).lower()
     return re.sub(r"[^a-z0-9]+", "-", text).strip("-") or "section"
 
 
 def normalize(text: str) -> str:
-    """Collapse whitespace and drop list markers so reflowing keeps the hash."""
-    text = LIST_ITEM_RE.sub("", text, count=1)
-    text = DEFINITION_RE.sub("", text, count=1)
+    """Collapse whitespace so reflowing a rule keeps its hash."""
     return " ".join(text.split())
 
 
-def code_span_end(text: str, start: int, end: int) -> int | None:
-    """Return where the code span opened by the backtick run text[start:end] ends.
+def keywords_in(prose: str) -> list[str]:
+    """Return the BCP 14 keywords in a rule's prose, its text without code or link targets.
 
-    Mirrors kramdown's parse_codespan (kramdown 2.4): the span closes at the first later
-    occurrence of the same backtick string, and None means the run is literal text:
-    either nothing closes it, or it is a single backtick with whitespace (or the start
-    of the text) before it and whitespace after it.
+    A keyword double-quoted on its own ("MUST", see QUOTED_KEYWORD_RE) is ignored.
+    Whitespace, newlines included, is collapsed first so a keyword pair wrapped across
+    lines still reads as one keyword ("MUST NOT", not "MUST").
     """
-    run = end - start
-    if (
-        run == 1
-        and (start == 0 or text[start - 1].isspace())
-        and end < len(text)
-        and text[end].isspace()
-    ):
-        return None
-    close = text.find("\x60" * run, end)
-    return None if close < 0 else close + run
-
-
-def strip_code_spans(text: str) -> str:
-    """Replace each kramdown code span with a space; its text is verbatim, never a rule.
-
-    A span opens at a run of backticks that is not backslash-escaped and ends as
-    code_span_end says, so a double-backtick span may hold a single backtick, and a run
-    that opens no span is literal text and stays. Pairing single backticks with one
-    regex instead would misalign after such a span or a stray backtick and delete
-    ordinary text, keywords included, up to the next code span.
-    """
-    pieces: list[str] = []
-    position = 0
-    while True:
-        match = BACKTICKS_RE.search(text, position)
-        if not match:
-            pieces.append(text[position:])
-            return "".join(pieces)
-        close = code_span_end(text, match.start(2), match.end(2))
-        if close is None:
-            pieces.append(text[position : match.end()])
-            position = match.end()
-            continue
-        pieces.append(text[position : match.start(2)])
-        pieces.append(" ")
-        position = close
-
-
-def keywords_in(text: str) -> list[str]:
-    """Return the BCP 14 keywords in text as a reader of the rendered draft sees them.
-
-    Ignored: keywords in code spans, in link destinations or autolinks, and a keyword
-    double-quoted on its own ("MUST", see QUOTED_KEYWORD_RE). Character references in
-    the remaining text are decoded first, as the rendered draft shows them ('&#77;UST'
-    is MUST, '&quot;MUST&quot;' a quoted keyword); inside a code span they stay literal.
-    Whitespace, newlines included, is collapsed so a keyword pair wrapped across lines
-    still reads as one keyword ("MUST NOT", not "MUST").
-    """
-    visible = strip_code_spans(text)
-    visible = LINK_DESTINATION_RE.sub("]", visible)
-    visible = AUTOLINK_RE.sub(" ", visible)
-    visible = decode_char_refs(visible)
-    visible = " ".join(visible.split())
-    visible = QUOTED_KEYWORD_RE.sub(" ", visible)
+    visible = QUOTED_KEYWORD_RE.sub(" ", normalize(prose))
     return sorted(set(KEYWORD_RE.findall(visible)))
 
 
-def is_table_line(text: str) -> bool:
-    """Whether kramdown reads this line as a table row: an unescaped pipe outside code."""
-    return bool(UNESCAPED_PIPE_RE.search(strip_code_spans(text)))
+def locked_kramdown_rfc_version(specs_dir: Path) -> str:
+    """Return the kramdown-rfc version the checkout renders its drafts with.
 
-
-def table_row_keywords(text: str) -> int:
-    """1 when a table row (not a delimiter row) has a BCP 14 keyword, otherwise 0."""
-    return 1 if keywords_in(text) and not TABLE_DELIMITER_RE.match(text) else 0
-
-
-def strip_comments(
-    line: str, closers: tuple[str, ...] | None
-) -> tuple[str, tuple[str, ...] | None, bool]:
-    """Remove kramdown comments (HTML and {::comment}) from one line.
-
-    closers holds the closing delimiters of a comment left open by an earlier line, or
-    None. Returns the line's visible text, the closers of a comment still open at its
-    end, and whether the line held any comment. A comment may open and close anywhere
-    on a line, so text before an opener or after a closer stays visible. Code spans on
-    the line are copied as they are: a '<!--' quoted in backticks opens nothing.
+    That is the version its Gemfile.lock resolves (mpp-specs' Dockerfile installs from
+    it), or KRAMDOWN_RFC_VERSION for a checkout without one.
     """
-    visible: list[str] = []
-    position = 0
-    touched = closers is not None
-    while position < len(line):
-        if closers is not None:
-            ends = [
-                (index, closer)
-                for closer in closers
-                if (index := line.find(closer, position)) >= 0
-            ]
-            if not ends:
-                return "".join(visible), closers, True
-            index, closer = min(ends)
-            position = index + len(closer)
-            closers = None
-            continue
-        match = COMMENT_OPEN_RE.search(line, position)
-        if not match:
-            visible.append(line[position:])
-            break
-        token = match.group()
-        if match.group(1):
-            close = code_span_end(line, match.start(1), match.end(1))
-            end = close if close is not None else match.end()
-            visible.append(line[position:end])
-            position = end
-            continue
-        visible.append(line[position : match.start()])
-        touched = True
-        closers = COMMENT_CLOSERS[token]
-        position = match.end()
-    return "".join(visible), closers, touched
+    lock = specs_dir / "Gemfile.lock"
+    try:
+        text = lock.read_text(encoding="utf-8")
+    except OSError:
+        return KRAMDOWN_RFC_VERSION
+    match = GEMFILE_LOCK_RE.search(text)
+    return match.group(1) if match else KRAMDOWN_RFC_VERSION
 
 
-def ial_id(body: str, alds: dict[str, list[str]] | None = None) -> str | None:
-    """Return the ID an IAL body gives its element, requirement or not, or None.
+class KramdownRfc:
+    """Renders drafts to XML with a kramdown-rfc command, after checking its version.
 
-    kramdown writes every '#name' token and quoted id="..." value to the same attribute
-    in order, so the last one is the element's ID: '{: #req-core-001 id="note"}' gives
-    it 'note'. Only real tokens count (IAL_TOKEN_RE). A bare name refers to an attribute
-    list definition in alds (name to its definitions' attribute strings, in draft order),
-    whose IDs kramdown applies before the IAL's own, so an own ID still wins. Extension
-    tags ('{::name}', '{:/name}') and definitions themselves ('{:name: ...}') set no ID.
+    command is the argv prefix to run, such as ['kramdown-rfc'], ['kramdown-rfc',
+    '_1.7.39_'] (RubyGems picks that installed version) or a 'docker run -i' line: the
+    draft is sent on stdin, which renders exactly as a file argument does, so the
+    command needs no access to the checkout.
     """
-    if body.startswith((":", "/")) or ALD_RE.match(body):
+
+    def __init__(self, command: Sequence[str] | None = None) -> None:
+        self.explicit = command is not None
+        self.command = list(command) if command else ["kramdown-rfc"]
+
+    def version(self, command: Sequence[str] | None = None) -> str:
+        """Return the version the command reports, or raise ValueError when it cannot run."""
+        argv = [*(command or self.command), "--version"]
+        try:
+            result = subprocess.run(
+                argv, capture_output=True, text=True, timeout=RENDER_TIMEOUT_SECONDS
+            )
+        except FileNotFoundError:
+            raise ValueError(
+                f"{argv[0]} not found: the gap report renders drafts with kramdown-rfc. "
+                f"Install it (gem install kramdown-rfc -v {KRAMDOWN_RFC_VERSION}) or pass "
+                "--kramdown-rfc with a command that runs it"
+            ) from None
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise ValueError(f"cannot run {shlex.join(argv)}: {error}") from None
+        match = KRAMDOWN_VERSION_RE.search(result.stdout)
+        if result.returncode != 0 or not match:
+            raise ValueError(
+                f"{shlex.join(argv)} did not report a kramdown-rfc version "
+                f"(exit {result.returncode})"
+            )
+        return match.group(1)
+
+    def require(self, version: str) -> None:
+        """Make sure the command is kramdown-rfc at exactly version, or raise ValueError.
+
+        When the default command answers with another version, RubyGems' selector
+        ('kramdown-rfc _<version>_') is tried, so a machine with several versions
+        installed needs no flag. An explicit --kramdown-rfc command is used as given.
+        """
+        found = self.version()
+        if found == version:
+            return
+        if not self.explicit:
+            selected = [*self.command, f"_{version}_"]
+            try:
+                if self.version(selected) == version:
+                    self.command = selected
+                    return
+            except ValueError:
+                pass
+        raise ValueError(
+            f"{shlex.join(self.command)} is kramdown-rfc {found}, but the drafts are rendered "
+            f"with {version} (mpp-specs' Gemfile.lock); install it (gem install kramdown-rfc "
+            f"-v {version}) or pass --kramdown-rfc with a command that runs it, such as "
+            f"'docker run --rm -i ietf-spec-tools kramdown-rfc'"
+        )
+
+    def __call__(self, markdown: bytes) -> str:
+        """Return the XML kramdown-rfc renders markdown to, or raise ValueError."""
+        try:
+            result = subprocess.run(
+                self.command,
+                input=markdown,
+                capture_output=True,
+                timeout=RENDER_TIMEOUT_SECONDS,
+                env={**os.environ, **RENDER_ENV},
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise ValueError(
+                f"cannot run {shlex.join(self.command)}: {error}"
+            ) from None
+        if result.returncode != 0:
+            # kramdown-rfc's messages quote the draft; keep only the last line, bounded.
+            message = result.stderr.decode("utf-8", "replace").strip().splitlines()
+            detail = message[-1][:200] if message else "no message"
+            raise ValueError(
+                f"kramdown-rfc failed (exit {result.returncode}): {detail}"
+            )
+        return result.stdout.decode("utf-8")
+
+
+# Characters XML 1.0 does not allow, which kramdown-rfc copies from the Markdown.
+XML_INVALID_RE = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]")
+# The entities kramdown-rfc's DOCTYPE declares, for a fragment rendered without one.
+FRAGMENT_PROLOG = (
+    '<!DOCTYPE rfc [<!ENTITY nbsp "&#160;"><!ENTITY zwsp "&#8203;">'
+    '<!ENTITY nbhy "&#8209;"><!ENTITY wj "&#8288;">]>'
+)
+# A requirement ID an IAL or attribute list definition in the Markdown sets: a
+# '#req-...' name or a quoted id="req-..." value. Only used to find IDs that never reach
+# the rendering; which block each one tags is kramdown-rfc's to decide.
+SOURCE_ID_RE = re.compile(r"""(?:(?<![\w&-])#|\bid=["'])(req-[A-Za-z0-9_-]+)""")
+
+# Renders one draft's Markdown bytes to kramdown-rfc XML.
+Renderer = Callable[[bytes], str]
+
+
+def parse_xml(document: str, comments: list[str] | None = None) -> ET.Element:
+    """Parse kramdown-rfc XML into an element tree, keeping its processing instructions.
+
+    kramdown-rfc declares each reference as an external entity in its DOCTYPE and uses
+    it in the references section (&RFC9110;). ElementTree's own parser fails on those,
+    so expat is driven directly and told to skip every external entity rather than
+    fetch it; parameter entities are never read. The <?line N?> instructions are kept:
+    they are the only source line numbers in the output. The text of XML comments (the
+    draft's HTML comments) goes to comments when given.
+
+    Two repairs keep a broken draft readable rather than fatal. A file without a
+    '---' front matter renders as a bare fragment of elements, so it is wrapped in a
+    root that declares kramdown-rfc's entities. Control characters XML forbids (a form
+    feed in the Markdown, say) pass through kramdown-rfc unchanged, so they are read as
+    spaces; xml2rfc would refuse such a draft, so mpp-specs' own build catches it.
+    """
+    document = XML_INVALID_RE.sub(" ", document)
+    if not document.lstrip().startswith("<?xml"):
+        document = FRAGMENT_PROLOG + "<rfc>" + document + "</rfc>"
+    builder = ET.TreeBuilder(insert_pis=True)
+    parser = xml.parsers.expat.ParserCreate()
+    if comments is not None:
+        parser.CommentHandler = comments.append
+    parser.SetParamEntityParsing(xml.parsers.expat.XML_PARAM_ENTITY_PARSING_NEVER)
+    parser.ExternalEntityRefHandler = lambda *_: 1
+    parser.StartElementHandler = builder.start
+    parser.EndElementHandler = builder.end
+    parser.CharacterDataHandler = builder.data
+    parser.ProcessingInstructionHandler = builder.pi
+    try:
+        parser.Parse(document.encode("utf-8"), True)
+    except xml.parsers.expat.ExpatError as error:
+        raise ValueError(f"cannot parse kramdown-rfc output: {error}") from None
+    return builder.close()
+
+
+def is_element(node: ET.Element) -> bool:
+    """Whether node is an element rather than a processing instruction or comment."""
+    return isinstance(node.tag, str)
+
+
+def inline_items(element: ET.Element) -> list[tuple[str, str] | ET.Element]:
+    """Return an element's content in order: paragraphs of its own text and block children.
+
+    Each paragraph is (text, prose). text is what a reader sees, for the excerpt and the
+    hash: code spans in backticks, a reference without text as [target]. prose is the
+    part a rule is read from: no code spans, autolinks or reference targets.
+
+    A block child (BLOCK_TAGS) is returned as the element, to be read on its own in its
+    place, and splits the text around it: in kramdown-rfc's default vocabulary a list
+    item's paragraph after a nested list is the <list>'s tail inside the item's <t>, and
+    a paragraph after a blank line in an item follows a <vspace blankLines="1"/>, yet
+    each renders as a paragraph of its own. A plain line break (<br/>, <vspace/>) only
+    adds a space.
+    """
+    items: list[tuple[str, str] | ET.Element] = []
+    text: list[str] = []
+    prose: list[str] = []
+
+    def end_paragraph() -> None:
+        items.append(("".join(text), "".join(prose)))
+        text.clear()
+        prose.clear()
+
+    def both(value: str | None) -> None:
+        if value:
+            text.append(value)
+            prose.append(value)
+
+    def walk(node: ET.Element) -> None:
+        both(node.text)
+        for child in node:
+            if not is_element(child):
+                pass  # a processing instruction: only its tail is text
+            elif child.tag in BLOCK_TAGS:
+                end_paragraph()
+                items.append(child)
+            elif child.tag == "vspace" and child.get("blankLines", "0") != "0":
+                end_paragraph()
+            elif child.tag in ("vspace", "br"):
+                both(" ")
+            elif child.tag in HIDDEN_INLINE_TAGS:
+                pass
+            elif child.tag == "tt" or (
+                child.tag == "spanx" and child.get("style") == "verb"
+            ):
+                # A code span: verbatim, so a keyword in it is no rule.
+                text.append("\x60" + "".join(child.itertext()) + "\x60")
+                prose.append(" ")
+            elif child.tag == "xref":
+                label = "".join(child.itertext())
+                text.append(label or f"[{child.get('target', '')}]")
+                prose.append(label or " ")
+            elif child.tag == "eref":
+                label = "".join(child.itertext())
+                target = child.get("target", "")
+                if not label or label == target:
+                    # An autolink: the URL is an address, not prose ('<https://x/MUST>').
+                    text.append(label or target)
+                    prose.append(" ")
+                else:
+                    walk(child)  # link text is prose; the target is an attribute
+            else:
+                walk(child)  # emphasis, <bcp14>, sub/superscript and the like
+            both(child.tail)
+
+    walk(element)
+    end_paragraph()
+    return items
+
+
+def inline_text(element: ET.Element) -> tuple[str, str]:
+    """Return all of an element's own inline text as one (text, prose) pair."""
+    segments = [item for item in inline_items(element) if isinstance(item, tuple)]
+    return (
+        " ".join(text for text, _ in segments),
+        " ".join(prose for _, prose in segments),
+    )
+
+
+class SourceLines:
+    """Finds the Markdown line a rendered rule starts on, by matching its words.
+
+    kramdown-rfc's output carries <?line?> instructions only at section boundaries, so a
+    rule is placed by finding LOCATE_WINDOW consecutive words of its text among the
+    Markdown's words, searching from the previous rule onwards (rules come in document
+    order). A window that contains words the Markdown spells differently (a character
+    reference, say) fails, so later windows of the rule are tried too.
+    """
+
+    def __init__(self, markdown: str) -> None:
+        # kramdown ends lines at LF, CR and CRLF only; str.splitlines would also split at
+        # U+2028 and the like, which kramdown keeps inside a line.
+        self.lines = re.sub(r"\r\n?", "\n", markdown).split("\n")
+        self.words: list[str] = []
+        self.word_lines: list[int] = []
+        for number, line in enumerate(self.lines, start=1):
+            for word in WORD_RE.findall(line):
+                self.words.append(word)
+                self.word_lines.append(number)
+        self.positions: dict[str, list[int]] = {}
+        for index, word in enumerate(self.words):
+            self.positions.setdefault(word, []).append(index)
+        self.cursor = 0
+
+    def find(self, words: list[str], start: int) -> int | None:
+        """Return the index in self.words where words begin, searching from start.
+
+        Long windows first, so rules that open with the same phrase are told apart;
+        shorter ones when the rendering spells too many words differently.
+        """
+        for size in dict.fromkeys(
+            min(n, len(words)) for n in (LOCATE_WINDOW, LOCATE_WINDOW // 2, 3)
+        ):
+            for offset in range(len(words) - size + 1):
+                window = words[offset : offset + size]
+                candidates = self.positions.get(window[0], [])
+                for index in candidates[bisect_left(candidates, start + offset) :]:
+                    if self.words[index : index + size] == window:
+                        return index - offset
         return None
-    return final_id(body, alds or {}, {})
+
+    def locate(self, text: str, fallback: int) -> int:
+        """Return the line a rule with this text starts on, or fallback when not found."""
+        words = WORD_RE.findall(text)
+        if not words:
+            return fallback
+        found = self.find(words, self.cursor)
+        if found is None:
+            found = self.find(words, 0)
+        if found is None:
+            return fallback
+        # Rules do not overlap, so the next one starts after this one's words. Only half of
+        # them are skipped: the Markdown can hold fewer words than the rendering (a
+        # character reference such as '&#77;UST' renders as one word, MUST).
+        self.cursor = found + max(1, len(words) // 2)
+        return self.word_lines[found]
+
+    def anchor_line(self, anchor: str, fallback: int) -> int:
+        """Return the first line naming an anchor (the IAL that set it), or fallback."""
+        for number, line in enumerate(self.lines, start=1):
+            if anchor in line:
+                return number
+        return fallback
 
 
-# kramdown resolves definitions without a depth limit; past this many nested references
-# the report stops with an error instead of exhausting Python's recursion limit.
-MAX_ALD_DEPTH = 100
-# memo's marker for a definition being expanded, distinct from one that sets no ID (None)
-# and one that sets an empty ID ('').
-_EXPANDING = object()
-
-
-def final_id(
-    attrs: str,
-    alds: dict[str, list[str]],
-    memo: dict[str, object],
-    depth: int = 0,
-) -> str | None:
-    """Return the last ID an attribute string sets, in the order kramdown applies them.
-
-    Mirrors mpp-specs' scripts/lint_requirements.py (ial_ids): referenced definitions'
-    IDs first, then the string's own '#name' and id="..." IDs, so an own ID wins over
-    any referenced one, and among references the last one that sets an ID wins. An
-    explicit id="" is an ID too: kramdown renders it as anchor="", which replaces any
-    earlier ID, so it returns '' (no ID set at all is None).
-
-    Only the final ID matters, so each definition name is resolved once and kept in
-    memo: a definition reachable along many paths ('{:a: b b}', '{:b: c c}', ...)
-    costs one expansion, not one per path, which keeps a chain of n definitions linear
-    instead of 2^n. A name being expanded maps to _EXPANDING, so a reference cycle
-    resolves to nothing instead of recursing. A chain deeper than MAX_ALD_DEPTH raises
-    ValueError, which the report shows as an error rather than a traceback.
-    """
-    if depth > MAX_ALD_DEPTH:
-        raise ValueError(f"attribute list definitions nest more than {MAX_ALD_DEPTH} deep")
-    own: str | None = None
-    referenced: str | None = None
-    for token in IAL_TOKEN_RE.finditer(attrs):
-        if token.group("key") == "id":
-            own = IAL_VALUE_ESCAPE_RE.sub(r"\1", token.group("value"))
-        elif token.group("names"):
-            names = IAL_ID_NAME_RE.findall(token.group("names"))
-            if names:
-                own = names[-1]
-        elif (ref := token.group("ref")) in alds:
-            if ref not in memo:
-                memo[ref] = _EXPANDING
-                resolved: str | None = None
-                for definition in alds[ref]:
-                    found = final_id(definition, alds, memo, depth + 1)
-                    if found is not None:
-                        resolved = found
-                memo[ref] = resolved
-            value = memo[ref]
-            if isinstance(value, str):
-                referenced = value
-    return own if own is not None else referenced
-
-
-def ial_req_id(body: str, alds: dict[str, list[str]] | None = None) -> str | None:
-    """Return the requirement ID an IAL body sets, or None when it sets none.
-
-    That is its final ID (ial_id, with alds' definitions expanded) when it starts with
-    'req-', so a later non-requirement ID in the same IAL overrides an earlier
-    requirement ID. Whether the rest matches req-<draft>-<nnn> is checked separately (a
-    malformed ID is reported, not credited).
-    """
-    identifier = ial_id(body, alds)
-    return identifier if identifier and identifier.startswith("req-") else None
-
-
-def extract_requirements(
-    path: Path, relative: str, alds: dict[str, list[str]] | None = None
+def requirements_from_xml(
+    document: str, markdown: str, relative: str, draft: str
 ) -> tuple[list[Requirement], list[str], int]:
-    """Extract every requirement in one draft, with warnings and the keyword table rows.
+    """Extract every rule from one draft's kramdown-rfc XML.
 
-    The draft is read the way kramdown-rfc renders it, so that a rule is counted only
-    when it appears as prose in the published draft:
-
-    - Sections: a draft whose first line starts with '---' is split into sections on
-      '---' lines first (SECTION_RE), and only text in a rendered section is read
-      (RENDERED_SECTION_RE). The first section is the YAML front matter.
-    - Code: ~~~ fences and indented code blocks are skipped.
-    - Comments: HTML and {::comment} comments are removed wherever they open and close.
-      A line holding only comment text neither adds text nor ends a paragraph: kramdown
-      keeps a comment between two lines of a paragraph inside that paragraph.
-    - Tables: a block that starts at a block boundary with a line holding an unescaped
-      pipe is a table, provided the rows are followed by a block boundary (a blank line,
-      a block IAL or the end of the section); otherwise kramdown reads the rows as a
-      paragraph. Table rows (field tables with REQUIRED or OPTIONAL columns) cannot carry
-      an IAL each, so they are counted rather than extracted; schemas cover them.
-    - IDs: a rule's ID comes from a block IAL on the line right after it, or from an IAL
-      at the very start of a list item's text. One at the end of a text line renders as
-      literal text in kramdown-rfc, so it sets no ID and is warned about. An IAL naming
-      an attribute list definition ('{:reqdef: #req-core-001}' defined outside code and
-      comments) gets that definition's IDs. kramdown resolves those references after
-      parsing, so a definition after the IAL counts too: when the draft defines any, it
-      is read a second time with all of them (alds; callers leave it None).
+    Returns the rules, warnings and the number of table rows holding a keyword. Read:
+    the abstract, notes, the middle and appendices; never references, headings, code or
+    figures. A rule is a paragraph of a <t>, list item or definition list entry with a
+    keyword in its prose. Its ID is the element's anchor; a list item whose text
+    kramdown-rfc wrapped in a paragraph passes its anchor to that paragraph. Table rows
+    cannot carry an ID each, so they are counted rather than extracted; schemas cover
+    them. A requirement anchor anywhere else (a heading, a list, a table, a span of
+    text) tags nothing, and the report says so.
     """
-    draft = draft_short_name(path.name)
-    # Split only where kramdown does: it turns CRLF and CR into LF, then reads LF-ended
-    # lines. str.splitlines() would also split at U+2028, U+0085, form feed and the like,
-    # which kramdown leaves inside a line, turning an inline '{: #id}' into a block IAL.
-    lines = re.sub(r"\r\n?", "\n", path.read_text(encoding="utf-8")).split("\n")
-    if lines and not lines[-1]:
-        lines.pop()  # the final newline ends the last line rather than starting another
+    source = SourceLines(markdown)
     requirements: list[Requirement] = []
     warnings: list[str] = []
-    section = "abstract"
-    unit: list[str] = []
-    unit_line = 0
-    fence: str | None = None
-    # The closing delimiters of a comment still open from an earlier line, or None.
-    comment: tuple[str, ...] | None = None
     table_rows = 0
-    # Rows of a table kramdown may yet back out of: (line number, the line as a unit
-    # holds it, the row's text). They count as a table once a block boundary follows
-    # them, or become a paragraph when another line of text does.
-    pending: list[tuple[int, str, str]] = []
-    pending_in_item = False
-    # Definitions this reading finds, and the ones IDs are resolved against: none on the
-    # first reading, every one in the draft on the second.
-    found_alds: dict[str, list[str]] = {}
-    known_alds = alds or {}
-    # Block IALs right after the current unit, one per line, not yet applied. kramdown
-    # applies each consecutive IAL line to the same block, so the block's ID is the last
-    # one any of them sets: '{: #req-core-001}' then '{: #note}' leaves it 'note', with
-    # no requirement ID. The unit is flushed once the run of IAL lines ends.
-    ial_bodies: list[str] = []
-    # A block IAL with no block right before it, held for the next block as kramdown
-    # does, even across blank lines: '{: #req-core-001}\n\nClient MUST pay.' tags the
-    # paragraph (checked with kramdown-rfc). (ID, line). A later held IAL replaces it.
-    held: tuple[str, int] | None = None
-    # The held ID the current unit took when it started, applied when it is flushed.
-    unit_held: str | None = None
-    # Line of the IAL that unit_held came from, for the warning when it tags no rule.
-    unit_held_line = 0
+    # The line of the latest <?line N?> instruction: the fallback for a rule the word
+    # matcher cannot place. kramdown-rfc writes -N after an expanded boilerplate.
+    pi_line = 0
+    # Elements whose anchor has been used as a rule's ID or warned about; every other
+    # requirement anchor is reported at the end, wherever kramdown-rfc put it.
+    handled: set[int] = set()
 
-    def drop_held(where: str) -> None:
-        """Discard the held IAL at a block that is no rule, warning if it named one."""
-        nonlocal held
-        if held and held[0].startswith("req-"):
-            warnings.append(f"{relative}:{held[1]}: {held[0]} goes on {where}, so it tags nothing")
-        held = None
-
-    def flush(req_id: str | None = None) -> None:
-        nonlocal unit, unit_held
-        if not unit:
+    def misplaced(owner: ET.Element | None, place: str) -> None:
+        """Warn when owner carries a requirement anchor, which tags nothing on place."""
+        if owner is None:
             return
-        text = "\n".join(unit)
-        unit = []
-        # An IAL after the block wins over one held before it: kramdown applies both in
-        # order, so the later ID is the element's.
-        if req_id is None and unit_held and unit_held.startswith("req-"):
-            req_id = unit_held
-        unit_held = None
-        item = LIST_ITEM_RE.match(text)
-        if item:
-            leading = LEADING_IAL_RE.match(text, item.end())
-            if leading:
-                # '- {: #req-...} text': kramdown-rfc gives the list item this ID, and it
-                # keeps it. A block IAL on the line after the item goes on the enclosing
-                # list instead (checked with kramdown-rfc 1.7.39), so a requirement ID
-                # there must not replace the item's: warn and keep the leading one.
-                leading_id = ial_req_id(leading.group("body"), known_alds)
-                if leading_id:
-                    if req_id and req_id != leading_id:
-                        warnings.append(
-                            f"{relative}:{unit_line}: {req_id} follows a list item that already "
-                            f"has {leading_id}; kramdown-rfc puts it on the list, not the item"
-                        )
-                    req_id = leading_id
-                elif req_id:
-                    # The item's own IAL sets no requirement ID, so an ID on the next line
-                    # still goes on the list, not the item: the item stays untagged.
-                    warnings.append(
-                        f"{relative}:{unit_line}: {req_id} follows a list item with its own IAL; "
-                        "kramdown-rfc puts it on the list, not the item"
-                    )
-                    req_id = None
-                text = text[: item.end()] + text[leading.end() :]
-        trailing = TRAILING_IAL_RE.search(text)
-        trailing_id = ial_req_id(trailing.group("body"), known_alds) if trailing else None
-        if trailing_id:
+        handled.add(id(owner))
+        anchor = owner.get("anchor") or ""
+        if anchor.startswith("req-"):
+            line = source.anchor_line(anchor, pi_line)
             warnings.append(
-                f"{relative}:{unit_line}: {trailing_id} ends a line of text, "
-                "where kramdown-rfc renders it as text, so it tags nothing; put it on the next line"
+                f"{relative}:{line}: {anchor} goes on {place}, so it tags nothing"
             )
-        found = keywords_in(text)
+
+    def count_table(table: ET.Element) -> int:
+        """Count a table's rows with a keyword in a cell's prose, header rows included."""
+        if table.tag == "texttable":
+            # kramdown-rfc's default vocabulary: <ttcol> headings, then the cells (<c>)
+            # of every row in order, as many per row as there are columns.
+            headings = [inline_text(cell)[1] for cell in table.iter("ttcol")]
+            cells = [inline_text(cell)[1] for cell in table.iter("c")]
+            width = max(1, len(headings))
+            rows = [headings] + [
+                cells[i : i + width] for i in range(0, len(cells), width)
+            ]
+        else:
+            rows = [
+                [" ".join(inline_prose(cell)) for cell in row if is_element(cell)]
+                for row in table.iter("tr")
+            ]
+        return sum(1 for row in rows if keywords_in(" ".join(row)))
+
+    def add_paragraph(text: str, prose: str, section: str, anchor: str | None) -> None:
+        line = source.locate(text, pi_line)
+        for ial in LITERAL_IAL_RE.finditer(prose):
+            literal = LITERAL_IAL_ID_RE.search(ial.group())
+            if literal:
+                warnings.append(
+                    f"{relative}:{line}: {literal.group(1)} ends a line of text, where kramdown-rfc "
+                    "renders it as text, so it tags nothing; put it on the next line"
+                )
+        req_id = anchor if anchor and anchor.startswith("req-") else None
+        found = keywords_in(prose)
         if not found:
             if req_id:
                 warnings.append(
-                    f"{relative}:{unit_line}: {req_id} tags text without a BCP 14 keyword"
+                    f"{relative}:{line}: {req_id} tags text without a BCP 14 keyword"
                 )
             return
         normalized = normalize(text)
         digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:8]
-        malformed = bool(req_id) and not REQ_ID_RE.match(req_id)
+        malformed = req_id is not None and not REQ_ID_RE.match(req_id)
         if malformed:
             warnings.append(
-                f"{relative}:{unit_line}: {req_id} does not match req-<draft>-<nnn>; not counted as tagged or covered"
+                f"{relative}:{line}: {req_id} does not match req-<draft>-<nnn>; not counted as tagged or covered"
             )
         requirements.append(
             Requirement(
                 draft=draft,
                 file=relative,
-                line=unit_line,
+                line=line,
                 section=section,
                 text=normalized,
                 req_id=req_id,
@@ -582,276 +631,184 @@ def extract_requirements(
             )
         )
 
-    def apply_ials() -> None:
-        """Flush the unit with the ID its run of block IALs gives it, if one is pending."""
-        nonlocal unit_held
-        if not ial_bodies:
-            return
-        final = None
-        for body in ial_bodies:
-            found = ial_id(body, known_alds)
-            if found is not None:  # an empty id="" replaces an earlier ID too
-                final = found
-        ial_bodies.clear()
-        if final is not None:
-            unit_held = None  # any ID after the block replaces one held before it
-        flush(final if final and final.startswith("req-") else None)
+    def read_rule_block(
+        element: ET.Element, section: str, owner: ET.Element | None
+    ) -> None:
+        """Read a paragraph, list item or definition entry and the blocks inside it, in order.
 
-    def is_block_ial(line: str) -> bool:
-        """Whether a line is a block IAL that sets attributes (not an extension or ALD)."""
-        match = IAL_LINE_RE.match(line)
-        if not match:
-            return False
-        body = match.group("body")
-        return not body.startswith((":", "/")) and not ALD_RE.match(body)
-
-    def commit_table() -> None:
-        nonlocal table_rows
-        table_rows += sum(table_row_keywords(row) for _, _, row in pending)
-        pending.clear()
-
-    def revert_table() -> None:
-        # No block boundary after the rows: kramdown backs out of the table and parses
-        # its lines as the start of a paragraph, which the current line then continues.
-        nonlocal unit_line
-        if pending:
-            unit_line = pending[0][0]
-            unit.extend(text for _, text, _ in pending)
-            pending.clear()
-
-    # A sectionized draft starts with '---' and its first section, the YAML front matter,
-    # runs to the next section line. Any other file is plain kramdown and is read whole.
-    sectionized = bool(lines) and lines[0].startswith("---")
-    in_front_matter = sectionized
-    rendered = not sectionized
-    sections: list[str] = []  # kramdown-rfc's stack of section names
-    item_indent = 0  # text column of the latest list item, for its fences and code
-    fence_base = 0
-    boundary = True  # whether the next line starts at a kramdown block boundary
-    # Whether the line before ended a block that is no paragraph (heading, table, code):
-    # kramdown puts a block IAL right after such a block on it, not on the next block.
-    after_block = False
-    for number, raw in enumerate(lines, start=1):
-        if ial_bodies and not is_block_ial(QUOTE_RE.sub("", raw.expandtabs(4))):
-            apply_ials()  # the run of IAL lines ended: every other line is handled below
-        if sectionized:
-            if number == 1:
-                continue
-            marker = SECTION_RE.match(raw)
-            if marker:
-                # kramdown-rfc cuts the draft here before parsing any Markdown, so no
-                # paragraph, fence, comment, table or list carries across this line, and
-                # the section's end is a block boundary for a table that ends it.
-                commit_table()
-                flush()
-                drop_held("no block before the section ends")
-                fence, comment, item_indent, boundary = None, None, 0, True
-                in_front_matter = False
-                if marker.group("name"):
-                    sections.append(marker.group("name"))
-                elif sections:
-                    sections.pop()
-                rendered = bool(sections) and bool(RENDERED_SECTION_RE.match(sections[-1]))
-                continue
-            if in_front_matter or not rendered:
-                continue
-        at_boundary, boundary = boundary, False
-        prev_block, after_block = after_block, False
-        # Tabs stop every 4 columns as kramdown counts them; all blockquote markers (nested
-        # quotes included) are removed before any boundary is decided, so a bare '>'
-        # separates quoted paragraphs.
-        line = QUOTE_RE.sub("", raw.expandtabs(4))
-        stripped = line.strip()
-        column = len(line) - len(line.lstrip())
-        fence_match = FENCE_RE.match(line)
-        if fence:
-            if (
-                fence_match
-                and len(fence_match.group(1)) <= fence_base + 3
-                and len(fence_match.group(2)) >= len(fence)
-                and not fence_match.group(3).strip()
-            ):
-                fence = None
-                after_block = True
-            continue
-        if pending and comment is None:
-            # Decide the pending table first: kramdown checks for its end before anything
-            # else on this line. A new list item ends a table inside the previous item.
-            ends_item = pending_in_item and LIST_ITEM_RE.match(line)
-            if not stripped or IAL_LINE_RE.match(line) or ends_item:
-                commit_table()
-            elif is_table_line(stripped):
-                # Read the row's visible text only, as for the table's first row: a
-                # keyword inside an HTML or {::comment} comment is no rule, whether the
-                # rows end up a table or a paragraph. A comment the row leaves open
-                # carries on to the next lines.
-                visible, comment, _ = strip_comments(line, None)
-                pending.append((number, visible.strip(), visible.strip()))
-                after_block = True
-                continue
-            else:
-                revert_table()
-        if comment is None:
-            if not unit and stripped and column < item_indent and not LIST_ITEM_RE.match(line):
-                item_indent = 0  # a line left of the item's text ends its list
-            if fence_match and len(fence_match.group(1)) <= item_indent + 3:
-                flush()
-                drop_held("a code block")
-                fence, fence_base = fence_match.group(2), item_indent
-                continue
-            if stripped and not unit and column >= item_indent + 4:
-                drop_held("a code block")
-                after_block = True
-                continue  # indented code block: kramdown renders it as code, not prose
-        visible, comment, had_comment = strip_comments(line, comment)
-        if had_comment:
-            if not visible.strip():
-                continue  # only comment text: no prose, and no paragraph break either
-            line = visible
-            stripped = line.strip()
-            # Text right after a comment is no block boundary for a table still pending.
-            revert_table()
-        # A '{:...}' line indented 4 or more columns past the open list item's text, inside
-        # a paragraph, is no definition or IAL: kramdown reads it as more paragraph text
-        # (ALD_START and IAL_BLOCK_START allow at most 3 leading spaces). With no
-        # paragraph open, such a line is an indented code block and was skipped above.
-        indented = bool(unit) and column >= item_indent + 4
-        ald = None if indented else ALD_DEF_RE.match(line)
-        if ald:
-            # A definition, not an IAL: kramdown reads it before trying a block IAL, so it
-            # tags nothing, yet it ends the paragraph before it. Code and comments were
-            # skipped above, so a definition inside them is never recorded.
-            found_alds.setdefault(ald.group("name"), []).append(ald.group("attrs"))
-            flush()
-            boundary = True
-            continue
-        ial = None if indented else IAL_LINE_RE.match(line)
-        if ial:
-            boundary = True
-            if ial_bodies:
-                ial_bodies.append(ial.group("body"))  # the next IAL line on the same block
-                continue
-            if unit and item_indent and column < item_indent and LIST_ITEM_RE.match(unit[0]):
-                # Left of the item's text, kramdown ends the list here and puts the IAL on
-                # the whole list, not the item (checked with kramdown-rfc), so the item's
-                # rule gets no ID from it. flush still warns when the item has its own.
-                req_id = ial_req_id(ial.group("body"), known_alds)
-                marker = LIST_ITEM_RE.match(unit[0])
-                if marker and LEADING_IAL_RE.match(unit[0], marker.end()):
-                    flush(req_id)  # flush keeps the item's leading ID and warns about this one
+        Each paragraph of its own text with a keyword is a rule. owner is the element
+        whose anchor is the rule's ID (element itself, or the list item that passed its
+        anchor down); the anchor goes to the first paragraph, the one an IAL tags. A list
+        item kramdown-rfc wraps in paragraphs (<li><t>...</t></li>) has no text of its
+        own, so its anchor goes to the paragraph that starts it.
+        """
+        consumed = owner is None
+        for item in inline_items(element):
+            if isinstance(item, tuple):
+                text, prose = item
+                if not normalize(text):
                     continue
-                if req_id:
-                    warnings.append(
-                        f"{relative}:{number}: {req_id} is not indented to its list item's text, "
-                        "so kramdown-rfc puts it on the whole list"
-                    )
-                flush()
-                continue
-            if unit and is_block_ial(line):
-                ial_bodies.append(ial.group("body"))  # applied once the run of IALs ends
-                continue
-            if not unit and prev_block:
-                # Right after a heading, table or code block: kramdown puts it on that
-                # block, so it tags no rule.
-                req_id = ial_req_id(ial.group("body"), known_alds)
-                if req_id:
-                    warnings.append(f"{relative}:{number}: {req_id} goes on the block before it, so it tags nothing")
-                continue
-            if not unit:
-                # No block right before it: kramdown holds it for the next block.
-                found_id = ial_id(ial.group("body"), known_alds)
-                if found_id is not None:
-                    if held and held[0].startswith("req-") and found_id != held[0]:
-                        warnings.append(
-                            f"{relative}:{held[1]}: {held[0]} is replaced by the IAL on line {number}, so it tags nothing"
-                        )
-                    held = (found_id, number)
-                continue
-            flush(ial_req_id(ial.group("body"), known_alds))
-            continue
-        if not stripped:
-            flush()
-            boundary = True
-            continue
-        if len(unit) == 1 and unit_line == number - 1 and not item_indent and SETEXT_UNDERLINE_RE.match(line):
-            # 'Title\n=====': the line above is a setext heading, not a rule (checked with
-            # kramdown-rfc). After two or more lines of text the underline is just more of
-            # the paragraph, as kramdown only reads a setext heading at a block's start.
-            heading = parse_heading("# " + unit[0])
-            unit.clear()
-            # An IAL held for this block goes on the heading, not the next paragraph
-            # (as for an ATX heading, see drop_held), so it tags no rule.
-            if unit_held and unit_held.startswith("req-"):
-                warnings.append(
-                    f"{relative}:{unit_held_line}: {unit_held} goes on a heading, so it tags nothing"
+                anchor = None
+                if not consumed:
+                    handled.add(id(owner))
+                    anchor = owner.get("anchor")  # type: ignore[union-attr]
+                    consumed = True
+                add_paragraph(text, prose, section, anchor)
+            else:
+                passes = (
+                    not consumed and element.tag in ("li", "dd") and item.tag == "t"
                 )
-            unit_held = None
-            section = (heading[1] or slugify(heading[0])) if heading else section
-            after_block = True
-            continue
-        heading = parse_heading(line)
-        if heading:
-            flush()
-            drop_held("a heading")
-            item_indent = 0
-            section = heading[1] or slugify(heading[0])
-            after_block = True
-            continue
-        item = LIST_ITEM_RE.match(line)
-        if item and unit and not item_indent:
-            # A bullet or number can't interrupt a top-level paragraph: kramdown reads
-            # '402. more' or '- more' after a line of prose as more of that paragraph
-            # (checked with kramdown-rfc). Inside a list item it starts the next item.
-            item = None
-        item = item or DEFINITION_RE.match(line)
-        if item:
-            flush()
-            item_indent = item.end()
-        if not unit:
-            # A list item's text starts its own block boundary; other text needs one.
-            row = line[item.end() :] if item else stripped
-            if (item or at_boundary) and is_table_line(row):
-                drop_held("a table")
-                pending.append((number, stripped, row.strip()))
-                pending_in_item = bool(item)
-                after_block = True
-                continue
-            if item:
-                drop_held("the list, not its item")
-            elif held:
-                unit_held, unit_held_line, held = held[0], held[1], None
-            unit_line = number
-        unit.append(stripped)
-    apply_ials()
-    commit_table()
-    flush()
-    if alds is None and found_alds:
-        # Some IAL may name a definition that only comes later: read the draft again
-        # with every definition known. The second reading finds the same ones, since
-        # which lines are code or comments does not depend on IDs.
-        return extract_requirements(path, relative, found_alds)
+                visit(item, section, owner if passes else None)
+                consumed = consumed or passes
+        if not consumed:
+            # No text of its own: kramdown-rfc's paragraph around a <list>, a thematic
+            # break, or an item whose first block is no paragraph.
+            if element.find("list") is not None:
+                place = "a list"
+            elif element.tag in ("li", "dd"):
+                place = "a list item without text"
+            else:
+                place = "a block without text"
+            misplaced(owner, place)
+
+    def visit(
+        child: ET.Element, section: str, inherited: ET.Element | None = None
+    ) -> None:
+        """Read one block; inherited is a list item whose anchor this block takes."""
+        nonlocal table_rows
+        tag = child.tag
+        if (
+            tag in ("references", "reference", "name", "title")
+            or tag in HIDDEN_INLINE_TAGS
+        ):
+            return
+        if tag == "front":
+            for part in child:
+                if is_element(part) and part.tag in FRONT_RULE_TAGS:
+                    walk(part, part_label(part))
+        elif tag in FRONT_RULE_TAGS:
+            walk(child, part_label(child))
+        elif tag == "section":
+            misplaced(child, ANCHOR_PLACES["section"])
+            walk(child, child.get("anchor") or slugify(section_title(child)))
+        elif tag in CODE_TAGS or tag in TABLE_TAGS:
+            misplaced(child, ANCHOR_PLACES[tag])
+            if tag in TABLE_TAGS:
+                table_rows += count_table(child)
+        elif tag in RULE_TAGS:
+            if child.get("anchor") is not None:
+                if inherited is not None:
+                    misplaced(inherited, "a list item without text")
+                inherited = child
+            elif inherited is not None:
+                handled.add(id(child))
+            read_rule_block(child, section, inherited)
+        elif tag in ("middle", "back"):
+            # Text outside any section, such as back matter before the first appendix,
+            # is labelled with the part it is in.
+            walk(child, tag)
+        else:
+            misplaced(child, ANCHOR_PLACES.get(tag, f"a <{tag}> element"))
+            walk(child, section)
+
+    def walk(parent: ET.Element, section: str) -> None:
+        """Read parent's children in order, following its <?line N?> instructions."""
+        nonlocal pi_line
+        for child in parent:
+            if is_element(child):
+                visit(child, section)
+            elif child.tag is ET.ProcessingInstruction and child.text:
+                match = re.fullmatch(r"line\s+(-?\d+)\s*", child.text)
+                if match:
+                    pi_line = abs(int(match.group(1)))
+
+    comments: list[str] = []
+    root = parse_xml(document, comments)
+    walk(root, "abstract")
+    # Requirement anchors the walk never reached as a rule or a block: on a span of text
+    # ('*MUST*{: #req-...}' anchors the <em>), a table cell, a reference and the like.
+    for element in root.iter():
+        anchor = element.get("anchor") if is_element(element) else None
+        if anchor and anchor.startswith("req-") and id(element) not in handled:
+            place = ANCHOR_PLACES.get(element.tag) or (
+                "a span of text"
+                if element.tag in SPAN_TAGS
+                else f"a <{element.tag}> element"
+            )
+            misplaced(element, place)
+    # Requirement IDs the Markdown sets that the rendering never shows: an IAL another
+    # one replaced, one held for a block that never came, a definition no IAL names.
+    # An ID that appears as text or in another attribute (in code, a comment, a literal
+    # IAL, title="#req-...") is skipped: it is either no IAL or already reported.
+    rendered = {e.get("anchor") for e in root.iter() if is_element(e)}
+    shown = " ".join(
+        [*root.itertext(), *comments]
+        + [value for e in root.iter() if is_element(e) for value in e.attrib.values()]
+    )
+    for req_id in dict.fromkeys(SOURCE_ID_RE.findall(markdown)):
+        if req_id not in rendered and req_id not in shown:
+            line = source.anchor_line(req_id, 0)
+            warnings.append(
+                f"{relative}:{line}: {req_id} is on no element kramdown-rfc renders, so it tags "
+                "nothing (another IAL replaced it, or no block follows it)"
+            )
 
     seen: dict[str, int] = {}
     for requirement in requirements:
+        # Two rules with the same text in one section would share a fallback key.
         count = seen.get(requirement.fallback_key, 0) + 1
         seen[requirement.fallback_key] = count
         if count > 1:
             requirement.fallback_key = f"{requirement.fallback_key}-{count}"
         # Exactly req-{draft}-NNN: a bare prefix check would take req-{draft}-charge-001,
-        # an ID of draft {draft}-charge, as this draft's own.
-        # A malformed ID already has its own warning; calling it foreign too would point
-        # at the wrong repair.
+        # an ID of draft {draft}-charge, as this draft's own. A malformed ID already has
+        # its own warning; calling it foreign too would point at the wrong repair.
         if (
             requirement.req_id
             and requirement.id_problem != "malformed"
-            and not re.fullmatch(rf"req-{re.escape(draft)}-[0-9]{{3}}", requirement.req_id)
+            and not re.fullmatch(
+                rf"req-{re.escape(draft)}-[0-9]{{3}}", requirement.req_id
+            )
         ):
             requirement.id_problem = requirement.id_problem or "foreign"
             warnings.append(
                 f"{relative}:{requirement.line}: {requirement.req_id} does not use this draft's prefix req-{draft}-; not counted as covered"
             )
-    drop_held("no block after it")
     return requirements, warnings, table_rows
+
+
+def part_label(part: ET.Element) -> str:
+    """Return the section label of the abstract or a note."""
+    if part.tag == "abstract":
+        return "abstract"
+    return part.get("anchor") or slugify(part.get("title") or section_title(part))
+
+
+def inline_prose(cell: ET.Element) -> list[str]:
+    """Return a v3 table cell's prose, its inline text and that of the blocks in it."""
+    parts = [inline_text(cell)[1]]
+    for block in cell.iter():
+        if block is not cell and is_element(block) and block.tag in RULE_TAGS:
+            parts.append(inline_text(block)[1])
+    return parts
+
+
+def section_title(element: ET.Element) -> str:
+    """Return the text of an element's <name> heading, or ''."""
+    name = element.find("name")
+    return "".join(name.itertext()) if name is not None else ""
+
+
+def extract_requirements(
+    path: Path, relative: str, render: Renderer
+) -> tuple[list[Requirement], list[str], int]:
+    """Render one draft with kramdown-rfc and extract its rules (requirements_from_xml)."""
+    data = path.read_bytes()
+    document = render(data)
+    markdown = data.decode("utf-8", "replace")
+    return requirements_from_xml(
+        document, markdown, relative, draft_short_name(path.name)
+    )
 
 
 def draft_paths(specs_dir: Path) -> list[Path]:
@@ -866,7 +823,8 @@ def draft_paths(specs_dir: Path) -> list[Path]:
         raise ValueError(f"{specs} is a symlink; pass an mpp-specs checkout")
     root = specs.resolve()
     paths = sorted(
-        p for p in specs.rglob("*.md")
+        p
+        for p in specs.rglob("*.md")
         # is_file: rglob also matches a directory named *.md, which read_text cannot read.
         if not p.is_symlink() and p.is_file() and p.resolve().is_relative_to(root)
     )
@@ -880,7 +838,7 @@ def draft_paths(specs_dir: Path) -> list[Path]:
 
 
 def extract_all(
-    specs_dir: Path,
+    specs_dir: Path, render: Renderer
 ) -> tuple[list[Requirement], list[str], dict[str, int], dict[str, str]]:
     """Extract requirements from every draft under specs/, flagging duplicate IDs.
 
@@ -888,10 +846,10 @@ def extract_all(
     draft's file. The last two list every draft read, including one with no prose rules
     (such as a draft whose keywords are all in tables), so the report still shows it.
     """
-    requirements: list[Requirement] = []
     warnings: list[str] = []
-    table_rows: dict[str, int] = {}
     first_path: dict[str, str] = {}
+    selected: list[tuple[Path, str]] = []
+
     # Highest revision first, so a stray older copy of a draft is the one skipped. Sort on
     # the -NN number, not the name: by name an unversioned draft-x.md ('.' > '-') would beat
     # draft-x-02.md. A file without a revision ranks below every explicit one.
@@ -909,10 +867,27 @@ def extract_all(
             )
             continue
         first_path[short] = relative
-        found, found_warnings, rows = extract_requirements(path, relative)
+        selected.append((path, relative))
+
+    def extract(item: tuple[Path, str]) -> tuple[list[Requirement], list[str], int]:
+        path, relative = item
+        try:
+            return extract_requirements(path, relative, render)
+        except (OSError, UnicodeDecodeError, ValueError) as error:
+            raise ValueError(f"{relative}: {error}") from None
+
+    # Each render starts a Ruby process that takes about a second, mostly startup, so the
+    # drafts are rendered in parallel; map keeps the results in draft order.
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=min(8, os.cpu_count() or 1)
+    ) as pool:
+        results = list(pool.map(extract, selected))
+    requirements: list[Requirement] = []
+    table_rows: dict[str, int] = {}
+    for (path, _), (found, found_warnings, rows) in zip(selected, results):
         requirements.extend(found)
         warnings.extend(found_warnings)
-        table_rows[short] = rows
+        table_rows[draft_short_name(path.name)] = rows
     # Coverage is matched by ID, so one claim on an ID that several rules carry would
     # cover all of them. Every rule sharing an ID is marked, the first one included,
     # since nothing says which of them the claim's author meant.
@@ -2097,8 +2072,18 @@ def clone_specs(destination: Path, ref: str) -> Path:
     return destination
 
 
-def generate(specs_dir: Path, source: str) -> dict[str, Any]:
-    """Build the report for one mpp-specs checkout against this suite's fixtures."""
+def generate(
+    specs_dir: Path, source: str, render: Renderer | None = None
+) -> dict[str, Any]:
+    """Build the report for one mpp-specs checkout against this suite's fixtures.
+
+    render defaults to kramdown-rfc on PATH, checked against the checkout's pinned
+    version before any draft is read.
+    """
+    if render is None:
+        kramdown = KramdownRfc()
+        kramdown.require(locked_kramdown_rfc_version(specs_dir))
+        render = kramdown
     # Sample the checkout's commit and the drafts' exact contents before and after
     # reading them: if either changed in between, the rules counted may not match the
     # commit named, so refuse to name one rather than attest the wrong source. The
@@ -2106,7 +2091,7 @@ def generate(specs_dir: Path, source: str) -> dict[str, Any]:
     # label stays '<HEAD>-dirty'.
     fingerprint_before = specs_fingerprint(specs_dir)
     commit_before = git_commit(specs_dir)
-    requirements, warnings, table_rows, draft_files = extract_all(specs_dir)
+    requirements, warnings, table_rows, draft_files = extract_all(specs_dir, render)
     commit = git_commit(specs_dir)
     if commit != commit_before:
         raise ValueError(
@@ -2131,6 +2116,17 @@ def generate(specs_dir: Path, source: str) -> dict[str, Any]:
     )
 
 
+def checked_renderer(specs_dir: Path, command: list[str] | None) -> KramdownRfc:
+    """Return a kramdown-rfc renderer checked against the version specs_dir pins.
+
+    A missing specs directory is reported first, as before kramdown-rfc was needed.
+    """
+    draft_paths(specs_dir)
+    kramdown = KramdownRfc(command)
+    kramdown.require(locked_kramdown_rfc_version(specs_dir))
+    return kramdown
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -2153,15 +2149,25 @@ def main(argv: list[str] | None = None) -> int:
         default=CONFORMANCE_DIR / "gap-report.md",
         help="Markdown summary path",
     )
+    parser.add_argument(
+        "--kramdown-rfc",
+        type=shlex.split,
+        help="command that renders a draft read from stdin to XML (default: kramdown-rfc, "
+        "at the version the checkout's Gemfile.lock pins), such as "
+        "'docker run --rm -i ietf-spec-tools kramdown-rfc'",
+    )
     args = parser.parse_args(argv)
 
     try:
         if args.specs:
-            report = generate(args.specs.resolve(), str(args.specs))
+            specs_dir = args.specs.resolve()
+            render = checked_renderer(specs_dir, args.kramdown_rfc)
+            report = generate(specs_dir, str(args.specs), render)
         else:
             with tempfile.TemporaryDirectory(prefix="mpp-specs-") as directory:
                 specs_dir = clone_specs(Path(directory) / "mpp-specs", args.ref)
-                report = generate(specs_dir, f"{SPECS_REPOSITORY}@{args.ref}")
+                render = checked_renderer(specs_dir, args.kramdown_rfc)
+                report = generate(specs_dir, f"{SPECS_REPOSITORY}@{args.ref}", render)
     except ValueError as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
