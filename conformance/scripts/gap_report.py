@@ -1482,6 +1482,11 @@ def build_report(
             ),
         }
 
+    countable = {
+        requirement.req_id
+        for requirement in requirements
+        if requirement.req_id and not requirement.id_problem
+    }
     totals = {
         "rules": len(requirements),
         "tagged": sum(entry["tagged"] for entry in drafts.values()),
@@ -1492,8 +1497,13 @@ def build_report(
         "specs": specs,
         "totals": totals,
         "drafts": sorted(drafts.values(), key=lambda entry: entry["file"]),
+        # Only IDs that count as covered above: defined once, well formed and in their own
+        # draft. A claim citing any other ID shows up under unknown_references or the
+        # warnings, never as coverage the totals don't count.
         "coverage": {
-            req_id: sorted(sources) for req_id, sources in sorted(coverage.items())
+            req_id: sorted(sources)
+            for req_id, sources in sorted(coverage.items())
+            if req_id in countable
         },
         "unknown_references": unknown,
         # Every claim citing each unknown ID, including claims that cover nothing.

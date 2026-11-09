@@ -1000,6 +1000,8 @@ class CoverageCorrectnessTests(unittest.TestCase):
             ["duplicate", "duplicate", "foreign"],
         )
         self.assertIn("[duplicate ID, not credited]", render_markdown(report))
+        # The coverage map agrees with the counts: only W's ID is listed.
+        self.assertEqual(report["coverage"], {"req-tempo-charge-002": ["vectors/a.json#x"]})
 
     def test_drafts_without_prose_rules_are_listed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
