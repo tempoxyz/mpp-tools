@@ -1029,11 +1029,27 @@ def load_claims(
         # over a file, and one invalid scenario aborts the whole file for every adapter. So
         # one bad scenario, tagged or not, makes every claim in the file coverage for nothing.
         file_error = None
+        commands = vector.get("commands", {})
         for scenario in vector["scenarios"]:
             try:
                 check_scenario(runner, scenario)
             except ValueError as error:
                 file_error = f"the runner refuses its file (vectors/{path.name}#{scenario['name']}: {error})"
+                break
+            # A generate scenario whose tests.generate is missing or true is compared with
+            # scenario["expected"]; without one the runner raises KeyError, which aborts
+            # the whole file (_run_scenarios lets it escape), so nothing in it runs.
+            generate = scenario.get("tests", {}).get("generate")
+            if (
+                commands.get("generate")
+                and not commands.get("operation")
+                and "expected" not in scenario
+                and generate in (None, True)
+            ):
+                file_error = (
+                    f"the runner crashes on its file (vectors/{path.name}#{scenario['name']} "
+                    "has no expected value for its generate test)"
+                )
                 break
         file_constraints: dict[str, tuple[str, ...]] = {}
         if not file_error:

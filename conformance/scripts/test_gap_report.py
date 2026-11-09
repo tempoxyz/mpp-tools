@@ -466,6 +466,36 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(report["totals"]["covered"], 0)
         self.assertEqual(len(warnings), 1)
 
+    def test_generate_scenario_without_expected_is_not_coverage(self) -> None:
+        # The runner compares a generate test that is true or missing with
+        # scenario["expected"]; without one it raises KeyError and aborts the file.
+        source = json.loads((VECTORS_DIR / "challenge-id.json").read_text(encoding="utf-8"))
+        base = {k: v for k, v in source["scenarios"][0].items() if k not in ("expected", "tests")}
+        good = dict(source["scenarios"][0], name="good", requirements=["req-core-001"])
+        for broken in ({"tests": {"generate": True}},):
+            with self.subTest(broken=broken):
+                bad = dict(base, name="bad", **broken)
+                vector = dict(source, scenarios=[good, bad])
+                with tempfile.TemporaryDirectory() as directory:
+                    vectors = Path(directory) / "vectors"
+                    vectors.mkdir()
+                    (vectors / "challenge-id.json").write_text(json.dumps(vector), encoding="utf-8")
+                    flows = Path(directory) / "flows.json"
+                    flows.write_text(json.dumps({"version": "1.0.0", "cases": [{"name": "a", "path": "/a"}]}), encoding="utf-8")
+                    claims = load_claims(vectors, flows)
+                self.assertEqual([claim.source for claim in claims], ["vectors/challenge-id.json#good"])
+                self.assertIn("no expected value", claims[0].runner_error or "")
+        # An explicit expectation in tests.generate needs no expected.
+        ok = dict(base, name="ok", tests={"generate": {"success": False, "error_type": "generation_error"}})
+        with tempfile.TemporaryDirectory() as directory:
+            vectors = Path(directory) / "vectors"
+            vectors.mkdir()
+            (vectors / "challenge-id.json").write_text(json.dumps(dict(source, scenarios=[good, ok])), encoding="utf-8")
+            flows = Path(directory) / "flows.json"
+            flows.write_text(json.dumps({"version": "1.0.0", "cases": [{"name": "a", "path": "/a"}]}), encoding="utf-8")
+            claims = load_claims(vectors, flows)
+        self.assertIsNone(claims[0].runner_error)
+
     def test_malformed_sdk_version_constraint_is_not_coverage(self) -> None:
         warnings: list[str] = []
         applies = version_checker(warnings, resolver=lambda adapter: "1.0.0")
