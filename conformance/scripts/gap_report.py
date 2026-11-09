@@ -608,8 +608,9 @@ def git_commit(path: Path) -> str | None:
     """Return the commit the specs at path were read from, or None if unknown.
 
     None when path is not the root of a git checkout (its HEAD would belong to an
-    enclosing repository); a "-dirty" suffix when the checkout has uncommitted
-    changes, since the counted rules then differ from that commit's tree.
+    enclosing repository); a "-dirty" suffix when specs/ has uncommitted changes
+    or untracked files, since draft discovery reads every specs/**/*.md in the
+    working tree and the counted rules then differ from that commit's tree.
     """
 
     def git(*args: str) -> str:
@@ -621,7 +622,7 @@ def git_commit(path: Path) -> str | None:
         if Path(git("rev-parse", "--show-toplevel")).resolve() != path.resolve():
             return None
         commit = git("rev-parse", "HEAD")
-        dirty = bool(git("status", "--porcelain", "--untracked-files=no"))
+        dirty = bool(git("status", "--porcelain", "--untracked-files=all", "--", "specs"))
     except (OSError, subprocess.CalledProcessError):
         return None
     if not commit:

@@ -503,12 +503,21 @@ class HelperTests(unittest.TestCase):
                 ).stdout.strip()
 
             run("init", "-q")
-            (repo / "a.md").write_text("x\n")
-            run("add", "a.md")
+            draft = repo / "specs" / "a.md"
+            draft.parent.mkdir()
+            draft.write_text("x\n")
+            run("add", "specs/a.md")
             run("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init")
             head = run("rev-parse", "HEAD")
             self.assertEqual(git_commit(repo), head)
-            (repo / "a.md").write_text("y\n")
+            # Untracked files outside specs/ don't change the counted rules.
+            (repo / "notes.txt").write_text("n\n")
+            self.assertEqual(git_commit(repo), head)
+            # An untracked draft is read by discovery, so the checkout is dirty.
+            (repo / "specs" / "b.md").write_text("new\n")
+            self.assertEqual(git_commit(repo), f"{head}-dirty")
+            (repo / "specs" / "b.md").unlink()
+            draft.write_text("y\n")
             self.assertEqual(git_commit(repo), f"{head}-dirty")
             nested = repo / "nested"
             nested.mkdir()
