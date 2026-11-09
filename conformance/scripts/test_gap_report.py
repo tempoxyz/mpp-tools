@@ -225,6 +225,17 @@ class ExtractTests(unittest.TestCase):
         self.assertLess(time.monotonic() - start, 1.0)
         self.assertEqual(source.locate("MUST " * 11 + "verify", 7), 7)
 
+    def test_container_render_forwards_safe_mode(self) -> None:
+        # The docker CLI does not pass its environment into the container, so the render
+        # command forwards each RENDER_ENV variable itself.
+        docker = KramdownRfc(["docker", "run", "--rm", "-i", "img", "kramdown-rfc"])
+        flags = [flag for name in gap_report.RENDER_ENV for flag in ("-e", name)]
+        self.assertEqual(
+            docker.render_command(),
+            ["docker", "run", *flags, "--rm", "-i", "img", "kramdown-rfc"],
+        )
+        self.assertEqual(KramdownRfc().render_command(), ["kramdown-rfc"])
+
     def test_draft_short_names(self) -> None:
         self.assertEqual(draft_short_name("draft-httpauth-payment-01.md"), "core")
         self.assertEqual(draft_short_name("draft-tempo-charge-00.md"), "tempo-charge")

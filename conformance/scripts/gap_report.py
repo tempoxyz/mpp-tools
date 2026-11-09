@@ -312,11 +312,29 @@ class KramdownRfc:
             f"'docker run --rm -i ietf-spec-tools kramdown-rfc'"
         )
 
+    def render_command(self) -> list[str]:
+        """Return the argv a render runs: the command, passing RENDER_ENV into a container.
+
+        A container does not inherit the environment of the docker (or podman) CLI that
+        starts it, so for a 'docker run' line each RENDER_ENV variable is forwarded with
+        '-e NAME' right after 'run'. Without it a containerized kramdown-rfc would render
+        with {::include} on and network lookups allowed.
+        """
+        command = list(self.command)
+        if (
+            len(command) >= 2
+            and Path(command[0]).name in {"docker", "podman"}
+            and command[1] == "run"
+        ):
+            forwarded = [flag for name in RENDER_ENV for flag in ("-e", name)]
+            return [*command[:2], *forwarded, *command[2:]]
+        return command
+
     def __call__(self, markdown: bytes) -> str:
         """Return the XML kramdown-rfc renders markdown to, or raise ValueError."""
         try:
             result = subprocess.run(
-                self.command,
+                self.render_command(),
                 input=markdown,
                 capture_output=True,
                 timeout=RENDER_TIMEOUT_SECONDS,
