@@ -29,7 +29,7 @@ from gap_report import (
     render_markdown,
     version_checker,
 )
-from harness import validate_value
+from harness import VECTORS_DIR, validate_value
 
 SPEC = """---
 title: Example
@@ -336,6 +336,32 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(report["coverage"], {})
         self.assertEqual(len(warnings), 1)
         self.assertIn("golang", warnings[0])
+
+    def test_claims_in_a_file_the_runner_refuses_are_not_coverage(self) -> None:
+        source = json.loads((VECTORS_DIR / "tempo-proof.json").read_text(encoding="utf-8"))
+        good = dict(source["scenarios"][0], name="good", requirements=["req-core-001"])
+        bad = dict(source["scenarios"][0], name="bad", sdkVersions={"golang": ">=0.1.0"})
+        source["scenarios"] = [good, bad]
+        with tempfile.TemporaryDirectory() as directory:
+            vectors = Path(directory) / "vectors"
+            vectors.mkdir()
+            (vectors / "tempo-proof.json").write_text(json.dumps(source), encoding="utf-8")
+            flows = Path(directory) / "flows.json"
+            flows.write_text(
+                json.dumps({"version": "1.0.0", "cases": [{"name": "a", "path": "/a"}]}),
+                encoding="utf-8",
+            )
+            claims = load_claims(vectors, flows)
+        self.assertEqual([claim.source for claim in claims], ["vectors/tempo-proof.json#good"])
+        self.assertIn("golang", claims[0].runner_error or "")
+        requirement = Requirement(
+            draft="draft-x-00", file="specs/x.md", line=1, section="",
+            text="A MUST b.", req_id="req-core-001", keywords=["MUST"],
+        )
+        warnings: list[str] = []
+        report = build_report([requirement], claims, {}, warnings, {})
+        self.assertEqual(report["totals"]["covered"], 0)
+        self.assertEqual(len(warnings), 1)
 
     def test_unresolved_sdk_version_is_not_coverage(self) -> None:
         def missing(adapter: str) -> str:

@@ -312,6 +312,8 @@ class Claim:
     sdk_versions: dict[str, str] | None = None
     # Flow cases only: server_only, raw_http, client_flow or ordinary, as flow_runner runs them.
     flow_mode: str | None = None
+    # Vector claims only: why the vector runner refuses this claim's whole file, if it does.
+    runner_error: str | None = None
 
 
 def vector_operation(vector: dict[str, Any]) -> str | None:
@@ -329,11 +331,23 @@ def load_claims(
 ) -> list[Claim]:
     """Read the requirement IDs each vector scenario and flow case claims."""
     claims: list[Claim] = []
+    runner = VectorRunner()
     for path in sorted(vectors_dir.glob("*.json")):
         if path.name == "package.json":
             continue
         vector = load_vector(path)
         operation = vector_operation(vector)
+        # The vector runner validates every scenario's sdkVersions and adapters as it loops
+        # over a file, and one invalid scenario aborts the whole file for every adapter. So
+        # one bad scenario, tagged or not, makes every claim in the file coverage for nothing.
+        file_error = None
+        for scenario in vector["scenarios"]:
+            try:
+                runner.scenario_version_constraints(scenario)
+                runner.scenario_adapters(scenario)
+            except ValueError as error:
+                file_error = f"vectors/{path.name}#{scenario['name']}: {error}"
+                break
         for scenario in vector["scenarios"]:
             if scenario.get("requirements"):
                 claims.append(
@@ -343,6 +357,7 @@ def load_claims(
                         operation=operation,
                         adapters=scenario.get("adapters"),
                         sdk_versions=scenario.get("sdkVersions"),
+                        runner_error=file_error,
                     )
                 )
     for flow_case in load_flow_cases(flow_cases_path):
@@ -416,9 +431,15 @@ def rejected_by_runner(claim: Claim, warnings: list[str]) -> bool:
     """Whether the vector runner refuses this claim's scenario outright.
 
     The runner rejects a scenario whose sdkVersions has unknown adapter keys (or
-    non-string values) before running it for any adapter, so such a claim is
-    coverage for no SDK and for no suite-wide total. Warns once per claim.
+    non-string values) before running it for any adapter, and aborts the whole file
+    when any scenario in it is invalid (runner_error), so such a claim is coverage
+    for no SDK and for no suite-wide total. Warns once per claim.
     """
+    if claim.runner_error:
+        message = f"{claim.source}: the runner refuses its file ({claim.runner_error}); not counted as coverage"
+        if message not in warnings:
+            warnings.append(message)
+        return True
     if not claim.sdk_versions:
         return False
     try:
