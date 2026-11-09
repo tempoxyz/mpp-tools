@@ -604,41 +604,49 @@ def render_markdown(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def git_blob_sha(data: bytes) -> str:
+    """Return the git blob id of data, as 'git hash-object' computes it without filters."""
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
 def git_commit(path: Path) -> str | None:
     """Return the commit the specs at path were read from, or None if unknown.
 
     None when path is not the root of a git checkout (its HEAD would belong to an
-    enclosing repository); a "-dirty" suffix when any specs/**/*.md differs from
-    HEAD (modified, untracked or gitignored), since draft discovery reads every
-    such file in the working tree and the counted rules then differ from that
-    commit's tree.
+    enclosing repository). A "-dirty" suffix when the drafts the report reads
+    differ from HEAD's: the specs/**/*.md files draft discovery finds in the
+    working tree are compared, by path and blob id, with the ones in HEAD's tree.
+    Comparing the files themselves rather than parsing 'git status' also covers
+    untracked, gitignored, oddly named and nested-repository files.
     """
 
     def git(*args: str) -> str:
         return subprocess.run(
             ["git", "-C", str(path), *args], capture_output=True, text=True, check=True
-        ).stdout.strip()
+        ).stdout
 
     try:
-        if Path(git("rev-parse", "--show-toplevel")).resolve() != path.resolve():
+        if Path(git("rev-parse", "--show-toplevel").strip()).resolve() != path.resolve():
             return None
-        commit = git("rev-parse", "HEAD")
-        # --ignored=traditional with --untracked-files=all lists each file inside an
-        # ignored directory rather than the directory itself; keep only .md entries.
-        status = git(
-            "status",
-            "--porcelain",
-            "--untracked-files=all",
-            "--ignored=traditional",
-            "--",
-            ":(glob)specs/**/*.md",
-        )
-        dirty = any(line.rstrip("/").endswith(".md") for line in status.splitlines())
-    except (OSError, subprocess.CalledProcessError):
+        commit = git("rev-parse", "HEAD").strip()
+        # "<mode> <type> <sha>\t<path>" per entry, NUL-separated so any name is exact.
+        head: dict[str, str] = {}
+        for entry in git("ls-tree", "-r", "-z", "HEAD", "--", "specs").split("\0"):
+            if not entry:
+                continue
+            meta, name = entry.split("\t", 1)
+            if name.endswith(".md"):
+                head[name] = meta.split()[2]
+        working = {
+            file.relative_to(path).as_posix(): git_blob_sha(file.read_bytes())
+            for file in (path / "specs").rglob("*.md")
+            if file.is_file()
+        }
+    except (OSError, subprocess.CalledProcessError, ValueError, IndexError):
         return None
     if not commit:
         return None
-    return f"{commit}-dirty" if dirty else commit
+    return f"{commit}-dirty" if working != head else commit
 
 
 def clone_specs(destination: Path, ref: str) -> Path:

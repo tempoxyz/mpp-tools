@@ -6,6 +6,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import shutil
 import subprocess
 import tempfile
 import time
@@ -530,6 +531,18 @@ class HelperTests(unittest.TestCase):
             (repo / "specs" / "build" / "draft.md").write_text("hidden\n")
             self.assertEqual(git_commit(repo), f"{head}-dirty")
             (repo / "specs" / "build" / "draft.md").unlink()
+            # A draft whose name git status would quote ("a b.md") is still seen.
+            (repo / "specs" / "a b.md").write_text("spaced\n")
+            self.assertEqual(git_commit(repo), f"{head}-dirty")
+            (repo / "specs" / "a b.md").unlink()
+            # A draft inside a nested repository (invisible to git status) is seen too.
+            nested_repo = repo / "specs" / "vendor"
+            nested_repo.mkdir()
+            subprocess.run(["git", "init", "-q", str(nested_repo)], check=True)
+            (nested_repo / "x.md").write_text("vendored\n")
+            self.assertEqual(git_commit(repo), f"{head}-dirty")
+            shutil.rmtree(nested_repo)
+            self.assertEqual(git_commit(repo), head)
             # An untracked draft is read by discovery, so the checkout is dirty.
             (repo / "specs" / "b.md").write_text("new\n")
             self.assertEqual(git_commit(repo), f"{head}-dirty")
