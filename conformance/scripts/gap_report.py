@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import html.entities
 import json
 import re
 import subprocess
@@ -69,16 +70,20 @@ LEADING_IAL_RE = re.compile(r"\{:(?P<body>[^{}]*)\}[ \t]*")
 TRAILING_IAL_RE = re.compile(r"(?<![\\*_\x60\])>])\{:(?P<body>[^{}]*)\}\s*$")
 # One attribute of an IAL body, scanned the way kramdown's parse_attribute_list does:
 # key="value" (or 'value'), one or more #id and .class names run together, or a bare
-# reference name, each separated by whitespace. Only a '#name' token sets the ID, so
-# '#req-...' inside a quoted value such as title="#req-core-001" sets nothing.
+# reference name, each separated by whitespace. A '#name' token and a quoted id="..."
+# (or id='...') value set the ID, the last one winning; '#req-...' inside another
+# attribute's value, such as title="#req-core-001", sets nothing, and kramdown ignores an
+# unquoted id=req-core-001.
 # Inside the quotes a backslash is matched only as the start of an escape pair and every
 # other character only on its own ('[^\\]'), so each character has exactly one way to
 # match: a value that never closes fails in linear time instead of backtracking
 # exponentially over a long backslash run (ReDoS).
 IAL_TOKEN_RE = re.compile(
-    r"""(?:^|(?<=\s))(?:\w[\w-]*=(?P<quote>["'])(?:\\.|(?!(?P=quote))[^\\\n])*(?P=quote)|(?P<names>(?:[#.]\w[\w-]*)+)|\w[\w-]*)(?=\s|$)"""
+    r"""(?:^|(?<=\s))(?:(?P<key>\w[\w-]*)=(?P<quote>["'])(?P<value>(?:\\.|(?!(?P=quote))[^\\\n])*)(?P=quote)|(?P<names>(?:[#.]\w[\w-]*)+)|\w[\w-]*)(?=\s|$)"""
 )
 IAL_ID_NAME_RE = re.compile(r"#(\w[\w-]*)")
+# The escapes kramdown removes from a quoted IAL value: a backslash before '}' or the quote.
+IAL_VALUE_ESCAPE_RE = re.compile(r"\\([}\"'])")
 # '{:name: attributes}' is an attribute list definition: it names attributes for later
 # reference and attaches nothing to the block before it.
 ALD_RE = re.compile(r"^\w[\w-]*:")
@@ -123,6 +128,29 @@ BACKTICKS_RE = re.compile(r"(?<!\\)\x60+")
 # keyword in a URL, as in [spec](https://example.com/MUST), is not a rule.
 LINK_DESTINATION_RE = re.compile(r"\]\([^()\s]*(?:\s+(?:\"[^\"]*\"|'[^']*'))?\s*\)")
 AUTOLINK_RE = re.compile(r"<[A-Za-z][A-Za-z0-9+.-]*:[^\s<>]*>")
+# A character reference as kramdown 2.4 reads one (HTML_ENTITY_RE in its parser/html.rb):
+# the ';' is required and a hex reference takes a lowercase 'x', so '&#77;UST' and
+# '&#x4d;UST' render as MUST while '&#77UST' and '&#X4d;UST' stay literal text
+# (checked with kramdown-rfc 1.7.39).
+CHAR_REF_RE = re.compile(r"&([\w:][\-\w.:]*);|&#(\d+);|&#x([0-9a-fA-F]+);")
+
+
+def decode_char_refs(text: str) -> str:
+    """Replace each character reference with the character kramdown renders for it.
+
+    An unknown name (such as '&MUST;') or an out-of-range code point is left as it is.
+    """
+
+    def decode(match: re.Match[str]) -> str:
+        name, decimal, hexadecimal = match.groups()
+        if name is not None:
+            return html.entities.html5.get(name + ";", match.group())
+        try:
+            return chr(int(decimal) if decimal is not None else int(hexadecimal, 16))
+        except (ValueError, OverflowError):
+            return match.group()
+
+    return CHAR_REF_RE.sub(decode, text)
 
 
 def parse_heading(line: str) -> tuple[str, str | None] | None:
@@ -153,7 +181,9 @@ class Requirement:
     # carries the same ID, "foreign" when the ID has another draft's prefix. Coverage is
     # matched by ID, so without this one claim on a shared ID would mark every rule that
     # carries it covered (and a mis-prefixed rule would be credited by another draft's
-    # tests). Such a rule counts as uncovered until its ID is fixed.
+    # tests). "malformed" when the ID does not match req-<draft>-<nnn>: no claim can cite
+    # it, so it counts as neither tagged nor covered. Such a rule counts as uncovered
+    # until its ID is fixed.
     id_problem: str | None = None
 
     @property
@@ -233,13 +263,16 @@ def keywords_in(text: str) -> list[str]:
     """Return the BCP 14 keywords in text as a reader of the rendered draft sees them.
 
     Ignored: keywords in code spans, in link destinations or autolinks, and a keyword
-    double-quoted on its own ("MUST", see QUOTED_KEYWORD_RE). Whitespace, newlines
-    included, is collapsed first so a keyword pair wrapped across lines still reads as
-    one keyword ("MUST NOT", not "MUST").
+    double-quoted on its own ("MUST", see QUOTED_KEYWORD_RE). Character references in
+    the remaining text are decoded first, as the rendered draft shows them ('&#77;UST'
+    is MUST, '&quot;MUST&quot;' a quoted keyword); inside a code span they stay literal.
+    Whitespace, newlines included, is collapsed so a keyword pair wrapped across lines
+    still reads as one keyword ("MUST NOT", not "MUST").
     """
     visible = strip_code_spans(text)
     visible = LINK_DESTINATION_RE.sub("]", visible)
     visible = AUTOLINK_RE.sub(" ", visible)
+    visible = decode_char_refs(visible)
     visible = " ".join(visible.split())
     visible = QUOTED_KEYWORD_RE.sub(" ", visible)
     return sorted(set(KEYWORD_RE.findall(visible)))
@@ -300,21 +333,34 @@ def strip_comments(
     return "".join(visible), closers, touched
 
 
-def ial_req_id(body: str) -> str | None:
-    """Return the requirement ID an IAL body sets, or None when it sets none.
+def ial_id(body: str) -> str | None:
+    """Return the ID an IAL body gives its element, requirement or not, or None.
 
-    The ID is the last '#name' token (kramdown keeps the last one), read only from a
-    real token (IAL_TOKEN_RE), and only when it starts with 'req-'; whether the rest
-    matches req-<draft>-<nnn> is warned about separately. Extension tags ('{::name}',
+    kramdown writes every '#name' token and quoted id="..." value to the same attribute
+    in order, so the last one is the element's ID: '{: #req-core-001 id="note"}' gives
+    it 'note'. Only real tokens count (IAL_TOKEN_RE). Extension tags ('{::name}',
     '{:/name}') and attribute list definitions ('{:name: ...}') set no ID.
     """
     if body.startswith((":", "/")) or ALD_RE.match(body):
         return None
     identifier = None
     for token in IAL_TOKEN_RE.finditer(body):
-        if token.group("names"):
+        if token.group("key") == "id":
+            identifier = IAL_VALUE_ESCAPE_RE.sub(r"\1", token.group("value"))
+        elif token.group("names"):
             for name in IAL_ID_NAME_RE.findall(token.group("names")):
                 identifier = name
+    return identifier
+
+
+def ial_req_id(body: str) -> str | None:
+    """Return the requirement ID an IAL body sets, or None when it sets none.
+
+    That is its final ID (ial_id) when it starts with 'req-', so a later non-requirement
+    ID in the same IAL overrides an earlier requirement ID. Whether the rest matches
+    req-<draft>-<nnn> is checked separately (a malformed ID is reported, not credited).
+    """
+    identifier = ial_id(body)
     return identifier if identifier and identifier.startswith("req-") else None
 
 
@@ -369,8 +415,11 @@ def extract_requirements(
         if item:
             leading = LEADING_IAL_RE.match(text, item.end())
             if leading:
-                # '- {: #req-...} text': kramdown-rfc gives the list item this ID. A block
-                # IAL on the line after the item (req_id) also tags it and wins.
+                # '- {: #req-...} text': kramdown-rfc gives the list item this ID. A
+                # requirement ID in a block IAL on the line after the item (req_id) is
+                # read as the item's and wins. One without a requirement ID ('{: #note}')
+                # leaves the leading ID: kramdown puts that IAL on the enclosing list, and
+                # the item keeps its own anchor (checked with kramdown-rfc 1.7.39).
                 req_id = req_id or ial_req_id(leading.group("body"))
                 text = text[: item.end()] + text[leading.end() :]
         trailing = TRAILING_IAL_RE.search(text)
@@ -388,9 +437,10 @@ def extract_requirements(
             return
         normalized = normalize(text)
         digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:8]
-        if req_id and not REQ_ID_RE.match(req_id):
+        malformed = bool(req_id) and not REQ_ID_RE.match(req_id)
+        if malformed:
             warnings.append(
-                f"{relative}:{unit_line}: {req_id} does not match req-<draft>-<nnn>"
+                f"{relative}:{unit_line}: {req_id} does not match req-<draft>-<nnn>; not counted as tagged or covered"
             )
         requirements.append(
             Requirement(
@@ -402,6 +452,9 @@ def extract_requirements(
                 req_id=req_id,
                 fallback_key=f"{draft}#{section}:{digest}",
                 keywords=found,
+                # The schemas only accept well-formed IDs in claims, so no claim can
+                # cite this one: it is reported under its ID but not counted as tagged.
+                id_problem="malformed" if malformed else None,
             )
         )
 
@@ -542,7 +595,7 @@ def extract_requirements(
         if count > 1:
             requirement.fallback_key = f"{requirement.fallback_key}-{count}"
         if requirement.req_id and not requirement.req_id.startswith(f"req-{draft}-"):
-            requirement.id_problem = "foreign"
+            requirement.id_problem = requirement.id_problem or "foreign"
             warnings.append(
                 f"{relative}:{requirement.line}: {requirement.req_id} does not use this draft's prefix req-{draft}-; not counted as covered"
             )
@@ -1029,7 +1082,11 @@ def build_report(
             continue
         for req_id in claim.requirements:
             coverage.setdefault(req_id, []).append(claim.source)
-    known = {requirement.req_id for requirement in requirements if requirement.req_id}
+    known = {
+        requirement.req_id
+        for requirement in requirements
+        if requirement.req_id and requirement.id_problem != "malformed"
+    }
     unknown = sorted(req_id for req_id in cited if req_id not in known)
 
     drafts: dict[str, dict[str, Any]] = {}
@@ -1053,7 +1110,7 @@ def build_report(
     for requirement in requirements:
         entry = draft_entry(requirement.draft, requirement.file)
         entry["rules"] += 1
-        if requirement.req_id:
+        if requirement.req_id and requirement.id_problem != "malformed":
             entry["tagged"] += 1
         if requirement.req_id in coverage and not requirement.id_problem:
             entry["covered"] += 1
@@ -1232,6 +1289,25 @@ def git_commit(path: Path) -> str | None:
     return f"{commit}-dirty" if working != head else commit
 
 
+def specs_fingerprint(specs_dir: Path) -> str:
+    """Return a sha256 over the path and bytes of every draft draft_paths finds.
+
+    generate compares it before and after reading the drafts. The commit label alone
+    cannot show a change there: every modified state under one HEAD is '<HEAD>-dirty'.
+    A draft that cannot be read hashes as a marker, so it differs from its contents.
+    """
+    digest = hashlib.sha256()
+    for path in draft_paths(specs_dir):
+        name = path.relative_to(specs_dir).as_posix().encode("utf-8")
+        try:
+            data = path.read_bytes()
+        except OSError:
+            data = None
+        digest.update(hashlib.sha256(name).digest())
+        digest.update(b"\0" if data is None else b"\1" + hashlib.sha256(data).digest())
+    return digest.hexdigest()
+
+
 def clone_specs(destination: Path, ref: str) -> Path:
     subprocess.run(
         [
@@ -1252,9 +1328,12 @@ def clone_specs(destination: Path, ref: str) -> Path:
 
 def generate(specs_dir: Path, source: str) -> dict[str, Any]:
     """Build the report for one mpp-specs checkout against this suite's fixtures."""
-    # Sample the checkout's commit before and after reading the drafts: if it moved (or
-    # its drafts changed) in between, the rules counted may not match either commit, so
-    # refuse to name one rather than attest the wrong source.
+    # Sample the checkout's commit and the drafts' exact contents before and after
+    # reading them: if either changed in between, the rules counted may not match the
+    # commit named, so refuse to name one rather than attest the wrong source. The
+    # fingerprint catches a draft that changes again in an already dirty checkout, whose
+    # label stays '<HEAD>-dirty'.
+    fingerprint_before = specs_fingerprint(specs_dir)
     commit_before = git_commit(specs_dir)
     requirements, warnings, table_rows, draft_files = extract_all(specs_dir)
     commit = git_commit(specs_dir)
@@ -1262,6 +1341,8 @@ def generate(specs_dir: Path, source: str) -> dict[str, Any]:
         raise ValueError(
             f"{specs_dir} changed while it was read ({commit_before} -> {commit}); run again"
         )
+    if specs_fingerprint(specs_dir) != fingerprint_before:
+        raise ValueError(f"{specs_dir} drafts changed while they were read; run again")
     claims = load_claims()
     profiles = load_profiles()
     adapters = load_capabilities()

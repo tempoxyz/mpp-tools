@@ -1186,12 +1186,120 @@ class GenerateCommitStabilityTest(unittest.TestCase):
         commits = iter(["a" * 40, "b" * 40])
         with (
             unittest.mock.patch.object(gap_report, "git_commit", lambda _p: next(commits)),
+            unittest.mock.patch.object(gap_report, "specs_fingerprint", lambda _p: "f"),
             unittest.mock.patch.object(
                 gap_report, "extract_all", lambda _p: ([], [], {}, {})
             ),
             self.assertRaisesRegex(ValueError, "changed while it was read"),
         ):
             gap_report.generate(Path("."), "x")
+
+
+class ReviewFindingTests(unittest.TestCase):
+    """Regression tests for review findings; kramdown behavior checked with kramdown-rfc 1.7.39."""
+
+    def test_character_references_render_as_keywords(self) -> None:
+        cases = {
+            "Clients &#77;UST retry.\n": [["MUST"]],
+            "Servers &#x4d;UST NOT drop.\n": [["MUST NOT"]],
+            "Peers &#x4D;AY and &#0077;UST go.\n": [["MAY", "MUST"]],
+            # kramdown needs the ';' and a lowercase 'x': these stay literal text
+            "A &#77UST b and &#X4d;UST c.\n": [],
+            # inside a code span a reference is verbatim
+            "Code \x60&#77;UST\x60 here.\n": [],
+            # &quot; renders as '"', so this is the quoted keyword of the boilerplate
+            "The key words &quot;MUST&quot; are.\n": [],
+        }
+        for body, expected in cases.items():
+            with self.subTest(body=body):
+                self.assertEqual([r.keywords for r in rules_in(body)], expected)
+
+    def test_final_ial_id_decides_the_requirement_id(self) -> None:
+        cases = {
+            'id="req-tempo-charge-001"': "req-tempo-charge-001",
+            "id='req-tempo-charge-002'": "req-tempo-charge-002",
+            # the last ID wins, whether a #name or an id= value
+            'id="note" #req-tempo-charge-003': "req-tempo-charge-003",
+            '#req-tempo-charge-004 id="note"': None,
+            "#req-tempo-charge-005 #note": None,
+            # another attribute's value, or an unquoted id=, sets no ID
+            'title="#req-tempo-charge-006"': None,
+            "id=req-tempo-charge-007": None,
+        }
+        for body, expected in cases.items():
+            with self.subTest(body=body):
+                self.assertEqual(ial_req_id(body), expected)
+        cases = {
+            'P MUST a.\n{: id="req-tempo-charge-008"}\n': "req-tempo-charge-008",
+            'P MUST a.\n{: #req-tempo-charge-009 id="note"}\n': None,
+            # kramdown puts a block IAL after a list item on the list; the item keeps the
+            # ID at the start of its text
+            "- {: #req-tempo-charge-010} Item MUST x.\n{: #note}\n": "req-tempo-charge-010",
+            '- {: #req-tempo-charge-011} Item MUST x.\n{: id="note"}\n': "req-tempo-charge-011",
+        }
+        for body, expected in cases.items():
+            with self.subTest(body=body):
+                requirements, warnings, _ = read_draft(body)
+                self.assertEqual([r.req_id for r in requirements], [expected])
+                self.assertEqual(warnings, [])
+
+    def test_malformed_ids_are_reported_but_not_tagged(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            specs = write_specs(
+                Path(directory),
+                {
+                    "specs/a/draft-tempo-charge-00.md": "# A\n\nX MUST hold.\n{: #req-tempo-charge-01}\n\n"
+                    "W MUST hold.\n{: #req-tempo-charge-002}\n",
+                },
+            )
+            requirements, warnings, table_rows, files = extract_all(specs)
+        claims = [Claim("vectors/a.json#x", ["req-tempo-charge-01", "req-tempo-charge-002"])]
+        profiles = {"go": {"profile": ["tempo-charge"], "capabilities": []}}
+        report = build_report(
+            requirements, claims, profiles, warnings, {}, table_rows, draft_files=files
+        )
+        (draft,) = report["drafts"]
+        self.assertEqual((draft["rules"], draft["tagged"], draft["covered"]), (2, 1, 1))
+        self.assertEqual(report["totals"]["tagged"], 1)
+        (uncovered,) = draft["uncovered"]
+        self.assertEqual(
+            (uncovered["key"], uncovered["id_problem"]), ("req-tempo-charge-01", "malformed")
+        )
+        self.assertEqual(report["unknown_references"], ["req-tempo-charge-01"])
+        self.assertTrue(any("does not match req-<draft>-<nnn>" in w for w in warnings))
+        self.assertIn("[malformed ID, not credited]", render_markdown(report))
+
+    def test_dirty_checkout_changing_again_while_read_fails(self) -> None:
+        import gap_report
+
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            draft = repo / "specs" / "draft-tempo-charge-00.md"
+            write_specs(repo, {"specs/draft-tempo-charge-00.md": "# A\n\nX MUST hold.\n"})
+            for args in (
+                ["init", "-q"],
+                ["add", "."],
+                ["-c", "user.name=t", "-c", "user.email=t@e", "-c", "commit.gpgsign=false",
+                 "commit", "-qm", "init"],
+            ):
+                subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+            draft.write_text("# A\n\nX MUST hold.\n\nY MAY hold.\n", encoding="utf-8")
+            label = git_commit(repo)
+            self.assertTrue(label and label.endswith("-dirty"))
+            extract = gap_report.extract_all
+
+            def extract_then_edit(path: Path):  # type: ignore[no-untyped-def]
+                result = extract(path)
+                draft.write_text("# A\n\nZ SHOULD hold.\n", encoding="utf-8")
+                return result
+
+            with (
+                unittest.mock.patch.object(gap_report, "extract_all", extract_then_edit),
+                self.assertRaisesRegex(ValueError, "drafts changed while they were read"),
+            ):
+                gap_report.generate(repo, "x")
+            # Both samples carry the same '-dirty' label: only the fingerprint tells them apart.
+            self.assertEqual(git_commit(repo), label)
 
 
 if __name__ == "__main__":
