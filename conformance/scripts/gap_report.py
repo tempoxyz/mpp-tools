@@ -22,6 +22,7 @@ import subprocess
 import sys
 import tempfile
 import urllib.parse
+import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -1361,10 +1362,15 @@ def answers_challenge(
             return False
         if cases_by_path is None or split.scheme or split.netloc:
             return False
+        # urllib's default HTTPRedirectHandler follows at most max_redirections (10)
+        # redirects and raises HTTPError on the next 302, which flow_runner reads as an
+        # unexpected status before any adapter call.
+        if hops >= urllib.request.HTTPRedirectHandler.max_redirections:
+            return False
         target_path = urllib.parse.urljoin(path, split.path) if split.path else path
         next_method = "HEAD" if method == "HEAD" else "GET"
         # Follow the redirect: the target is requested with no initial_query. A loop stops
-        # once hops exceeds the number of cases.
+        # at the redirect cap above (or once hops exceeds the number of cases).
         flow_case, hops, method, query = cases_by_path.get(target_path), hops + 1, next_method, ""
 
 

@@ -1340,15 +1340,24 @@ class FlowOperationsTest(unittest.TestCase):
         self.assertFalse(claim_applies(legacy, "go", parse_only))
         self.assertTrue(claim_applies(legacy, "go", no_receipt))
 
-    def test_long_redirect_chain_does_not_recurse(self) -> None:
-        # Redirects are followed in a loop, so a chain longer than the recursion limit
-        # still resolves instead of raising RecursionError.
-        count = 3000
-        cases = {f"/c{i}": {"path": f"/c{i}", "redirect_to": f"/c{i + 1}"} for i in range(count)}
-        cases[f"/c{count}"] = {"path": f"/c{count}"}
-        self.assertTrue(answers_challenge(cases["/c0"], cases))
-        cases["/c1"]["redirect_to"] = "/c0"
-        self.assertFalse(answers_challenge(cases["/c0"], cases))
+    def test_redirect_chains_stop_where_urllib_does(self) -> None:
+        def chain(count: int) -> dict[str, dict[str, str]]:
+            cases = {
+                f"/c{i}": {"path": f"/c{i}", "redirect_to": f"/c{i + 1}"} for i in range(count)
+            }
+            cases[f"/c{count}"] = {"path": f"/c{count}"}
+            return cases
+
+        # urllib follows 10 redirects; the 11th 302 is the response flow_runner sees.
+        ten = chain(10)
+        self.assertTrue(answers_challenge(ten["/c0"], ten))
+        eleven = chain(11)
+        self.assertFalse(answers_challenge(eleven["/c0"], eleven))
+        # A chain longer than the recursion limit ends without RecursionError.
+        long = chain(3000)
+        self.assertFalse(answers_challenge(long["/c0"], long))
+        ten["/c1"]["redirect_to"] = "/c0"
+        self.assertFalse(answers_challenge(ten["/c0"], ten))
 
 
 class OperationInputErrorTest(unittest.TestCase):
