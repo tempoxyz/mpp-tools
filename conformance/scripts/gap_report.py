@@ -120,6 +120,8 @@ WORD_RE = re.compile(r"[A-Za-z0-9]+")
 # How many consecutive words of a rule must match the Markdown to place it: enough that
 # rules opening with the same phrase ("Servers MUST verify that the ...") are told apart.
 LOCATE_WINDOW = 12
+# Candidate positions SourceLines.find compares per call before giving up.
+LOCATE_BUDGET = 4096
 
 # Elements a rule is read from: paragraphs (<t>, also list items in kramdown-rfc's
 # default vocabulary, where a list is <list> holding <t> items), v3 list items and
@@ -501,6 +503,11 @@ class SourceLines:
         Long windows first, so rules that open with the same phrase are told apart;
         shorter ones when the rendering spells too many words differently.
         """
+        # Every candidate costs a slice comparison, and a common first word can have
+        # thousands of them. The budget keeps a rule the matcher cannot place (rendered
+        # words the Markdown spells differently) from making a draft quadratic: when it
+        # runs out, the caller falls back to the <?line?> number.
+        budget = LOCATE_BUDGET
         for size in dict.fromkeys(
             min(n, len(words)) for n in (LOCATE_WINDOW, LOCATE_WINDOW // 2, 3)
         ):
@@ -508,6 +515,9 @@ class SourceLines:
                 window = words[offset : offset + size]
                 candidates = self.positions.get(window[0], [])
                 for index in candidates[bisect_left(candidates, start + offset) :]:
+                    budget -= 1
+                    if budget < 0:
+                        return None
                     if self.words[index : index + size] == window:
                         return index - offset
         return None

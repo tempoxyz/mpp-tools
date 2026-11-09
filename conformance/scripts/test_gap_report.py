@@ -216,6 +216,15 @@ class ExtractTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.directory.cleanup()
 
+    def test_unplaceable_rule_gives_up_within_budget(self) -> None:
+        # Every word of the source is the rule's first word, so each window has thousands
+        # of candidates and none matches: without a budget, find is quadratic.
+        source = gap_report.SourceLines("MUST " * 20000)
+        start = time.monotonic()
+        self.assertIsNone(source.find(["MUST"] * 11 + ["verify"], 0))
+        self.assertLess(time.monotonic() - start, 1.0)
+        self.assertEqual(source.locate("MUST " * 11 + "verify", 7), 7)
+
     def test_draft_short_names(self) -> None:
         self.assertEqual(draft_short_name("draft-httpauth-payment-01.md"), "core")
         self.assertEqual(draft_short_name("draft-tempo-charge-00.md"), "tempo-charge")
