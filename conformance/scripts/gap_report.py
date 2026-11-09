@@ -22,10 +22,11 @@ import sys
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from harness import (
     ADAPTERS_DIR,
+    AdapterConfig,
     COMMAND_TO_OPERATION,
     CONFORMANCE_DIR,
     FLOW_CASES_PATH,
@@ -35,6 +36,7 @@ from harness import (
     load_vector,
     validate_value,
 )
+from vector_runner import VectorRunner
 
 SPECS_REPOSITORY = "https://github.com/tempoxyz/mpp-specs"
 EXCERPT_LENGTH = 160
@@ -164,9 +166,14 @@ def extract_requirements(
 
     start = 0
     if lines and lines[0].strip() == "---":
+        # kramdown-rfc front matter ends at a bare --- or at the first "--- abstract"-style marker.
         for index in range(1, len(lines)):
-            if lines[index].strip() == "---":
+            closing = lines[index].strip()
+            if closing == "---":
                 start = index + 1
+                break
+            if closing.startswith("--- "):
+                start = index
                 break
 
     for number, line in enumerate(lines[start:], start=start + 1):
@@ -190,7 +197,12 @@ def extract_requirements(
             continue
         ial = IAL_LINE_RE.match(line)
         if ial:
-            flush(ial_req_id(ial.group("body")))
+            req_id = ial_req_id(ial.group("body"))
+            if req_id and not unit:
+                warnings.append(
+                    f"{relative}:{number}: {req_id} is not on the line right after a rule, so it tags nothing"
+                )
+            flush(req_id)
             continue
         if stripped.startswith("|"):
             flush()
@@ -228,12 +240,24 @@ def extract_requirements(
     return requirements, warnings, table_rows
 
 
+def draft_paths(specs_dir: Path) -> list[Path]:
+    """Return the drafts under specs/, or fail when specs_dir is not an mpp-specs checkout."""
+    if not specs_dir.is_dir():
+        raise ValueError(f"specs path {specs_dir} does not exist or is not a directory")
+    paths = sorted((specs_dir / "specs").rglob("*.md"))
+    if not paths:
+        raise ValueError(
+            f"{specs_dir} has no specs/**/*.md drafts; pass an mpp-specs checkout"
+        )
+    return paths
+
+
 def extract_all(specs_dir: Path) -> tuple[list[Requirement], list[str], dict[str, int]]:
     """Extract requirements from every draft under specs/, flagging duplicate IDs."""
     requirements: list[Requirement] = []
     warnings: list[str] = []
     table_rows: dict[str, int] = {}
-    for path in sorted((specs_dir / "specs").rglob("*.md")):
+    for path in draft_paths(specs_dir):
         relative = path.relative_to(specs_dir).as_posix()
         found, found_warnings, rows = extract_requirements(path, relative)
         requirements.extend(found)
@@ -261,6 +285,9 @@ class Claim:
     requirements: list[str]
     operation: str | None = None
     adapters: list[str] | None = None
+    sdk_versions: dict[str, str] | None = None
+    # Flow cases only: server_only, client_flow or ordinary, as flow_runner runs them.
+    flow_mode: str | None = None
 
 
 def vector_operation(vector: dict[str, Any]) -> str | None:
@@ -291,6 +318,7 @@ def load_claims(
                         requirements=scenario["requirements"],
                         operation=operation,
                         adapters=scenario.get("adapters"),
+                        sdk_versions=scenario.get("sdkVersions"),
                     )
                 )
     for flow_case in load_flow_cases(flow_cases_path):
@@ -299,10 +327,19 @@ def load_claims(
                 Claim(
                     source=f"flows/{flow_cases_path.name}#{flow_case['name']}",
                     requirements=flow_case["requirements"],
-                    operation="http.flow",
+                    flow_mode=flow_mode(flow_case),
                 )
             )
     return claims
+
+
+def flow_mode(flow_case: dict[str, Any]) -> str:
+    """Classify a flow case the way flow_runner dispatches it."""
+    if flow_case.get("server_only"):
+        return "server_only"
+    if flow_case.get("discovery") or flow_case.get("json_rpc"):
+        return "ordinary"
+    return "client_flow" if flow_case.get("client_flow") else "ordinary"
 
 
 def load_profiles(adapters_dir: Path = ADAPTERS_DIR) -> dict[str, dict[str, Any]]:
@@ -319,13 +356,66 @@ def load_profiles(adapters_dir: Path = ADAPTERS_DIR) -> dict[str, dict[str, Any]
     return profiles
 
 
-def claim_applies(claim: Claim, adapter: str, capabilities: list[str]) -> bool:
+VersionCheck = Callable[[Claim, str], bool]
+
+
+def claim_applies(
+    claim: Claim,
+    adapter: str,
+    capabilities: list[str],
+    version_applies: VersionCheck | None = None,
+) -> bool:
     """Whether the runners would run this claim against the adapter."""
+    if claim.flow_mode is not None:
+        # flow_runner runs every case but server_only ones against each adapter;
+        # only client_flow cases drive the adapter's http.payment_request.
+        if claim.flow_mode == "server_only":
+            return False
+        return (
+            claim.flow_mode != "client_flow" or "http.payment_request" in capabilities
+        )
     if claim.adapters is not None and adapter not in claim.adapters:
         return False
-    if claim.operation == "http.flow":
-        return any(capability.startswith("http.") for capability in capabilities)
-    return claim.operation is None or claim.operation in capabilities
+    if claim.operation is not None and claim.operation not in capabilities:
+        return False
+    return version_applies is None or version_applies(claim, adapter)
+
+
+def version_checker(
+    warnings: list[str], resolver: Callable[[str], str] | None = None
+) -> VersionCheck:
+    """Evaluate a claim's sdkVersions with the vector runner's own version logic.
+
+    An adapter whose pinned SDK version cannot be resolved (its toolchain is
+    missing) counts none of its version-constrained claims, with a warning.
+    """
+    runner = VectorRunner(sdk_version_resolver=resolver)
+    unresolved: set[str] = set()
+
+    def applies(claim: Claim, adapter: str) -> bool:
+        if not claim.sdk_versions or adapter not in claim.sdk_versions:
+            return True
+        config = AdapterConfig(name=adapter, command=[], capabilities=[])
+        try:
+            matched, _ = runner.scenario_version_applies(
+                {"sdkVersions": claim.sdk_versions}, config
+            )
+        except (
+            OSError,
+            subprocess.CalledProcessError,
+            RuntimeError,
+            StopIteration,
+            KeyError,
+        ):
+            if adapter not in unresolved:
+                unresolved.add(adapter)
+                warnings.append(
+                    f"{adapter}: pinned SDK version unknown; its sdkVersions-constrained claims are not counted"
+                )
+            return False
+        return matched
+
+    return applies
 
 
 def excerpt(text: str) -> str:
@@ -343,6 +433,7 @@ def build_report(
     warnings: list[str],
     specs: dict[str, str | None],
     table_rows: dict[str, int] | None = None,
+    version_applies: VersionCheck | None = None,
 ) -> dict[str, Any]:
     """Assemble the JSON report: per-draft counts, uncovered rules and profile coverage."""
     coverage: dict[str, list[str]] = {}
@@ -387,7 +478,7 @@ def build_report(
         applicable = {
             req_id
             for claim in claims
-            if claim_applies(claim, adapter, manifest["capabilities"])
+            if claim_applies(claim, adapter, manifest["capabilities"], version_applies)
             for req_id in claim.requirements
         }
         per_draft: dict[str, dict[str, int]] = {}
@@ -519,7 +610,15 @@ def generate(specs_dir: Path, source: str) -> dict[str, Any]:
     claims = load_claims()
     profiles = load_profiles()
     specs: dict[str, str | None] = {"source": source, "commit": git_commit(specs_dir)}
-    return build_report(requirements, claims, profiles, warnings, specs, table_rows)
+    return build_report(
+        requirements,
+        claims,
+        profiles,
+        warnings,
+        specs,
+        table_rows,
+        version_checker(warnings),
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -546,12 +645,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    if args.specs:
-        report = generate(args.specs.resolve(), str(args.specs))
-    else:
-        with tempfile.TemporaryDirectory(prefix="mpp-specs-") as directory:
-            specs_dir = clone_specs(Path(directory) / "mpp-specs", args.ref)
-            report = generate(specs_dir, f"{SPECS_REPOSITORY}@{args.ref}")
+    try:
+        if args.specs:
+            report = generate(args.specs.resolve(), str(args.specs))
+        else:
+            with tempfile.TemporaryDirectory(prefix="mpp-specs-") as directory:
+                specs_dir = clone_specs(Path(directory) / "mpp-specs", args.ref)
+                report = generate(specs_dir, f"{SPECS_REPOSITORY}@{args.ref}")
+    except ValueError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
 
     args.json.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     args.markdown.write_text(render_markdown(report), encoding="utf-8")

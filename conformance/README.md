@@ -290,28 +290,13 @@ make test-sdk ADAPTER=rust
 make flow-sdk ADAPTER=rust
 ```
 
-## Requirement Gap Report
-
-`make gap-report` lists the BCP 14 rules in [tempoxyz/mpp-specs](https://github.com/tempoxyz/mpp-specs) and which ones vectors and flows cover. It writes `gap-report.json` and `gap-report.md`.
-
-```bash
-make gap-report                         # clone mpp-specs main into a temp dir
-make gap-report SPECS_PATH=../mpp-specs # use a local checkout
-```
-
-- A rule is a paragraph or list item in `specs/**/*.md` with an RFC 2119/8174 keyword in capitals. Its key is the `{: #req-<draft>-<nnn>}` IAL after it, or `<draft>#<section>:<sha256 prefix>` until it has one. Table rows with keywords are counted, not extracted.
-- A vector scenario or flow case claims rules with `"requirements": ["req-core-001"]`.
-- An adapter manifest claims drafts with `"profile": ["core", "tempo-charge"]`; the report shows coverage per claimed draft, counting only scenarios that run against that adapter.
-- The report flags requirement IDs no spec defines, duplicate IDs and IDs with another draft's prefix.
-
 ## Adding a New Test Scenario
 
 1. Edit the appropriate vector file in `vectors/`
 2. Add a new scenario object to the `scenarios` array
 3. Optionally use `adapters` and `sdkVersions` to define where the rule applies
-4. List the spec requirement IDs it checks in `requirements`
-5. Run `make test` to verify all applicable adapters pass
-6. Submit a PR
+4. Run `make test` to verify all applicable adapters pass
+5. Submit a PR
 
 ## Prerequisites
 

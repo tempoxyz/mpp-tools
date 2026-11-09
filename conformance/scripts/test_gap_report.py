@@ -3,7 +3,10 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -17,7 +20,9 @@ from gap_report import (
     extract_requirements,
     load_claims,
     load_profiles,
+    main,
     render_markdown,
+    version_checker,
 )
 from harness import validate_value
 
@@ -145,6 +150,31 @@ class ExtractTests(unittest.TestCase):
             )
         )
 
+    def test_warns_on_detached_ids(self) -> None:
+        self.path.write_text(
+            "# A\n\nX MUST hold.\n\n{: #req-tempo-charge-001}\n\n{: #req-tempo-charge-002}\nY MAY hold.\n",
+            encoding="utf-8",
+        )
+        requirements, warnings, _ = extract_requirements(self.path, "specs/x.md")
+        self.assertEqual(
+            [requirement.req_id for requirement in requirements], [None, None]
+        )
+        self.assertEqual(len(warnings), 2)
+        self.assertIn(
+            "req-tempo-charge-001 is not on the line right after a rule", warnings[0]
+        )
+
+    def test_front_matter_ending_with_section_marker(self) -> None:
+        self.path.write_text(
+            "---\ntitle: X\n--- abstract\n\nX MUST hold.\n\n--- middle\n\n# A\n\nY\n---\n\nZ MAY hold.\n",
+            encoding="utf-8",
+        )
+        requirements, _, _ = extract_requirements(self.path, "specs/x.md")
+        self.assertEqual(
+            [requirement.text for requirement in requirements],
+            ["X MUST hold.", "Z MAY hold."],
+        )
+
 
 class ReportTests(unittest.TestCase):
     def test_counts_coverage_unknown_ids_and_profiles(self) -> None:
@@ -198,10 +228,103 @@ class ReportTests(unittest.TestCase):
         self.assertIn("| tempo-charge | 5 | 3 | 2 | 1 |", markdown)
         self.assertIn("req-tempo-charge-999", markdown)
 
+    def test_flow_claims_follow_case_mode(self) -> None:
+        ordinary = Claim("flows/flows.json#a", ["req-core-001"], flow_mode="ordinary")
+        client = Claim("flows/flows.json#b", ["req-core-001"], flow_mode="client_flow")
+        server = Claim("flows/flows.json#c", ["req-core-001"], flow_mode="server_only")
+        # Ruby and Java run ordinary flows without any http.* capability.
+        self.assertTrue(claim_applies(ordinary, "java", ["challenge.parse"]))
+        self.assertFalse(claim_applies(client, "java", ["challenge.parse"]))
+        self.assertTrue(claim_applies(client, "go", ["http.payment_request"]))
+        self.assertFalse(
+            claim_applies(server, "go", ["http.payment_request", "http.server"])
+        )
+
+    def test_flow_modes_from_cases(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            flows = Path(directory) / "flows.json"
+            cases = [
+                {"name": "a", "path": "/a", "requirements": ["req-core-001"]},
+                {
+                    "name": "b",
+                    "path": "/b",
+                    "client_flow": True,
+                    "requirements": ["req-core-001"],
+                },
+                {
+                    "name": "c",
+                    "path": "/c",
+                    "server_only": True,
+                    "requirements": ["req-core-001"],
+                },
+            ]
+            flows.write_text(
+                json.dumps({"version": "1.0.0", "cases": cases}), encoding="utf-8"
+            )
+            vectors = Path(directory) / "vectors"
+            vectors.mkdir()
+            claims = load_claims(vectors, flows)
+        self.assertEqual(
+            [claim.flow_mode for claim in claims],
+            ["ordinary", "client_flow", "server_only"],
+        )
+
+    def test_sdk_versions_use_runner_logic(self) -> None:
+        warnings: list[str] = []
+        versions = {"go": "0.4.0", "rust": "0.9.0"}
+        applies = version_checker(warnings, resolver=lambda adapter: versions[adapter])
+        claim = Claim(
+            "vectors/a.json#x",
+            ["req-core-001"],
+            operation="challenge.parse",
+            sdk_versions={"go": ">=0.5.0", "rust": ">=0.5.0"},
+        )
+        self.assertFalse(claim_applies(claim, "go", ["challenge.parse"], applies))
+        self.assertTrue(claim_applies(claim, "rust", ["challenge.parse"], applies))
+        self.assertTrue(claim_applies(claim, "python", ["challenge.parse"], applies))
+        self.assertEqual(warnings, [])
+
+    def test_unresolved_sdk_version_is_not_coverage(self) -> None:
+        def missing(adapter: str) -> str:
+            raise subprocess.CalledProcessError(1, ["cargo"])
+
+        warnings: list[str] = []
+        applies = version_checker(warnings, resolver=missing)
+        claim = Claim(
+            "vectors/a.json#x", ["req-core-001"], sdk_versions={"rust": ">=0.5.0"}
+        )
+        self.assertFalse(claim_applies(claim, "rust", [], applies))
+        self.assertFalse(claim_applies(claim, "rust", [], applies))
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("rust", warnings[0])
+
+    def test_version_skipped_claims_do_not_count_for_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "draft-tempo-charge-00.md"
+            path.write_text(SPEC, encoding="utf-8")
+            requirements, warnings, _ = extract_requirements(path, "specs/x.md")
+        claims = [
+            Claim(
+                "vectors/a.json#x",
+                ["req-tempo-charge-001"],
+                sdk_versions={"go": ">=9.0.0"},
+            )
+        ]
+        profiles = {"go": {"profile": ["tempo-charge"], "capabilities": []}}
+        report = build_report(
+            requirements,
+            claims,
+            profiles,
+            warnings,
+            {"source": "x", "commit": None},
+            version_applies=version_checker(warnings, resolver=lambda adapter: "1.0.0"),
+        )
+        self.assertEqual(
+            report["profiles"]["go"]["drafts"]["tempo-charge"]["covered"], 0
+        )
+        self.assertEqual(report["drafts"][0]["covered"], 1)
+
     def test_claim_applies(self) -> None:
-        flow = Claim("flows/flows.json#x", ["req-core-001"], operation="http.flow")
-        self.assertTrue(claim_applies(flow, "go", ["http.server"]))
-        self.assertFalse(claim_applies(flow, "go", ["challenge.parse"]))
         vector = Claim(
             "vectors/a.json#x",
             ["req-core-001"],
@@ -210,6 +333,52 @@ class ReportTests(unittest.TestCase):
         )
         self.assertFalse(claim_applies(vector, "go", ["challenge.parse"]))
         self.assertTrue(claim_applies(vector, "rust", ["challenge.parse"]))
+
+
+class SpecsPathTests(unittest.TestCase):
+    def run_main(self, specs: Path, out: Path) -> tuple[int, str]:
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            code = main(
+                [
+                    "--specs",
+                    str(specs),
+                    "--json",
+                    str(out / "r.json"),
+                    "--markdown",
+                    str(out / "r.md"),
+                ]
+            )
+        return code, stderr.getvalue()
+
+    def test_missing_specs_path_fails_without_report(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            code, stderr = self.run_main(out / "missing", out)
+            self.assertEqual(code, 2)
+            self.assertIn("does not exist", stderr)
+            self.assertFalse((out / "r.json").exists())
+            self.assertFalse((out / "r.md").exists())
+
+    def test_checkout_without_drafts_fails_without_report(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            (out / "checkout" / "specs").mkdir(parents=True)
+            code, stderr = self.run_main(out / "checkout", out)
+            self.assertEqual(code, 2)
+            self.assertIn("no specs/**/*.md drafts", stderr)
+            self.assertFalse((out / "r.json").exists())
+
+    def test_writes_report_for_a_checkout(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            write_specs(
+                out / "checkout", {"specs/methods/tempo/draft-tempo-charge-00.md": SPEC}
+            )
+            code, _ = self.run_main(out / "checkout", out)
+            self.assertEqual(code, 0)
+            report = json.loads((out / "r.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["totals"]["rules"], 5)
 
 
 class FixtureTests(unittest.TestCase):
@@ -260,10 +429,13 @@ class FixtureTests(unittest.TestCase):
             claims = load_claims(vectors, flows)
 
         self.assertEqual(
-            [(claim.source, claim.requirements, claim.operation) for claim in claims],
+            [
+                (claim.source, claim.requirements, claim.operation or claim.flow_mode)
+                for claim in claims
+            ],
             [
                 ("vectors/a.json#one", ["req-core-001"], "challenge.id"),
-                ("flows/flows.json#f", ["req-core-002"], "http.flow"),
+                ("flows/flows.json#f", ["req-core-002"], "ordinary"),
             ],
         )
 

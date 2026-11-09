@@ -98,7 +98,7 @@ Rules:
 - `build` is optional.
 - `profile` is optional: the drafts the SDK claims to implement, by the
   short name requirement IDs use (`core`, `tempo-charge`). `make gap-report`
-  reports coverage per claimed draft.
+  reports coverage per claimed draft; see [GAP_REPORT.md](./GAP_REPORT.md).
 - `command` must start a process that reads one JSON request from stdin and
   writes one JSON response to stdout.
 - stderr is free for logs. stdout must contain only the response JSON.
