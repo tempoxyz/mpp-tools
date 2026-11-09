@@ -173,6 +173,7 @@ ANCHOR_PLACES = {
     "texttable": "a table",
     "figure": "a code block or figure",
     "artwork": "a code block or figure",
+    "artset": "a code block or figure",
     "sourcecode": "a code block or figure",
     "blockquote": "a quote",
     "aside": "an aside",

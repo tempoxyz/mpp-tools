@@ -2159,6 +2159,11 @@ class SetextAndEscapeTest(unittest.TestCase):
         self.assertEqual(len(warnings), 1)
         self.assertIn(":14: req-tempo-charge-001 goes on a heading", warnings[0])
 
+    def test_every_code_and_table_tag_names_its_place(self) -> None:
+        # The walk looks up ANCHOR_PLACES for any code or table element that carries an
+        # anchor, so a missing tag (an <artset> outside a figure) would raise KeyError.
+        self.assertLessEqual(gap_report.CODE_TAGS | gap_report.TABLE_TAGS, set(gap_report.ANCHOR_PLACES))
+
     def test_ial_right_after_a_heading_table_or_code_tags_it(self) -> None:
         # kramdown puts a block IAL with no blank line before it on the block above.
         requirements, warnings, _ = read_draft(
