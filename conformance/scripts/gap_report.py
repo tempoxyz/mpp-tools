@@ -37,6 +37,7 @@ from harness import (
     validate_value,
 )
 from vector_runner import VectorRunner
+from version_constraints import matches_constraint
 
 SPECS_REPOSITORY = "https://github.com/tempoxyz/mpp-specs"
 EXCERPT_LENGTH = 160
@@ -57,7 +58,12 @@ HEADING_RE = re.compile(r"^#{1,6}\s+(?P<rest>.*)$")
 HEADING_ANCHOR_RE = re.compile(r"\{#(?P<anchor>[^{}\s]+)\}$")
 LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
 DEFINITION_RE = re.compile(r"^\s*:\s+")
-FENCE_RE = re.compile(r"^\s*(\x60{3,}|~{3,})")
+# kramdown-rfc fences code with ~~~ only; a ``` pair renders as inline verbatim, whose
+# keywords keywords_in already ignores. A fence line indented 4 or more is code.
+FENCE_RE = re.compile(r"^( *)(~{3,})(.*)$")
+QUOTE_RE = re.compile(r"^ {0,3}> ?")
+# A table delimiter row, with or without outer pipes: | --- | :---: | or --- | ---
+TABLE_DELIMITER_RE = re.compile(r"^\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?$")
 
 
 def parse_heading(line: str) -> tuple[str, str | None] | None:
@@ -190,21 +196,38 @@ def extract_requirements(
                 start = index
                 break
 
-    for number, line in enumerate(lines[start:], start=start + 1):
+    item_indent = 0  # text column of the latest list item, for its fences and code
+    fence_base = 0
+    in_table = False
+    for number, raw in enumerate(lines[start:], start=start + 1):
+        # Tabs stop every 4 columns as kramdown counts them; a blockquote marker is removed
+        # before any boundary is decided, so a bare '>' separates quoted paragraphs.
+        line = QUOTE_RE.sub("", raw.expandtabs(4))
         stripped = line.strip()
+        column = len(line) - len(line.lstrip())
+        fence_match = FENCE_RE.match(line)
         if fence:
-            if stripped.startswith(fence):
+            if (
+                fence_match
+                and len(fence_match.group(1)) <= fence_base + 3
+                and len(fence_match.group(2)) >= len(fence)
+                and not fence_match.group(3).strip()
+            ):
                 fence = None
             continue
         if in_comment:
             if "-->" in line:
                 in_comment = False
             continue
-        fence_match = FENCE_RE.match(line)
-        if fence_match:
+        if not unit and stripped and column < item_indent and not LIST_ITEM_RE.match(line):
+            item_indent = 0  # a line left of the item's text ends its list
+        if fence_match and len(fence_match.group(1)) <= item_indent + 3:
             flush()
-            fence = fence_match.group(1)[0] * 3
+            in_table = False
+            fence, fence_base = fence_match.group(2), item_indent
             continue
+        if stripped and not unit and column >= item_indent + 4:
+            continue  # indented code block: kramdown renders it as code, not prose
         if stripped.startswith("<!--"):
             flush()
             in_comment = "-->" not in stripped
@@ -218,27 +241,34 @@ def extract_requirements(
                 )
             flush(req_id)
             continue
-        if stripped.startswith("|"):
-            flush()
-            table_rows += 1 if keywords_in(stripped) else 0
+        if TABLE_DELIMITER_RE.match(stripped) and len(unit) == 1 and "|" in unit[0]:
+            # The unit so far was a table header written without a leading pipe.
+            table_rows += 1 if keywords_in(unit[0]) else 0
+            unit = []
+            in_table = True
             continue
+        if stripped.startswith("|") or (in_table and "|" in stripped):
+            flush()
+            in_table = True
+            table_rows += 1 if keywords_in(stripped) and not TABLE_DELIMITER_RE.match(stripped) else 0
+            continue
+        in_table = False
         if not stripped or stripped.startswith("--- "):
             flush()
             continue
         heading = parse_heading(line)
         if heading:
             flush()
+            item_indent = 0
             section = heading[1] or slugify(heading[0])
             continue
-        if LIST_ITEM_RE.match(line) or DEFINITION_RE.match(line):
+        item = LIST_ITEM_RE.match(line) or DEFINITION_RE.match(line)
+        if item:
             flush()
+            item_indent = item.end()
         if not unit:
             unit_line = number
-        unit.append(
-            stripped.removeprefix("> ").removeprefix(">")
-            if stripped.startswith(">")
-            else stripped
-        )
+        unit.append(stripped)
     flush()
 
     seen: dict[str, int] = {}
@@ -258,7 +288,12 @@ def draft_paths(specs_dir: Path) -> list[Path]:
     """Return the drafts under specs/, or fail when specs_dir is not an mpp-specs checkout."""
     if not specs_dir.is_dir():
         raise ValueError(f"specs path {specs_dir} does not exist or is not a directory")
-    paths = sorted((specs_dir / "specs").rglob("*.md"))
+    root = (specs_dir / "specs").resolve()
+    # A symlinked draft could point anywhere; its text would be copied into the report.
+    paths = sorted(
+        p for p in (specs_dir / "specs").rglob("*.md")
+        if not p.is_symlink() and p.resolve().is_relative_to(root)
+    )
     if not paths:
         raise ValueError(
             f"{specs_dir} has no specs/**/*.md drafts; pass an mpp-specs checkout"
@@ -314,6 +349,11 @@ class Claim:
     flow_mode: str | None = None
     # Vector claims only: why the vector runner refuses this claim's whole file, if it does.
     runner_error: str | None = None
+    # Vector claims only: further operations the scenario's tests call (a parse and format
+    # scenario needs both), and adapters any scenario in the file pins an SDK version for:
+    # the runner resolves that adapter's version for the file and aborts it if it can't.
+    operations: tuple[str, ...] = ()
+    file_constrained: frozenset[str] = frozenset()
 
 
 def vector_operation(vector: dict[str, Any]) -> str | None:
@@ -326,6 +366,41 @@ def vector_operation(vector: dict[str, Any]) -> str | None:
     return None
 
 
+def scenario_operations(vector: dict[str, Any], scenario: dict[str, Any]) -> tuple[str, ...]:
+    """Return the operations a scenario's tests call, as the vector runner dispatches them.
+
+    An explicit commands.operation (or a generate command) is the only one. Otherwise
+    each of the parse and format tests the scenario selects calls its own command, and a
+    roundtrip calls both, so the adapter needs each of them for the scenario to pass.
+    """
+    commands = vector["commands"]
+    if "operation" in commands or "generate" in commands:
+        operation = vector_operation(vector)
+        return (operation,) if operation else ()
+    tests = scenario.get("tests") or {}
+    needed = []
+    for test, command in (("parse", "parse"), ("format", "format")):
+        if command in commands and (tests.get(test) is not None or tests.get("roundtrip") is True):
+            operation = COMMAND_TO_OPERATION.get(commands[command])
+            if operation:
+                needed.append(operation)
+    return tuple(needed)
+
+
+def check_scenario(runner: VectorRunner, scenario: dict[str, Any]) -> None:
+    """Raise ValueError if the vector runner would refuse this scenario.
+
+    Structure (sdkVersions keys and value types, adapters names) is checked as the
+    runner checks it before running anything. Each constraint is also parsed: the
+    runner parses it as it decides whether the scenario applies, and a malformed one
+    (such as "=>1.0.0") raises there and aborts the file.
+    """
+    constraints = runner.scenario_version_constraints(scenario)
+    runner.scenario_adapters(scenario)
+    for expression in constraints.values():
+        matches_constraint("0.0.0", expression)
+
+
 def load_claims(
     vectors_dir: Path = VECTORS_DIR, flow_cases_path: Path = FLOW_CASES_PATH
 ) -> list[Claim]:
@@ -336,15 +411,19 @@ def load_claims(
         if path.name == "package.json":
             continue
         vector = load_vector(path)
-        operation = vector_operation(vector)
+        constrained = frozenset(
+            name
+            for scenario in vector["scenarios"]
+            if isinstance(scenario.get("sdkVersions"), dict)
+            for name in scenario["sdkVersions"]
+        )
         # The vector runner validates every scenario's sdkVersions and adapters as it loops
         # over a file, and one invalid scenario aborts the whole file for every adapter. So
         # one bad scenario, tagged or not, makes every claim in the file coverage for nothing.
         file_error = None
         for scenario in vector["scenarios"]:
             try:
-                runner.scenario_version_constraints(scenario)
-                runner.scenario_adapters(scenario)
+                check_scenario(runner, scenario)
             except ValueError as error:
                 file_error = f"vectors/{path.name}#{scenario['name']}: {error}"
                 break
@@ -354,10 +433,12 @@ def load_claims(
                     Claim(
                         source=f"vectors/{path.name}#{scenario['name']}",
                         requirements=scenario["requirements"],
-                        operation=operation,
+                        operation=(scenario_operations(vector, scenario) or (None,))[0],
+                        operations=scenario_operations(vector, scenario)[1:],
                         adapters=scenario.get("adapters"),
                         sdk_versions=scenario.get("sdkVersions"),
                         runner_error=file_error,
+                        file_constrained=constrained,
                     )
                 )
     for flow_case in load_flow_cases(flow_cases_path):
@@ -424,6 +505,8 @@ def claim_applies(
         return False
     if claim.operation is not None and claim.operation not in capabilities:
         return False
+    if any(operation not in capabilities for operation in claim.operations):
+        return False
     return version_applies is None or version_applies(claim, adapter)
 
 
@@ -443,7 +526,7 @@ def rejected_by_runner(claim: Claim, warnings: list[str]) -> bool:
     if not claim.sdk_versions:
         return False
     try:
-        VectorRunner().scenario_version_constraints({"sdkVersions": claim.sdk_versions})
+        check_scenario(VectorRunner(), {"sdkVersions": claim.sdk_versions})
     except ValueError as error:
         message = f"{claim.source}: {error}; not counted as coverage"
         if message not in warnings:
@@ -464,17 +547,19 @@ def version_checker(
     unresolved: set[str] = set()
 
     def applies(claim: Claim, adapter: str) -> bool:
-        if not claim.sdk_versions:
-            return True
         if rejected_by_runner(claim, warnings):
             return False
-        if adapter not in claim.sdk_versions:
+        # Own constraint for this adapter, or (with "*") just the version resolution the
+        # runner does for any scenario in the file that pins one for this adapter.
+        if claim.sdk_versions and adapter in claim.sdk_versions:
+            constraints = claim.sdk_versions
+        elif adapter in claim.file_constrained:
+            constraints = {adapter: "*"}
+        else:
             return True
         config = AdapterConfig(name=adapter, command=[], capabilities=[])
         try:
-            matched, _ = runner.scenario_version_applies(
-                {"sdkVersions": claim.sdk_versions}, config
-            )
+            matched, _ = runner.scenario_version_applies({"sdkVersions": constraints}, config)
         except (
             OSError,
             subprocess.CalledProcessError,
@@ -485,7 +570,7 @@ def version_checker(
             if adapter not in unresolved:
                 unresolved.add(adapter)
                 warnings.append(
-                    f"{adapter}: pinned SDK version unknown; its sdkVersions-constrained claims are not counted"
+                    f"{adapter}: pinned SDK version unknown; claims in vector files that pin it are not counted"
                 )
             return False
         return matched

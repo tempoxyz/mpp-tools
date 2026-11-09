@@ -18,6 +18,7 @@ from gap_report import (
     Requirement,
     build_report,
     claim_applies,
+    draft_paths,
     draft_short_name,
     extract_all,
     extract_requirements,
@@ -27,6 +28,7 @@ from gap_report import (
     load_profiles,
     main,
     render_markdown,
+    scenario_operations,
     version_checker,
 )
 from harness import VECTORS_DIR, validate_value
@@ -361,6 +363,81 @@ class ReportTests(unittest.TestCase):
         warnings: list[str] = []
         report = build_report([requirement], claims, {}, warnings, {})
         self.assertEqual(report["totals"]["covered"], 0)
+        self.assertEqual(len(warnings), 1)
+
+    def test_malformed_sdk_version_constraint_is_not_coverage(self) -> None:
+        warnings: list[str] = []
+        applies = version_checker(warnings, resolver=lambda adapter: "1.0.0")
+        claim = Claim("vectors/a.json#x", ["req-core-001"], sdk_versions={"go": "=>1.0.0"})
+        # The runner raises on the constraint and aborts the file; the report warns instead.
+        self.assertFalse(claim_applies(claim, "go", [], applies))
+        self.assertFalse(claim_applies(claim, "python", [], applies))
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("=>1.0.0", warnings[0])
+
+    def extract(self, text: str) -> tuple[list, int]:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "draft-tempo-charge-00.md"
+            path.write_text(text, encoding="utf-8")
+            requirements, _, rows = extract_requirements(path, "specs/x.md")
+        return requirements, rows
+
+    def test_extraction_follows_kramdown_rfc_blocks(self) -> None:
+        bt = "\x60" * 3
+        cases = {
+            # indented code is code, not a rule
+            "Intro.\n\n    code MUST x\n\nP MUST y.\n": 1,
+            # a bare '>' separates quoted paragraphs; quoted list items are their own blocks
+            "> A MUST a.\n>\n> B MUST b.\n": 2,
+            "> - A MUST a.\n> - B MUST b.\n": 2,
+            # a backtick pair is inline verbatim, not a fence and not a rule
+            f"{bt}\ncode MUST\n{bt}\n\nP MUST y.\n": 1,
+            # a ~~~ indented 4 does not close the block
+            "~~~\n    ~~~\nMUST in code\n~~~\n\nP MUST y.\n": 1,
+            # tab-indented text is indented code
+            "Intro.\n\n\tcode MUST x\n\nP MUST y.\n": 1,
+        }
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(len(self.extract(text)[0]), expected)
+
+    def test_table_without_leading_pipe_counts_rows(self) -> None:
+        requirements, rows = self.extract("a | b\n--- | ---\nx | REQUIRED\ny | OPTIONAL\n\nP MUST y.\n")
+        self.assertEqual(len(requirements), 1)
+        self.assertEqual(rows, 2)
+
+    def test_symlinked_drafts_are_skipped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "specs").mkdir()
+            (root / "specs/draft-a-00.md").write_text("A MUST b.\n", encoding="utf-8")
+            (root / "outside.md").write_text("Secret MUST x.\n", encoding="utf-8")
+            (root / "specs/draft-b-00.md").symlink_to(root / "outside.md")
+            self.assertEqual([p.name for p in draft_paths(root)], ["draft-a-00.md"])
+
+    def test_parse_format_scenarios_need_each_tested_command(self) -> None:
+        vector = {"commands": {"parse": "parse-www-authenticate", "format": "format-www-authenticate"}}
+        self.assertEqual(scenario_operations(vector, {"tests": {"format": True}}), ("challenge.format",))
+        self.assertEqual(
+            scenario_operations(vector, {"tests": {"roundtrip": True}}),
+            ("challenge.parse", "challenge.format"),
+        )
+        claim = Claim("vectors/a.json#x", ["req-core-001"], operation="challenge.parse",
+                      operations=("challenge.format",))
+        self.assertFalse(claim_applies(claim, "go", ["challenge.parse"]))
+        self.assertTrue(claim_applies(claim, "go", ["challenge.parse", "challenge.format"]))
+
+    def test_unresolved_version_voids_files_that_pin_the_adapter(self) -> None:
+        def missing(adapter: str) -> str:
+            raise subprocess.CalledProcessError(1, ["cargo"])
+
+        warnings: list[str] = []
+        applies = version_checker(warnings, resolver=missing)
+        # This scenario has no constraint itself, but a sibling pins rust: the runner
+        # resolves rust's version for the file and aborts it for rust when it can't.
+        claim = Claim("vectors/a.json#x", ["req-core-001"], file_constrained=frozenset({"rust"}))
+        self.assertFalse(claim_applies(claim, "rust", [], applies))
+        self.assertTrue(claim_applies(claim, "python", [], applies))
         self.assertEqual(len(warnings), 1)
 
     def test_unresolved_sdk_version_is_not_coverage(self) -> None:
