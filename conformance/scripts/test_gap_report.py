@@ -268,6 +268,19 @@ class ReportTests(unittest.TestCase):
                     "discovery": True,
                     "requirements": ["req-core-001"],
                 },
+                {
+                    "name": "e",
+                    "path": "/e",
+                    "client_flow": True,
+                    "no_payment": True,
+                    "requirements": ["req-core-001"],
+                },
+                {
+                    "name": "f",
+                    "path": "/f",
+                    "no_payment": True,
+                    "requirements": ["req-core-001"],
+                },
             ]
             flows.write_text(
                 json.dumps({"version": "1.0.0", "cases": cases}), encoding="utf-8"
@@ -277,7 +290,7 @@ class ReportTests(unittest.TestCase):
             claims = load_claims(vectors, flows)
         self.assertEqual(
             [claim.flow_mode for claim in claims],
-            ["ordinary", "client_flow", "server_only", "raw_http"],
+            ["ordinary", "client_flow", "server_only", "raw_http", "client_flow", "raw_http"],
         )
 
     def test_sdk_versions_use_runner_logic(self) -> None:

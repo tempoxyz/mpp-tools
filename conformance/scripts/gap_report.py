@@ -351,11 +351,16 @@ def flow_mode(flow_case: dict[str, Any]) -> str:
     """Classify a flow case the way flow_runner dispatches it."""
     if flow_case.get("server_only"):
         return "server_only"
-    # Discovery, JSON-RPC and no_payment cases send raw HTTP to the compliance
-    # server and never call the adapter, so they exercise no SDK.
-    if flow_case.get("discovery") or flow_case.get("json_rpc") or flow_case.get("no_payment"):
+    # Same order as flow_runner's dispatch: discovery and JSON-RPC cases send raw
+    # HTTP without the adapter; client_flow wins over no_payment; a remaining
+    # no_payment case also never calls the adapter.
+    if flow_case.get("discovery") or flow_case.get("json_rpc"):
         return "raw_http"
-    return "client_flow" if flow_case.get("client_flow") else "ordinary"
+    if flow_case.get("client_flow"):
+        return "client_flow"
+    if flow_case.get("no_payment"):
+        return "raw_http"
+    return "ordinary"
 
 
 def load_profiles(adapters_dir: Path = ADAPTERS_DIR) -> dict[str, dict[str, Any]]:
