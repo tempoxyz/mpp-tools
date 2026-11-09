@@ -1318,5 +1318,55 @@ class LeadingListItemIdTest(unittest.TestCase):
         self.assertTrue(any("req-tempo-charge-002 follows a list item" in w for w in warnings))
 
 
+class AttributeListDefinitionTest(unittest.TestCase):
+    def test_ial_naming_a_definition_gets_its_id(self) -> None:
+        # kramdown applies an ALD's attributes to every IAL that names it, resolving the
+        # names after parsing, so a definition later in the draft applies too; referenced
+        # IDs go first and the IAL's own ID wins (checked with kramdown-rfc). Definitions
+        # in code or comments define nothing, and a definition line tags nothing itself.
+        # A reference cycle (which crashes kramdown) only has to stop rather than recurse.
+        requirements, warnings, _ = read_draft(
+            "Before MUST be.\n{: early}\n\n"
+            "Own MUST win.\n{: early #req-tempo-charge-009}\n\n"
+            "Nested MUST be.\n{: outer}\n\n"
+            "Coded MUST not.\n{: coded}\n\n"
+            "~~~\n{:coded: #req-tempo-charge-077}\n~~~\n\n"
+            "<!-- {:hidden: #req-tempo-charge-088} -->\n\n"
+            "Hidden MUST not.\n{: hidden}\n\n"
+            "Loop MUST stop.\n{: loop}\n\n"
+            "- {: late} Item MUST be.\n\n"
+            "Defined MUST stay untagged.\n{:early: #req-tempo-charge-001}\n"
+            "{:outer: inner .x}\n{:inner: #req-tempo-charge-002}\n"
+            "{:late: #req-tempo-charge-003}\n{:loop: loop #req-tempo-charge-004}\n"
+        )
+        self.assertEqual(
+            [r.req_id for r in requirements],
+            [
+                "req-tempo-charge-001",
+                "req-tempo-charge-009",
+                "req-tempo-charge-002",
+                None,
+                None,
+                "req-tempo-charge-004",
+                "req-tempo-charge-003",
+                None,
+            ],
+        )
+        self.assertEqual(warnings, [])
+
+    def test_duplicate_check_sees_expanded_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            specs = write_specs(
+                Path(directory),
+                {
+                    "specs/draft-tempo-charge-00.md": "# A\n\nX MUST hold.\n{: reqdef}\n\n"
+                    "Y MUST hold.\n{: #req-tempo-charge-001}\n\n{:reqdef: #req-tempo-charge-001}\n",
+                },
+            )
+            requirements, warnings, _, _ = extract_all(specs)
+        self.assertEqual([r.id_problem for r in requirements], ["duplicate", "duplicate"])
+        self.assertTrue(any("req-tempo-charge-001 already used" in w for w in warnings))
+
+
 if __name__ == "__main__":
     unittest.main()

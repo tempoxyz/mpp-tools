@@ -70,16 +70,16 @@ LEADING_IAL_RE = re.compile(r"\{:(?P<body>[^{}]*)\}[ \t]*")
 TRAILING_IAL_RE = re.compile(r"(?<![\\*_\x60\])>])\{:(?P<body>[^{}]*)\}\s*$")
 # One attribute of an IAL body, scanned the way kramdown's parse_attribute_list does:
 # key="value" (or 'value'), one or more #id and .class names run together, or a bare
-# reference name, each separated by whitespace. A '#name' token and a quoted id="..."
-# (or id='...') value set the ID, the last one winning; '#req-...' inside another
-# attribute's value, such as title="#req-core-001", sets nothing, and kramdown ignores an
-# unquoted id=req-core-001.
+# reference name ('ref': an attribute list definition's name), each separated by
+# whitespace. A '#name' token and a quoted id="..." (or id='...') value set the ID, the
+# last one winning; '#req-...' inside another attribute's value, such as
+# title="#req-core-001", sets nothing, and kramdown ignores an unquoted id=req-core-001.
 # Inside the quotes a backslash is matched only as the start of an escape pair and every
 # other character only on its own ('[^\\]'), so each character has exactly one way to
 # match: a value that never closes fails in linear time instead of backtracking
 # exponentially over a long backslash run (ReDoS).
 IAL_TOKEN_RE = re.compile(
-    r"""(?:^|(?<=\s))(?:(?P<key>\w[\w-]*)=(?P<quote>["'])(?P<value>(?:\\.|(?!(?P=quote))[^\\\n])*)(?P=quote)|(?P<names>(?:[#.]\w[\w-]*)+)|\w[\w-]*)(?=\s|$)"""
+    r"""(?:^|(?<=\s))(?:(?P<key>\w[\w-]*)=(?P<quote>["'])(?P<value>(?:\\.|(?!(?P=quote))[^\\\n])*)(?P=quote)|(?P<names>(?:[#.]\w[\w-]*)+)|(?P<ref>\w[\w-]*))(?=\s|$)"""
 )
 IAL_ID_NAME_RE = re.compile(r"#(\w[\w-]*)")
 # The escapes kramdown removes from a quoted IAL value: a backslash before '}' or the quote.
@@ -87,6 +87,9 @@ IAL_VALUE_ESCAPE_RE = re.compile(r"\\([}\"'])")
 # '{:name: attributes}' is an attribute list definition: it names attributes for later
 # reference and attaches nothing to the block before it.
 ALD_RE = re.compile(r"^\w[\w-]*:")
+# A whole definition line's name and attributes, as kramdown reads it (ALD_START): an IAL
+# naming it ('{: reqdef}') gets those attributes, wherever in the draft it is defined.
+ALD_DEF_RE = re.compile(r"^\s*\{:(?P<name>\w[\w-]*):(?P<attrs>(?:\\\}|[^}])+)\}\s*$")
 # Headings are parsed in two linear steps (see parse_heading) rather than with one regex
 # whose lazy title and optional whitespace runs backtrack on long whitespace.
 HEADING_RE = re.compile(r"^#{1,6}\s+(?P<rest>.*)$")
@@ -333,39 +336,56 @@ def strip_comments(
     return "".join(visible), closers, touched
 
 
-def ial_id(body: str) -> str | None:
+def ial_id(body: str, alds: dict[str, list[str]] | None = None) -> str | None:
     """Return the ID an IAL body gives its element, requirement or not, or None.
 
     kramdown writes every '#name' token and quoted id="..." value to the same attribute
     in order, so the last one is the element's ID: '{: #req-core-001 id="note"}' gives
-    it 'note'. Only real tokens count (IAL_TOKEN_RE). Extension tags ('{::name}',
-    '{:/name}') and attribute list definitions ('{:name: ...}') set no ID.
+    it 'note'. Only real tokens count (IAL_TOKEN_RE). A bare name refers to an attribute
+    list definition in alds (name to its definitions' attribute strings, in draft order),
+    whose IDs kramdown applies before the IAL's own, so an own ID still wins. Extension
+    tags ('{::name}', '{:/name}') and definitions themselves ('{:name: ...}') set no ID.
     """
     if body.startswith((":", "/")) or ALD_RE.match(body):
         return None
-    identifier = None
-    for token in IAL_TOKEN_RE.finditer(body):
+    ids = attribute_ids(body, alds or {}, frozenset())
+    return ids[-1] if ids else None
+
+
+def attribute_ids(attrs: str, alds: dict[str, list[str]], seen: frozenset[str]) -> list[str]:
+    """Return the IDs an attribute string sets, in the order kramdown applies them.
+
+    Mirrors mpp-specs' scripts/lint_requirements.py (ial_ids): referenced definitions'
+    IDs first, then the string's own '#name' and id="..." IDs. seen holds the
+    definitions already being expanded, so a reference cycle stops instead of recursing.
+    """
+    own: list[str] = []
+    referenced: list[str] = []
+    for token in IAL_TOKEN_RE.finditer(attrs):
         if token.group("key") == "id":
-            identifier = IAL_VALUE_ESCAPE_RE.sub(r"\1", token.group("value"))
+            own.append(IAL_VALUE_ESCAPE_RE.sub(r"\1", token.group("value")))
         elif token.group("names"):
-            for name in IAL_ID_NAME_RE.findall(token.group("names")):
-                identifier = name
-    return identifier
+            own.extend(IAL_ID_NAME_RE.findall(token.group("names")))
+        elif (ref := token.group("ref")) in alds and ref not in seen:
+            for definition in alds[ref]:
+                referenced.extend(attribute_ids(definition, alds, seen | {ref}))
+    return referenced + own
 
 
-def ial_req_id(body: str) -> str | None:
+def ial_req_id(body: str, alds: dict[str, list[str]] | None = None) -> str | None:
     """Return the requirement ID an IAL body sets, or None when it sets none.
 
-    That is its final ID (ial_id) when it starts with 'req-', so a later non-requirement
-    ID in the same IAL overrides an earlier requirement ID. Whether the rest matches
-    req-<draft>-<nnn> is checked separately (a malformed ID is reported, not credited).
+    That is its final ID (ial_id, with alds' definitions expanded) when it starts with
+    'req-', so a later non-requirement ID in the same IAL overrides an earlier
+    requirement ID. Whether the rest matches req-<draft>-<nnn> is checked separately (a
+    malformed ID is reported, not credited).
     """
-    identifier = ial_id(body)
+    identifier = ial_id(body, alds)
     return identifier if identifier and identifier.startswith("req-") else None
 
 
 def extract_requirements(
-    path: Path, relative: str
+    path: Path, relative: str, alds: dict[str, list[str]] | None = None
 ) -> tuple[list[Requirement], list[str], int]:
     """Extract every requirement in one draft, with warnings and the keyword table rows.
 
@@ -386,7 +406,11 @@ def extract_requirements(
       an IAL each, so they are counted rather than extracted; schemas cover them.
     - IDs: a rule's ID comes from a block IAL on the line right after it, or from an IAL
       at the very start of a list item's text. One at the end of a text line renders as
-      literal text in kramdown-rfc, so it sets no ID and is warned about.
+      literal text in kramdown-rfc, so it sets no ID and is warned about. An IAL naming
+      an attribute list definition ('{:reqdef: #req-core-001}' defined outside code and
+      comments) gets that definition's IDs. kramdown resolves those references after
+      parsing, so a definition after the IAL counts too: when the draft defines any, it
+      is read a second time with all of them (alds; callers leave it None).
     """
     draft = draft_short_name(path.name)
     lines = path.read_text(encoding="utf-8").splitlines()
@@ -404,6 +428,10 @@ def extract_requirements(
     # them, or become a paragraph when another line of text does.
     pending: list[tuple[int, str, str]] = []
     pending_in_item = False
+    # Definitions this reading finds, and the ones IDs are resolved against: none on the
+    # first reading, every one in the draft on the second.
+    found_alds: dict[str, list[str]] = {}
+    known_alds = alds or {}
 
     def flush(req_id: str | None = None) -> None:
         nonlocal unit
@@ -419,7 +447,7 @@ def extract_requirements(
                 # keeps it. A block IAL on the line after the item goes on the enclosing
                 # list instead (checked with kramdown-rfc 1.7.39), so a requirement ID
                 # there must not replace the item's: warn and keep the leading one.
-                leading_id = ial_req_id(leading.group("body"))
+                leading_id = ial_req_id(leading.group("body"), known_alds)
                 if leading_id:
                     if req_id and req_id != leading_id:
                         warnings.append(
@@ -429,9 +457,10 @@ def extract_requirements(
                     req_id = leading_id
                 text = text[: item.end()] + text[leading.end() :]
         trailing = TRAILING_IAL_RE.search(text)
-        if trailing and ial_req_id(trailing.group("body")):
+        trailing_id = ial_req_id(trailing.group("body"), known_alds) if trailing else None
+        if trailing_id:
             warnings.append(
-                f"{relative}:{unit_line}: {ial_req_id(trailing.group('body'))} ends a line of text, "
+                f"{relative}:{unit_line}: {trailing_id} ends a line of text, "
                 "where kramdown-rfc renders it as text, so it tags nothing; put it on the next line"
             )
         found = keywords_in(text)
@@ -558,9 +587,18 @@ def extract_requirements(
             stripped = line.strip()
             # Text right after a comment is no block boundary for a table still pending.
             revert_table()
+        ald = ALD_DEF_RE.match(line)
+        if ald:
+            # A definition, not an IAL: kramdown reads it before trying a block IAL, so it
+            # tags nothing, yet it ends the paragraph before it. Code and comments were
+            # skipped above, so a definition inside them is never recorded.
+            found_alds.setdefault(ald.group("name"), []).append(ald.group("attrs"))
+            flush()
+            boundary = True
+            continue
         ial = IAL_LINE_RE.match(line)
         if ial:
-            req_id = ial_req_id(ial.group("body"))
+            req_id = ial_req_id(ial.group("body"), known_alds)
             if req_id and not unit:
                 warnings.append(
                     f"{relative}:{number}: {req_id} is not on the line right after a rule, so it tags nothing"
@@ -593,6 +631,11 @@ def extract_requirements(
         unit.append(stripped)
     commit_table()
     flush()
+    if alds is None and found_alds:
+        # Some IAL may name a definition that only comes later: read the draft again
+        # with every definition known. The second reading finds the same ones, since
+        # which lines are code or comments does not depend on IDs.
+        return extract_requirements(path, relative, found_alds)
 
     seen: dict[str, int] = {}
     for requirement in requirements:
