@@ -250,6 +250,49 @@ class ReportTests(unittest.TestCase):
             claim_applies(server, "go", ["http.payment_request", "http.server"])
         )
 
+    def test_flow_claim_with_missing_challenge_path_covers_nothing(self) -> None:
+        # flow_runner fails a case whose challenge_path no case's path matches before it
+        # sends anything; a server_only case's path still counts as a match.
+        with tempfile.TemporaryDirectory() as directory:
+            flows = Path(directory) / "flows.json"
+            cases = [
+                {"name": "route", "path": "/route", "server_only": True},
+                {
+                    "name": "ok",
+                    "path": "/ok",
+                    "challenge_path": "/route",
+                    "requirements": ["req-core-001"],
+                },
+                {
+                    "name": "bad",
+                    "path": "/bad",
+                    "challenge_path": "/nowhere",
+                    "requirements": ["req-core-002"],
+                },
+            ]
+            flows.write_text(
+                json.dumps({"version": "1.0.0", "cases": cases}), encoding="utf-8"
+            )
+            vectors = Path(directory) / "vectors"
+            vectors.mkdir()
+            claims = load_claims(vectors, flows)
+        self.assertEqual(
+            [(claim.source, claim.runner_error is None) for claim in claims],
+            [("flows/flows.json#ok", True), ("flows/flows.json#bad", False)],
+        )
+        requirements = [
+            Requirement(
+                draft="draft-x-00", file="specs/x.md", line=line, section="",
+                text="A MUST b.", req_id=f"req-core-00{line}", keywords=["MUST"],
+            )
+            for line in (1, 2)
+        ]
+        warnings: list[str] = []
+        report = build_report(requirements, claims, {}, warnings, {}, adapters={})
+        self.assertEqual(report["coverage"], {"req-core-001": ["flows/flows.json#ok"]})
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("flows.json#bad: challenge_path /nowhere", warnings[0])
+
     def test_flow_modes_from_cases(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             flows = Path(directory) / "flows.json"
@@ -533,7 +576,13 @@ class SpecsPathTests(unittest.TestCase):
             (out / "checkout" / "specs").mkdir(parents=True)
             code, stderr = self.run_main(out / "checkout", out)
             self.assertEqual(code, 2)
-            self.assertIn("no specs/**/*.md drafts", stderr)
+            self.assertIn("no specs/**/draft-*.md drafts", stderr)
+            self.assertFalse((out / "r.json").exists())
+            # Markdown that is not a draft (a README) does not make it a specs checkout.
+            (out / "checkout" / "specs" / "README.md").write_text("Notes MUST x.\n")
+            code, stderr = self.run_main(out / "checkout", out)
+            self.assertEqual(code, 2)
+            self.assertIn("no specs/**/draft-*.md drafts", stderr)
             self.assertFalse((out / "r.json").exists())
 
     def test_writes_report_for_a_checkout(self) -> None:
@@ -793,6 +842,21 @@ class KramdownReadingTests(unittest.TestCase):
             "A \x60 MUST b and \x60c\x60 MAY.\n": [["MAY", "MUST"]],
             "Link [x](https://e.com/MUST) ten MAY.\n": [["MAY"]],
             "Only [x](https://e.com/MUST \"MUST\") and <https://e.com/MUST>.\n": [],
+        }
+        for body, expected in cases.items():
+            with self.subTest(body=body):
+                self.assertEqual([r.keywords for r in rules_in(body)], expected)
+
+    def test_quoted_keywords_match_the_specs_linter(self) -> None:
+        # As mpp-specs' lint_requirements.py: only a keyword double-quoted on its own is
+        # dropped; one inside a longer quoted phrase or in single quotes is a rule.
+        cases = {
+            'The key words "MUST", "MUST NOT" and "MAY" are\n"SHOULD\nNOT".\n': [],
+            'Text says "clients MUST retry".\n': [["MUST"]],
+            'Text says "MUST retry" or "retry MAY".\n': [["MAY", "MUST"]],
+            "Text says 'MUST'.\n": [["MUST"]],
+            # a digit next to it makes a different word, as in the linter
+            "Field MUST2 and 3MAY.\n": [],
         }
         for body, expected in cases.items():
             with self.subTest(body=body):

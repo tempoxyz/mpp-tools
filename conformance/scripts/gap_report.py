@@ -45,7 +45,15 @@ EXCERPT_LENGTH = 160
 # whitespace before matching, so a two-word keyword hard-wrapped across lines ("MUST" at
 # the end of one line, "NOT" at the start of the next) still matches as "MUST NOT".
 KEYWORD_RE = re.compile(
-    r"(?<![A-Za-z\"'])(?:MUST NOT|SHALL NOT|SHOULD NOT|NOT RECOMMENDED|MUST|REQUIRED|SHALL|SHOULD|RECOMMENDED|MAY|OPTIONAL)(?![A-Za-z\"'])"
+    r"(?<![A-Za-z0-9])(?:MUST NOT|SHALL NOT|SHOULD NOT|NOT RECOMMENDED|MUST|REQUIRED|SHALL|SHOULD|RECOMMENDED|MAY|OPTIONAL)(?![A-Za-z0-9])"
+)
+# A keyword quoted on its own, as in the boilerplate 'The key words "MUST", ...', names
+# the keyword rather than stating a rule. Only that exact form is dropped, the way
+# mpp-specs' scripts/lint_requirements.py does (QUOTED_KEYWORDS), so both tools agree on
+# which blocks are rules: a keyword in a longer quoted phrase ("clients MUST retry") or
+# in single quotes still counts.
+QUOTED_KEYWORD_RE = re.compile(
+    r'"(?:MUST NOT|SHALL NOT|SHOULD NOT|NOT RECOMMENDED|MUST|REQUIRED|SHALL|SHOULD|RECOMMENDED|MAY|OPTIONAL)"'
 )
 REQ_ID_RE = re.compile(r"^req-[a-z0-9-]+-[0-9]{3}$")
 # A block IAL alone on its line, such as '{: #req-core-001}'. kramdown extension tags
@@ -224,8 +232,8 @@ def strip_code_spans(text: str) -> str:
 def keywords_in(text: str) -> list[str]:
     """Return the BCP 14 keywords in text as a reader of the rendered draft sees them.
 
-    Ignored: keywords in code spans (quoted ones such as "MUST" are excluded by
-    KEYWORD_RE itself) and in link destinations or autolinks. Whitespace, newlines
+    Ignored: keywords in code spans, in link destinations or autolinks, and a keyword
+    double-quoted on its own ("MUST", see QUOTED_KEYWORD_RE). Whitespace, newlines
     included, is collapsed first so a keyword pair wrapped across lines still reads as
     one keyword ("MUST NOT", not "MUST").
     """
@@ -233,6 +241,7 @@ def keywords_in(text: str) -> list[str]:
     visible = LINK_DESTINATION_RE.sub("]", visible)
     visible = AUTOLINK_RE.sub(" ", visible)
     visible = " ".join(visible.split())
+    visible = QUOTED_KEYWORD_RE.sub(" ", visible)
     return sorted(set(KEYWORD_RE.findall(visible)))
 
 
@@ -550,9 +559,11 @@ def draft_paths(specs_dir: Path) -> list[Path]:
         p for p in (specs_dir / "specs").rglob("*.md")
         if not p.is_symlink() and p.resolve().is_relative_to(root)
     )
-    if not paths:
+    # Every specs/**/*.md is read as a draft, as mpp-specs' gen.sh and linter do, but a
+    # tree with no draft-*.md at all (only a README, say) is not an mpp-specs checkout.
+    if not any(p.name.startswith("draft-") for p in paths):
         raise ValueError(
-            f"{specs_dir} has no specs/**/*.md drafts; pass an mpp-specs checkout"
+            f"{specs_dir} has no specs/**/draft-*.md drafts; pass an mpp-specs checkout"
         )
     return paths
 
@@ -616,10 +627,10 @@ class Claim:
     sdk_versions: dict[str, str] | None = None
     # Flow cases only: server_only, raw_http, client_flow or ordinary, as flow_runner runs them.
     flow_mode: str | None = None
-    # Vector claims only: why no SDK can pass this claim for real, if none can: the vector
-    # runner refuses the claim's whole file, or the scenario calls a legacy command that
-    # maps to no adapter operation (the runner fails it before starting any SDK, so it
-    # could only "pass" by expecting that failure).
+    # Why no SDK can pass this claim for real, if none can: the vector runner refuses the
+    # claim's whole file, or the scenario calls a legacy command that maps to no adapter
+    # operation (the runner fails it before starting any SDK, so it could only "pass" by
+    # expecting that failure); or a flow case's challenge_path names no case's path.
     runner_error: str | None = None
     # Vector claims only: further operations the scenario's tests call (a parse and format
     # scenario needs both), each of which the adapter must advertise.
@@ -750,13 +761,25 @@ def load_claims(
                     file_constraints=file_constraints,
                 )
             )
-    for flow_case in load_flow_cases(flow_cases_path):
+    flow_cases = load_flow_cases(flow_cases_path)
+    # flow_runner looks a challenge_path up among every case's path, server_only ones
+    # included, and fails the case before sending anything when none has it.
+    flow_paths = {str(flow_case.get("path", "/")) for flow_case in flow_cases}
+    for flow_case in flow_cases:
         if flow_case.get("requirements"):
+            challenge_path = flow_case.get("challenge_path")
+            flow_error = None
+            if challenge_path and str(challenge_path) not in flow_paths:
+                flow_error = (
+                    f"challenge_path {challenge_path} names no flow case's path, "
+                    "so flow_runner fails it before any request"
+                )
             claims.append(
                 Claim(
                     source=f"flows/{flow_cases_path.name}#{flow_case['name']}",
                     requirements=flow_case["requirements"],
                     flow_mode=flow_mode(flow_case),
+                    runner_error=flow_error,
                 )
             )
     return claims
@@ -847,7 +870,8 @@ def rejected_by_runner(claim: Claim, warnings: list[str]) -> bool:
     That is when the runner refuses the claim's scenario outright, for every adapter:
     its sdkVersions has unknown adapter keys or non-string values, or its adapters list
     names an unknown adapter; or when it refuses the whole file because another scenario
-    in it is invalid, or the scenario calls an unmapped command (runner_error). Such a
+    in it is invalid, or the scenario calls an unmapped command, or a flow case's
+    challenge_path matches no flow case (runner_error). Such a
     claim counts for no SDK and for no suite-wide total. Warns once per claim.
     """
     if claim.runner_error:
