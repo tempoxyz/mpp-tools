@@ -234,6 +234,8 @@ class ReportTests(unittest.TestCase):
         ordinary = Claim("flows/flows.json#a", ["req-core-001"], flow_mode="ordinary")
         client = Claim("flows/flows.json#b", ["req-core-001"], flow_mode="client_flow")
         server = Claim("flows/flows.json#c", ["req-core-001"], flow_mode="server_only")
+        raw = Claim("flows/flows.json#d", ["req-core-001"], flow_mode="raw_http")
+        self.assertFalse(claim_applies(raw, "typescript", ["http.payment_request"]))
         # Ruby and Java run ordinary flows without any http.* capability.
         self.assertTrue(claim_applies(ordinary, "java", ["challenge.parse"]))
         self.assertFalse(claim_applies(client, "java", ["challenge.parse"]))
@@ -259,6 +261,12 @@ class ReportTests(unittest.TestCase):
                     "server_only": True,
                     "requirements": ["req-core-001"],
                 },
+                {
+                    "name": "d",
+                    "path": "/d",
+                    "discovery": True,
+                    "requirements": ["req-core-001"],
+                },
             ]
             flows.write_text(
                 json.dumps({"version": "1.0.0", "cases": cases}), encoding="utf-8"
@@ -268,7 +276,7 @@ class ReportTests(unittest.TestCase):
             claims = load_claims(vectors, flows)
         self.assertEqual(
             [claim.flow_mode for claim in claims],
-            ["ordinary", "client_flow", "server_only"],
+            ["ordinary", "client_flow", "server_only", "raw_http"],
         )
 
     def test_sdk_versions_use_runner_logic(self) -> None:

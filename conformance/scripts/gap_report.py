@@ -300,7 +300,7 @@ class Claim:
     operation: str | None = None
     adapters: list[str] | None = None
     sdk_versions: dict[str, str] | None = None
-    # Flow cases only: server_only, client_flow or ordinary, as flow_runner runs them.
+    # Flow cases only: server_only, raw_http, client_flow or ordinary, as flow_runner runs them.
     flow_mode: str | None = None
 
 
@@ -351,8 +351,10 @@ def flow_mode(flow_case: dict[str, Any]) -> str:
     """Classify a flow case the way flow_runner dispatches it."""
     if flow_case.get("server_only"):
         return "server_only"
-    if flow_case.get("discovery") or flow_case.get("json_rpc"):
-        return "ordinary"
+    # Discovery, JSON-RPC and no_payment cases send raw HTTP to the compliance
+    # server and never call the adapter, so they exercise no SDK.
+    if flow_case.get("discovery") or flow_case.get("json_rpc") or flow_case.get("no_payment"):
+        return "raw_http"
     return "client_flow" if flow_case.get("client_flow") else "ordinary"
 
 
@@ -381,9 +383,9 @@ def claim_applies(
 ) -> bool:
     """Whether the runners would run this claim against the adapter."""
     if claim.flow_mode is not None:
-        # flow_runner runs every case but server_only ones against each adapter;
-        # only client_flow cases drive the adapter's http.payment_request.
-        if claim.flow_mode == "server_only":
+        # server_only and raw_http cases never call the adapter; only client_flow
+        # cases drive the adapter's http.payment_request.
+        if claim.flow_mode in ("server_only", "raw_http"):
             return False
         return (
             claim.flow_mode != "client_flow" or "http.payment_request" in capabilities
