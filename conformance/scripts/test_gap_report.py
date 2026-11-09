@@ -418,6 +418,30 @@ class ReportTests(unittest.TestCase):
         ok = {"name": "r", "path": "/charge/r", "redirect_to": "landing"}
         self.assertTrue(answers_challenge(ok, {"/charge/r": ok, "/charge/landing": landing}))
 
+    def test_operation_expected_the_runner_cannot_compare_voids_the_file(self) -> None:
+        for bad in (True, [1], {"ok": False, "error": "boom"}):
+            with self.subTest(expected=bad), tempfile.TemporaryDirectory() as directory:
+                vectors = Path(directory) / "vectors"
+                vectors.mkdir()
+                vector = {
+                    "version": "1.0.0",
+                    "description": "x",
+                    "spec_ref": "draft-httpauth-payment",
+                    "commands": {"operation": "challenge.parse"},
+                    "scenarios": [
+                        {"name": "ok", "description": "d", "tags": ["t"], "input": {"header": "Payment x"}, "expected": {"ok": False, "error": {"type": "parse_error"}}, "requirements": ["req-core-001"]},
+                        {"name": "bad", "description": "d", "tags": ["t"], "input": {"header": "Payment y"}, "expected": bad},
+                    ],
+                }
+                (vectors / "v.json").write_text(json.dumps(vector), encoding="utf-8")
+                flows = Path(directory) / "flows.json"
+                flows.write_text(
+                    json.dumps({"version": "1.0.0", "cases": [{"name": "r", "path": "/r"}]}),
+                    encoding="utf-8",
+                )
+                claims = load_claims(vectors, flows)
+                self.assertIn("cannot compare", claims[0].runner_error or "")
+
     def test_legacy_requests_the_schema_rejects_cover_nothing(self) -> None:
         commands = {"parse": "parse-www-authenticate", "format": "format-www-authenticate"}
         # A format test whose object is not a JSON object cannot form a valid request.

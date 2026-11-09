@@ -1136,6 +1136,28 @@ def load_claims(
             # runs any, so such a scenario crashes the file only for the adapters it lists
             # (all of them when it lists none). A version skip would also spare an adapter;
             # it is not modelled, so this errs toward less coverage, never more.
+            # compare_adapter_response reads an operation scenario's expected as an
+            # object, and its error as one when ok is false; the schema allows any value,
+            # and anything else raises AttributeError, which also aborts the file. Treated
+            # like the generate crash below: for the listed adapters, or for all.
+            expected = scenario.get("expected")
+            if commands.get("operation") and (
+                not isinstance(expected, dict)
+                or (
+                    expected.get("ok") is False
+                    and "error" in expected
+                    and not isinstance(expected["error"], dict)
+                )
+            ):
+                selected = scenario.get("adapters")
+                if selected:
+                    crashed.update(selected)
+                    continue
+                file_error = (
+                    f"the runner crashes on its file (vectors/{path.name}#{scenario['name']} "
+                    "has an expected value or error it cannot compare)"
+                )
+                break
             generate = scenario.get("tests", {}).get("generate")
             if (
                 commands.get("generate")
