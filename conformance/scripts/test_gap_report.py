@@ -17,6 +17,7 @@ from pathlib import Path
 from gap_report import (
     Claim,
     Requirement,
+    answers_challenge,
     build_report,
     claim_applies,
     draft_paths,
@@ -24,6 +25,7 @@ from gap_report import (
     extract_all,
     extract_requirements,
     flow_mode,
+    flow_operations,
     git_commit,
     ial_req_id,
     parse_heading,
@@ -1300,6 +1302,52 @@ class CyclopsFindingTests(unittest.TestCase):
         )
         markdown = render_markdown(report)
         self.assertIn("req-core-998\x60: flows/flows.json\\#s", markdown)
+
+class FlowOperationsTest(unittest.TestCase):
+    def test_operations_follow_what_flow_runner_calls(self) -> None:
+        receipt = {"receipt": {"status": "success"}}
+        # An invalid_www_authenticate case ends at challenge.parse's rejection.
+        self.assertEqual(
+            flow_operations({"invalid_www_authenticate": True}, receipt), ("challenge.parse",)
+        )
+        # A successful retry with a Receipt also calls receipt.parse.
+        self.assertEqual(
+            flow_operations({}, receipt),
+            ("challenge.parse", "credential.format", "receipt.parse"),
+        )
+        self.assertEqual(
+            flow_operations({}, {"receipt": None}), ("challenge.parse", "credential.format")
+        )
+        self.assertEqual(flow_operations({}, None), ("challenge.parse", "credential.format"))
+
+    def test_profile_credit_needs_every_operation_the_case_calls(self) -> None:
+        parse_only = ["challenge.parse"]
+        no_receipt = ["challenge.parse", "credential.format"]
+        invalid = Claim("flows/f.json#a", ["r"], flow_mode="ordinary", operations=("challenge.parse",))
+        paid = Claim(
+            "flows/f.json#b",
+            ["r"],
+            flow_mode="ordinary",
+            operations=("challenge.parse", "credential.format", "receipt.parse"),
+        )
+        self.assertTrue(claim_applies(invalid, "go", parse_only))
+        self.assertFalse(claim_applies(paid, "go", no_receipt))
+        self.assertTrue(claim_applies(paid, "go", [*no_receipt, "receipt.parse"]))
+        # A claim built without operations keeps the parse and format pair.
+        legacy = Claim("flows/f.json#c", ["r"], flow_mode="ordinary")
+        self.assertFalse(claim_applies(legacy, "go", parse_only))
+        self.assertTrue(claim_applies(legacy, "go", no_receipt))
+
+    def test_long_redirect_chain_does_not_recurse(self) -> None:
+        # Redirects are followed in a loop, so a chain longer than the recursion limit
+        # still resolves instead of raising RecursionError.
+        count = 3000
+        cases = {f"/c{i}": {"path": f"/c{i}", "redirect_to": f"/c{i + 1}"} for i in range(count)}
+        cases[f"/c{count}"] = {"path": f"/c{count}"}
+        self.assertTrue(answers_challenge(cases["/c0"], cases))
+        cases["/c1"]["redirect_to"] = "/c0"
+        self.assertFalse(answers_challenge(cases["/c0"], cases))
+
 
 class MarkdownEscapingTest(unittest.TestCase):
     def test_values_from_specs_cannot_add_rows_headings_or_break_code_spans(self) -> None:

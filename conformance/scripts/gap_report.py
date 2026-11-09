@@ -947,8 +947,9 @@ class Claim:
     # operation (the runner fails it before starting any SDK, so it could only "pass" by
     # expecting that failure); or a flow case's challenge_path names no case's path.
     runner_error: str | None = None
-    # Vector claims only: further operations the scenario's tests call (a parse and format
-    # scenario needs both), each of which the adapter must advertise.
+    # Further operations the claim calls, each of which the adapter must advertise: for a
+    # vector claim the ones its scenario's tests call besides operation (a parse and format
+    # scenario needs both); for an ordinary flow case all of them (flow_operations).
     operations: tuple[str, ...] = ()
     # Vector claims only: per adapter, the sdkVersions expressions of every scenario in this
     # claim's file that selects the adapter (this scenario included), in file order. As the
@@ -1125,7 +1126,7 @@ def load_claims(
     # ("missing golden case"). Without the file (a test fixture) nothing is checked.
     golden_path = flow_cases_path.parent / "golden-results.json"
     golden = (
-        {str(entry.get("name")) for entry in load_flow_results(golden_path)}
+        {str(entry.get("name")): entry for entry in load_flow_results(golden_path)}
         if golden_path.exists()
         else None
     )
@@ -1148,9 +1149,34 @@ def load_claims(
                     requirements=flow_case["requirements"],
                     flow_mode=flow_mode(flow_case, cases_by_path),
                     runner_error=flow_error,
+                    operations=flow_operations(
+                        flow_case, (golden or {}).get(str(flow_case["name"]))
+                    ),
                 )
             )
     return claims
+
+
+def flow_operations(
+    flow_case: dict[str, Any], golden_entry: dict[str, Any] | None
+) -> tuple[str, ...]:
+    """The adapter operations an ordinary flow case calls, as flow_runner runs it.
+
+    flow_runner calls challenge.parse on the 402's WWW-Authenticate header. An
+    invalid_www_authenticate case expects that parse to fail and ends there, so a
+    parse-only adapter takes part in it. Every other case goes on to credential.format,
+    and a case whose golden result holds a Receipt also calls receipt.parse on the
+    retry's Payment-Receipt header. AdapterClient.call answers an operation the adapter
+    does not declare locally (unsupported_operation), so without one of these the SDK
+    does not run that step and the case covers nothing for it. Without a golden entry
+    (a test fixture without golden-results.json) no Receipt step is assumed.
+    """
+    if flow_case.get("invalid_www_authenticate"):
+        return ("challenge.parse",)
+    operations: tuple[str, ...] = ("challenge.parse", "credential.format")
+    if golden_entry is not None and golden_entry.get("receipt") is not None:
+        operations += ("receipt.parse",)
+    return operations
 
 
 # Flow case flags under which the compliance server answers without a Payment challenge
@@ -1250,48 +1276,54 @@ def answers_challenge(
     cases_by_path is unknown does not count. urllib follows the server's 302
     only for GET, HEAD and POST (POST turns into GET), so a PUT, PATCH, DELETE or OPTIONS
     request stops at the 302 before any adapter call.
+
+    Redirects are followed in a loop rather than by recursion, so a long redirect chain in a
+    large flows.json cannot exceed Python's recursion limit.
     """
-    if flow_case is None or hops > len(cases_by_path or {}):
-        return False
-    path = str(flow_case.get("path", "/"))
-    # The request must reach this case: its path plus any initial_query has to normalize
-    # back to the path itself (a query or fragment in path, or an initial_query that adds
-    # path segments, sends it to another pathname, usually a 404).
-    if lookup_path(path, query) != path:
-        return False
-    # The server's order (compliance-server.ts): discovery, json_rpc and force_status answer
-    # first, then redirect_to, and only then no_payment, so a redirect wins over no_payment.
-    if any(flow_case.get(flag) for flag in ("discovery", "json_rpc", "force_status")):
-        return False
-    # compliance-server.ts redirects only when redirect_to is truthy, so an empty string (or
-    # a port offset with no target) is no redirect and the case answers as if unset.
-    target = flow_case.get("redirect_to")
-    if not target:
-        if flow_case.get("no_payment"):
+    while True:
+        if flow_case is None or hops > len(cases_by_path or {}):
             return False
-        # A case with expect_problem_details answers the first request with that
-        # problem's status; only a 402 carries the challenge flow_runner parses.
-        problem = flow_case.get("expect_problem_details")
-        if problem and problem.get("status") != 402:
+        path = str(flow_case.get("path", "/"))
+        # The request must reach this case: its path plus any initial_query has to normalize
+        # back to the path itself (a query or fragment in path, or an initial_query that adds
+        # path segments, sends it to another pathname, usually a 404).
+        if lookup_path(path, query) != path:
             return False
-        # mpp.charge validates the case's request (compliance-server.ts baseMethod: string
-        # amount, currency, recipient and expires, optional string resource) and throws
-        # before any 402 when it doesn't fit, so flow_runner never reaches the adapter.
-        # A case without request gets the server's default one, which fits.
-        return charge_request_fits(flow_case.get("request"))
-    if method not in {"GET", "HEAD", "POST"}:
-        return False
-    split = urllib.parse.urlsplit(str(target))
-    # compliance-server.ts listens on port and port + 1 with the same handler; only offset 1
-    # (a JSON integer, not a bool) reaches a listener. Other offsets get connection refused.
-    offset = flow_case.get("redirect_to_port_offset")
-    if offset and not (type(offset) is int and offset == 1):
-        return False
-    if cases_by_path is None or split.scheme or split.netloc:
-        return False
-    target_path = urllib.parse.urljoin(path, split.path) if split.path else path
-    next_method = "HEAD" if method == "HEAD" else "GET"
-    return answers_challenge(cases_by_path.get(target_path), cases_by_path, hops + 1, next_method)
+        # The server's order (compliance-server.ts): discovery, json_rpc and force_status answer
+        # first, then redirect_to, and only then no_payment, so a redirect wins over no_payment.
+        if any(flow_case.get(flag) for flag in ("discovery", "json_rpc", "force_status")):
+            return False
+        # compliance-server.ts redirects only when redirect_to is truthy, so an empty string (or
+        # a port offset with no target) is no redirect and the case answers as if unset.
+        target = flow_case.get("redirect_to")
+        if not target:
+            if flow_case.get("no_payment"):
+                return False
+            # A case with expect_problem_details answers the first request with that
+            # problem's status; only a 402 carries the challenge flow_runner parses.
+            problem = flow_case.get("expect_problem_details")
+            if problem and problem.get("status") != 402:
+                return False
+            # mpp.charge validates the case's request (compliance-server.ts baseMethod: string
+            # amount, currency, recipient and expires, optional string resource) and throws
+            # before any 402 when it doesn't fit, so flow_runner never reaches the adapter.
+            # A case without request gets the server's default one, which fits.
+            return charge_request_fits(flow_case.get("request"))
+        if method not in {"GET", "HEAD", "POST"}:
+            return False
+        split = urllib.parse.urlsplit(str(target))
+        # compliance-server.ts listens on port and port + 1 with the same handler; only offset 1
+        # (a JSON integer, not a bool) reaches a listener. Other offsets get connection refused.
+        offset = flow_case.get("redirect_to_port_offset")
+        if offset and not (type(offset) is int and offset == 1):
+            return False
+        if cases_by_path is None or split.scheme or split.netloc:
+            return False
+        target_path = urllib.parse.urljoin(path, split.path) if split.path else path
+        next_method = "HEAD" if method == "HEAD" else "GET"
+        # Follow the redirect: the target is requested with no initial_query. A loop stops
+        # once hops exceeds the number of cases.
+        flow_case, hops, method, query = cases_by_path.get(target_path), hops + 1, next_method, ""
 
 
 def load_profiles(adapters_dir: Path = ADAPTERS_DIR) -> dict[str, dict[str, Any]]:
@@ -1347,10 +1379,13 @@ def claim_applies(
             return False
         if claim.flow_mode == "client_flow":
             return "http.payment_request" in capabilities
-        # An ordinary case drives the SDK through challenge.parse, then credential.format;
-        # AdapterClient.call answers an operation the adapter lacks locally, so without
-        # both the SDK never runs the case.
-        return "challenge.parse" in capabilities and "credential.format" in capabilities
+        # An ordinary case drives the SDK through the operations flow_operations lists
+        # (challenge.parse, then credential.format and receipt.parse unless the case
+        # stops earlier); AdapterClient.call answers an operation the adapter lacks
+        # locally, so without each of them the SDK does not run the whole case. A claim
+        # built without them (older callers) needs the parse and format pair.
+        needed = claim.operations or ("challenge.parse", "credential.format")
+        return all(operation in capabilities for operation in needed)
     if claim.adapters is not None and adapter not in claim.adapters:
         return False
     if adapter in claim.crashed_adapters:
