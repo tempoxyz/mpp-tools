@@ -463,6 +463,16 @@ class ReportTests(unittest.TestCase):
             (root / "specs/draft-b-00.md").symlink_to(root / "outside.md")
             self.assertEqual([p.name for p in draft_paths(root)], ["draft-a-00.md"])
 
+    def test_symlinked_specs_root_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "elsewhere").mkdir()
+            (root / "elsewhere/draft-x-00.md").write_text("Secret MUST x.\n", encoding="utf-8")
+            (root / "checkout").mkdir()
+            (root / "checkout/specs").symlink_to(root / "elsewhere")
+            with self.assertRaises(ValueError):
+                draft_paths(root / "checkout")
+
     def test_parse_format_scenarios_need_each_tested_command(self) -> None:
         vector = {"commands": {"parse": "parse-www-authenticate", "format": "format-www-authenticate"}}
         # A format test expecting success compares semantically, parsing both wire values.
@@ -1189,6 +1199,28 @@ class FlowModeForcedStatusTest(unittest.TestCase):
             flow_mode({"name": "c", "path": "/c", "force_status": 500, "client_flow": True}),
             "client_flow",
         )
+
+    def test_cases_the_server_never_answers_with_a_challenge(self) -> None:
+        # The server looks cases up by pathname, so a query or fragment in path is a 404.
+        self.assertEqual(flow_mode({"name": "q", "path": "/q?x=1"}), "raw_http")
+        self.assertEqual(flow_mode({"name": "h", "path": "/h#f"}), "raw_http")
+        # A missing challenge_path case fails in flow_runner before any adapter call.
+        self.assertEqual(flow_mode({"name": "m", "path": "/m", "challenge_path": "/none"}, {}), "raw_http")
+
+    def test_redirect_reaches_the_adapter_only_through_a_challenge_case(self) -> None:
+        paid = {"name": "t", "path": "/t"}
+        free = {"name": "n", "path": "/n", "no_payment": True}
+        cases = {"/t": paid, "/n": free}
+        self.assertEqual(flow_mode({"name": "r", "path": "/r", "redirect_to": "/t"}, cases), "ordinary")
+        self.assertEqual(flow_mode({"name": "r", "path": "/r", "redirect_to": "/n"}, cases), "raw_http")
+        self.assertEqual(flow_mode({"name": "r", "path": "/r", "redirect_to": "/gone"}, cases), "raw_http")
+        self.assertEqual(
+            flow_mode({"name": "r", "path": "/r", "redirect_to": "/t", "redirect_to_port_offset": 1}, cases),
+            "raw_http",
+        )
+        self.assertEqual(flow_mode({"name": "r", "path": "/r", "redirect_to": "http://x/t"}, cases), "raw_http")
+        loop = {"/a": {"name": "a", "path": "/a", "redirect_to": "/b"}, "/b": {"name": "b", "path": "/b", "redirect_to": "/a"}}
+        self.assertEqual(flow_mode(loop["/a"], loop), "raw_http")
 
 
 class GenerateCommitStabilityTest(unittest.TestCase):

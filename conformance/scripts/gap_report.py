@@ -21,6 +21,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -774,10 +775,15 @@ def draft_paths(specs_dir: Path) -> list[Path]:
     """Return the drafts under specs/, or fail when specs_dir is not an mpp-specs checkout."""
     if not specs_dir.is_dir():
         raise ValueError(f"specs path {specs_dir} does not exist or is not a directory")
-    root = (specs_dir / "specs").resolve()
-    # A symlinked draft could point anywhere; its text would be copied into the report.
+    specs = specs_dir / "specs"
+    # A symlinked specs/ (or draft) could point anywhere; its text would be copied into the
+    # report. Refusing the link itself keeps root inside the checkout, so the containment
+    # check below also catches symlinked directories under specs/ that lead out of it.
+    if specs.is_symlink():
+        raise ValueError(f"{specs} is a symlink; pass an mpp-specs checkout")
+    root = specs.resolve()
     paths = sorted(
-        p for p in (specs_dir / "specs").rglob("*.md")
+        p for p in specs.rglob("*.md")
         if not p.is_symlink() and p.resolve().is_relative_to(root)
     )
     # Every specs/**/*.md is read as a draft, as mpp-specs' gen.sh and linter do, but a
@@ -1046,12 +1052,43 @@ def flow_mode(
     # json_rpc (both 200) case, so flow_runner stops (unexpected_status or
     # missing_challenge) before it calls the adapter: it checks the reference server,
     # not an SDK.
-    first = flow_case
+    first: dict[str, Any] | None = flow_case
     if flow_case.get("challenge_path") and cases_by_path is not None:
-        first = cases_by_path.get(str(flow_case["challenge_path"]), flow_case)
-    if any(first.get(flag) for flag in NO_CHALLENGE_FLAGS):
-        return "raw_http"
-    return "ordinary"
+        # flow_runner fails with missing_challenge_case, before any adapter call.
+        first = cases_by_path.get(str(flow_case["challenge_path"]))
+    return "ordinary" if answers_challenge(first, cases_by_path) else "raw_http"
+
+
+def answers_challenge(
+    flow_case: dict[str, Any] | None,
+    cases_by_path: dict[str, dict[str, Any]] | None,
+    hops: int = 0,
+) -> bool:
+    """Whether the compliance server answers flow_runner's first request with a 402 challenge.
+
+    Only then does flow_runner call the adapter. The server finds a case by the request's
+    pathname alone (compliance-server.ts caseByPath), so a case whose path holds a query or
+    fragment is never found (404). A case with a no-challenge flag answers without one. A
+    redirect_to case answers 302, and flow_runner's urllib follows it: it reaches the adapter
+    only when the target is another case on the same server that answers a challenge. A
+    redirect to another port (redirect_to_port_offset) or host, to no case, a loop, or any
+    redirect when cases_by_path is unknown does not count.
+    """
+    if flow_case is None or hops > len(cases_by_path or {}):
+        return False
+    path = str(flow_case.get("path", "/"))
+    if "?" in path or "#" in path:
+        return False
+    if any(flow_case.get(flag) for flag in NO_CHALLENGE_FLAGS):
+        return False
+    target = flow_case.get("redirect_to")
+    if target is None:
+        return True
+    split = urllib.parse.urlsplit(str(target))
+    if cases_by_path is None or flow_case.get("redirect_to_port_offset") or split.scheme or split.netloc:
+        return False
+    target_path = urllib.parse.urljoin(path, split.path) if split.path else path
+    return answers_challenge(cases_by_path.get(target_path), cases_by_path, hops + 1)
 
 
 def load_profiles(adapters_dir: Path = ADAPTERS_DIR) -> dict[str, dict[str, Any]]:
