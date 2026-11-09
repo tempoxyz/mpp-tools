@@ -33,6 +33,7 @@ from gap_report import (
     load_profiles,
     main,
     md_code,
+    operation_input_error,
     render_markdown,
     scenario_commands,
     scenario_operations,
@@ -1347,6 +1348,25 @@ class FlowOperationsTest(unittest.TestCase):
         self.assertTrue(answers_challenge(cases["/c0"], cases))
         cases["/c1"]["redirect_to"] = "/c0"
         self.assertFalse(answers_challenge(cases["/c0"], cases))
+
+
+class OperationInputErrorTest(unittest.TestCase):
+    def test_positive_scenario_with_schema_invalid_input_runs_no_sdk(self) -> None:
+        # The runner validates a positive operation scenario's request before starting
+        # the adapter, so an input the schema rejects never reaches an SDK.
+        vector = {"commands": {"operation": "challenge.parse"}}
+        bad = {"name": "bad", "input": {"header": 1}, "expected": {"ok": True}}
+        self.assertIn(
+            "adapter request schema", operation_input_error(vector, bad, "v") or ""
+        )
+        # A negative scenario skips validation and reaches the SDK.
+        self.assertIsNone(
+            operation_input_error(vector, {**bad, "expected": {"ok": False}}, "v")
+        )
+        good = {"name": "good", "input": {"header": "Payment x"}, "expected": {"ok": True}}
+        self.assertIsNone(operation_input_error(vector, good, "v"))
+        # Legacy command vectors are not checked.
+        self.assertIsNone(operation_input_error({"commands": {"parse": "p"}}, bad, "v"))
 
 
 class MarkdownEscapingTest(unittest.TestCase):

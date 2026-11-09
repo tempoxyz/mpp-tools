@@ -38,7 +38,7 @@ from harness import (
     load_vector,
     validate_value,
 )
-from vector_runner import VectorRunner
+from vector_runner import VectorRunner, expects_failure
 from version_constraints import matches_constraint
 
 SPECS_REPOSITORY = "https://github.com/tempoxyz/mpp-specs"
@@ -1027,6 +1027,35 @@ def check_scenario(runner: VectorRunner, scenario: dict[str, Any]) -> None:
     runner.scenario_adapters(scenario)
 
 
+def operation_input_error(
+    vector: dict[str, Any], scenario: dict[str, Any], vector_name: str
+) -> str | None:
+    """Why the runner fails an operation scenario for every SDK before calling one, if it does.
+
+    For an operation vector whose scenario does not expect ok: false, vector_runner sends
+    the request with validate_input on, and AdapterClient.call validates it against
+    adapter-request.schema.json before starting the adapter. An input the schema rejects
+    raises there, the runner records a failure, and no SDK process runs, so the claim checks
+    nothing. A negative scenario skips that validation and reaches the SDK. Legacy parse,
+    format and generate commands build their requests from the scenario differently and are
+    not checked here, which errs toward counting them.
+    """
+    operation = vector.get("commands", {}).get("operation")
+    if not operation or expects_failure(scenario.get("expected"), "ok"):
+        return None
+    request = {
+        "schema": 1,
+        "op": operation,
+        "input": scenario.get("input"),
+        "context": {"caseName": scenario["name"], "vectorName": vector_name},
+    }
+    try:
+        validate_value(request, "adapter-request.schema.json", "request")
+    except ValueError as error:
+        return f"its input fails the adapter request schema, so the runner fails it before any SDK runs ({error})"
+    return None
+
+
 def load_claims(
     vectors_dir: Path = VECTORS_DIR, flow_cases_path: Path = FLOW_CASES_PATH
 ) -> list[Claim]:
@@ -1103,6 +1132,8 @@ def load_claims(
                 )
             elif not error and not operations:
                 error = "its tests call none of the vector's commands"
+            elif not error:
+                error = operation_input_error(vector, scenario, path.stem)
             claims.append(
                 Claim(
                     source=source,
