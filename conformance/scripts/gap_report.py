@@ -1079,8 +1079,8 @@ def legacy_input_error(commands: dict[str, Any], scenario: dict[str, Any]) -> st
     """Why run_legacy_command fails a legacy test's first call for every SDK, if it does.
 
     Mirrors vector_runner._run_scenario: a generate command alone when present, else a parse
-    test on the wire value and a format test on the object, each with the input and the
-    expectation the runner gives it.
+    test on the wire value, a format test on the object and a roundtrip test's format call,
+    each with the input and the expectation the runner gives it.
     """
     tests = scenario.get("tests") or {}
     parse, format_, generate = commands.get("parse"), commands.get("format"), commands.get("generate")
@@ -1100,6 +1100,9 @@ def legacy_input_error(commands: dict[str, Any], scenario: dict[str, Any]) -> st
         if format_test is not None and format_ and obj is not None:
             expected = {"success": True} if format_test in (True, "exact") else format_test
             calls.append((format_, obj if base64url else json.dumps(obj), expected))
+        # A roundtrip test starts with a format call on the object, validated like any other.
+        if tests.get("roundtrip") is True and parse and format_ and obj is not None:
+            calls.append((format_, obj if base64url else json.dumps(obj), {"success": True}))
     for command, input_data, expected in calls:
         if expects_failure(expected):
             continue
@@ -1391,8 +1394,8 @@ def request_sendable(case: dict[str, Any]) -> bool:
     http_method as written) before it sends anything; a body that is not a string, or
     holds a lone surrogate, raises there. It also adds the case's Accept-Payment and
     Idempotency-Key headers (str() of each truthy value), which http.client refuses
-    when they hold CR or LF or fall outside Latin-1. Either way no request reaches the
-    server.
+    when they hold CR or LF or fall outside Latin-1, and refuses a URL with a control
+    character, space or non-ASCII text. Either way no request reaches the server.
     """
     if case.get("http_method", "GET") in {"POST", "PUT", "PATCH"}:
         body = case.get("body")
@@ -1407,7 +1410,11 @@ def request_sendable(case: dict[str, Any]) -> bool:
         value = case.get(key)
         if value and not header_value_sendable(str(value)):
             return False
-    return True
+    # flow_case_url appends initial_query to path; http.client refuses a request target
+    # with a control character or space, and cannot encode one outside ASCII.
+    query = case.get("initial_query")
+    target = f"{case.get('path', '/')}{'' if query is None else query}"
+    return all(0x20 < ord(char) < 0x7F for char in target)
 
 
 def header_value_sendable(value: str) -> bool:

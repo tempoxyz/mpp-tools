@@ -586,6 +586,9 @@ class ReportTests(unittest.TestCase):
         self.assertIsNone(legacy_input_error(commands, {"name": "b", "tests": {"parse": True}}))
         good = {"name": "g", "wire": 'Payment id="a"', "tests": {"parse": True}}
         self.assertIsNone(legacy_input_error(commands, good))
+        # A roundtrip test's format call is checked too.
+        roundtrip = {**bad_object, "tests": {"roundtrip": True}}
+        self.assertIn("format-www-authenticate request", legacy_input_error(commands, roundtrip) or "")
         # An unknown command fails request_input_for_command for every SDK.
         self.assertIn(
             "parse-nothing request", legacy_input_error({"parse": "parse-nothing"}, good) or ""
@@ -627,6 +630,11 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(flow_mode({"name": "d", "path": "/d", "discovery": True, **bad}), "unsent")
         self.assertEqual(flow_mode({"name": "p", "path": "/p", "no_payment": True, **bad}), "unsent")
         self.assertEqual(flow_mode({"name": "p", "path": "/p", "no_payment": True}), "raw_http")
+        # urllib never sends a URL with a space, control or non-ASCII character.
+        for path, query in (("/a b", None), ("/a", "?x=1 2"), ("/a", "?x=\u00e9"), ("/a\x01", "")):
+            case = {"name": "u", "path": path, "initial_query": query, "discovery": True}
+            self.assertEqual(flow_mode(case), "unsent", (path, query))
+        self.assertEqual(flow_mode({"name": "q", "path": "/q", "initial_query": "?x=1", "discovery": True}), "raw_http")
         # A no_payment case sends the challenge_path case's request.
         target = {"name": "t", "path": "/t", **bad}
         via = {"name": "v", "path": "/v", "no_payment": True, "challenge_path": "/t"}
