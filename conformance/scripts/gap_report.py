@@ -134,7 +134,10 @@ RENDERED_SECTION_RE = re.compile(
 # backticks is matched too, so strip_comments can step over code spans.
 COMMENT_CLOSERS = {"<!--": ("-->",), "{::comment}": ("{:/comment}", "{:/}")}
 COMMENT_OPEN_RE = re.compile(r"<!--|\{::comment\}|(?<!\\)\x60+")
-BACKTICKS_RE = re.compile(r"(?<!\\)\x60+")
+# A backtick run (group 2) after an even number of backslashes (group 1), as kramdown
+# reads it: two backslashes and a backtick open a span (the first backslash escapes the
+# second), one backslash and a backtick is an escaped backtick.
+BACKTICKS_RE = re.compile(r"(?<!\\)((?:\\\\)*)(\x60+)")
 # A link's destination (and title) and an autolink are attributes, not text: a capital
 # keyword in a URL, as in [spec](https://example.com/MUST), is not a rule.
 LINK_DESTINATION_RE = re.compile(r"\]\([^()\s]*(?:\s+(?:\"[^\"]*\"|'[^']*'))?\s*\)")
@@ -260,12 +263,12 @@ def strip_code_spans(text: str) -> str:
         if not match:
             pieces.append(text[position:])
             return "".join(pieces)
-        close = code_span_end(text, match.start(), match.end())
+        close = code_span_end(text, match.start(2), match.end(2))
         if close is None:
             pieces.append(text[position : match.end()])
             position = match.end()
             continue
-        pieces.append(text[position : match.start()])
+        pieces.append(text[position : match.start(2)])
         pieces.append(" ")
         position = close
 
