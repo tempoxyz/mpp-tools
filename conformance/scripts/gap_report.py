@@ -1213,6 +1213,23 @@ def lookup_path(path: str, query: str = "") -> str | None:
     return pathname
 
 
+def charge_request_fits(request: Any) -> bool:
+    """Whether the compliance server's mpp.charge accepts a flow case's request object.
+
+    Mirrors the zod schema of baseMethod's request in compliance-server.ts: amount,
+    currency, recipient and expires are required strings and resource an optional string.
+    None means the case has no request, so the server uses its default, which fits.
+    """
+    if request is None:
+        return True
+    if not isinstance(request, dict):
+        return False
+    required = ("amount", "currency", "recipient", "expires")
+    if any(not isinstance(request.get(key), str) for key in required):
+        return False
+    return "resource" not in request or isinstance(request["resource"], str)
+
+
 def answers_challenge(
     flow_case: dict[str, Any] | None,
     cases_by_path: dict[str, dict[str, Any]] | None,
@@ -1255,7 +1272,13 @@ def answers_challenge(
         # A case with expect_problem_details answers the first request with that
         # problem's status; only a 402 carries the challenge flow_runner parses.
         problem = flow_case.get("expect_problem_details")
-        return not problem or problem.get("status") == 402
+        if problem and problem.get("status") != 402:
+            return False
+        # mpp.charge validates the case's request (compliance-server.ts baseMethod: string
+        # amount, currency, recipient and expires, optional string resource) and throws
+        # before any 402 when it doesn't fit, so flow_runner never reaches the adapter.
+        # A case without request gets the server's default one, which fits.
+        return charge_request_fits(flow_case.get("request"))
     if method not in {"GET", "HEAD", "POST"}:
         return False
     split = urllib.parse.urlsplit(str(target))

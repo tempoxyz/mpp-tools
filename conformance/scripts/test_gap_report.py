@@ -1328,6 +1328,17 @@ class FlowModeForcedStatusTest(unittest.TestCase):
         # A missing challenge_path case fails in flow_runner before any adapter call.
         self.assertEqual(flow_mode({"name": "m", "path": "/m", "challenge_path": "/none"}, {}), "raw_http")
 
+    def test_request_mpp_charge_rejects_never_reaches_the_adapter(self) -> None:
+        # compliance-server.ts validates request with zod before it answers 402.
+        full = {"amount": "1", "currency": "USD", "recipient": "m", "expires": "2099-01-01T00:00:00Z"}
+        self.assertEqual(flow_mode({"name": "d", "path": "/d"}), "ordinary")
+        self.assertEqual(flow_mode({"name": "f", "path": "/f", "request": full}), "ordinary")
+        self.assertEqual(flow_mode({"name": "r", "path": "/r", "request": {**full, "resource": "/r"}}), "ordinary")
+        missing = {k: v for k, v in full.items() if k != "expires"}
+        self.assertEqual(flow_mode({"name": "m", "path": "/m", "request": missing}), "raw_http")
+        self.assertEqual(flow_mode({"name": "n", "path": "/n", "request": {**full, "amount": 1}}), "raw_http")
+        self.assertEqual(flow_mode({"name": "x", "path": "/x", "request": {**full, "resource": 2}}), "raw_http")
+
     def test_redirect_reaches_the_adapter_only_through_a_challenge_case(self) -> None:
         paid = {"name": "t", "path": "/t"}
         free = {"name": "n", "path": "/n", "no_payment": True}
