@@ -170,6 +170,15 @@ class ExtractTests(unittest.TestCase):
         self.assertEqual(requirements[0].id_problem, "foreign")
         self.assertTrue(any("does not use this draft's prefix req-tempo-" in w for w in warnings))
 
+    def test_malformed_own_id_is_not_also_foreign(self) -> None:
+        specs = write_specs(
+            self.root / "checkout",
+            {"specs/a/draft-core-00.md": "# A\n\nX MUST hold.\n{: #req-core-01}\n"},
+        )
+        requirements, warnings, _, _ = extract_all(specs)
+        self.assertEqual(requirements[0].id_problem, "malformed")
+        self.assertFalse(any("does not use this draft's prefix" in w for w in warnings))
+
     def test_next_line_id_after_an_item_ial_without_one_goes_on_the_list(self) -> None:
         self.path.write_text("# A\n\n- {: #note} Client MUST pay.\n{: #req-x-001}\n", encoding="utf-8")
         requirements, warnings, _ = extract_requirements(self.path, "specs/x.md")
@@ -476,6 +485,13 @@ class ReportTests(unittest.TestCase):
             (root / "specs/draft-a-00.md").write_text("A MUST b.\n", encoding="utf-8")
             (root / "outside.md").write_text("Secret MUST x.\n", encoding="utf-8")
             (root / "specs/draft-b-00.md").symlink_to(root / "outside.md")
+            self.assertEqual([p.name for p in draft_paths(root)], ["draft-a-00.md"])
+
+    def test_directory_named_like_a_draft_is_skipped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = write_specs(Path(directory), {"specs/draft-a-00.md": "# A\n"})
+            (root / "specs" / "notes.md").mkdir()
+            (root / "specs" / "notes.md" / "marker.txt").write_text("x", encoding="utf-8")
             self.assertEqual([p.name for p in draft_paths(root)], ["draft-a-00.md"])
 
     def test_symlinked_specs_root_is_refused(self) -> None:

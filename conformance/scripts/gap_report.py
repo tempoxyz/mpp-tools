@@ -775,7 +775,13 @@ def extract_requirements(
             requirement.fallback_key = f"{requirement.fallback_key}-{count}"
         # Exactly req-{draft}-NNN: a bare prefix check would take req-{draft}-charge-001,
         # an ID of draft {draft}-charge, as this draft's own.
-        if requirement.req_id and not re.fullmatch(rf"req-{re.escape(draft)}-[0-9]{{3}}", requirement.req_id):
+        # A malformed ID already has its own warning; calling it foreign too would point
+        # at the wrong repair.
+        if (
+            requirement.req_id
+            and requirement.id_problem != "malformed"
+            and not re.fullmatch(rf"req-{re.escape(draft)}-[0-9]{{3}}", requirement.req_id)
+        ):
             requirement.id_problem = requirement.id_problem or "foreign"
             warnings.append(
                 f"{relative}:{requirement.line}: {requirement.req_id} does not use this draft's prefix req-{draft}-; not counted as covered"
@@ -796,7 +802,8 @@ def draft_paths(specs_dir: Path) -> list[Path]:
     root = specs.resolve()
     paths = sorted(
         p for p in specs.rglob("*.md")
-        if not p.is_symlink() and p.resolve().is_relative_to(root)
+        # is_file: rglob also matches a directory named *.md, which read_text cannot read.
+        if not p.is_symlink() and p.is_file() and p.resolve().is_relative_to(root)
     )
     # Every specs/**/*.md is read as a draft, as mpp-specs' gen.sh and linter do, but a
     # tree with no draft-*.md at all (only a README, say) is not an mpp-specs checkout.
