@@ -1188,7 +1188,9 @@ def load_claims(
                     flow_mode=flow_mode(flow_case, cases_by_path),
                     runner_error=flow_error,
                     operations=flow_operations(
-                        flow_case, (golden or {}).get(str(flow_case["name"]))
+                        flow_case,
+                        (golden or {}).get(str(flow_case["name"])),
+                        first_challenge_case(flow_case, cases_by_path),
                     ),
                 )
             )
@@ -1196,20 +1198,28 @@ def load_claims(
 
 
 def flow_operations(
-    flow_case: dict[str, Any], golden_entry: dict[str, Any] | None
+    flow_case: dict[str, Any],
+    golden_entry: dict[str, Any] | None,
+    challenge_case: dict[str, Any] | None = None,
 ) -> tuple[str, ...]:
     """The adapter operations an ordinary flow case calls, as flow_runner runs it.
 
-    flow_runner calls challenge.parse on the 402's WWW-Authenticate header. An
-    invalid_www_authenticate case expects that parse to fail and ends there, so a
-    parse-only adapter takes part in it. Every other case goes on to credential.format,
+    flow_runner calls challenge.parse on the 402's WWW-Authenticate header. The
+    compliance server sends a malformed header only when the case that answers the
+    first request has invalid_www_authenticate; that is challenge_case (the
+    challenge_path case, or the case a redirect lands on) when given, else flow_case.
+    The parse then fails and the case ends there, so a parse-only adapter takes part
+    in it. A case that sets the flag but takes its challenge from a valid case goes on
+    like any other. Every other case goes on to credential.format,
     and a case whose golden result holds a Receipt also calls receipt.parse on the
     retry's Payment-Receipt header. AdapterClient.call answers an operation the adapter
     does not declare locally (unsupported_operation), so without one of these the SDK
     does not run that step and the case covers nothing for it. Without a golden entry
     (a test fixture without golden-results.json) no Receipt step is assumed.
     """
-    if flow_case.get("invalid_www_authenticate"):
+    # The flag of the case the server answered with decides, not the claiming case's.
+    answered = challenge_case if challenge_case is not None else flow_case
+    if answered.get("invalid_www_authenticate"):
         return ("challenge.parse",)
     operations: tuple[str, ...] = ("challenge.parse", "credential.format")
     if golden_entry is not None and golden_entry.get("receipt") is not None:
@@ -1247,6 +1257,18 @@ def flow_mode(
     # json_rpc (both 200) case, so flow_runner stops (unexpected_status or
     # missing_challenge) before it calls the adapter: it checks the reference server,
     # not an SDK.
+    return "ordinary" if first_challenge_case(flow_case, cases_by_path) is not None else "raw_http"
+
+
+def first_challenge_case(
+    flow_case: dict[str, Any], cases_by_path: dict[str, dict[str, Any]] | None
+) -> dict[str, Any] | None:
+    """The case whose 402 challenge answers flow_runner's first request, or None.
+
+    That is the challenge_path case when one is named, else flow_case, followed through
+    any redirects to the case that finally answers (see answering_case). None means no
+    challenge reaches the adapter.
+    """
     first: dict[str, Any] | None = flow_case
     if flow_case.get("challenge_path") and cases_by_path is not None:
         # flow_runner fails with missing_challenge_case, before any adapter call.
@@ -1256,7 +1278,7 @@ def flow_mode(
     method = str((first or flow_case).get("http_method", "GET")).upper()
     # flow_runner appends that case's initial_query to its path (flow_case_url).
     query = str((first or {}).get("initial_query") or "")
-    return "ordinary" if answers_challenge(first, cases_by_path, method=method, query=query) else "raw_http"
+    return answering_case(first, cases_by_path, method=method, query=query)
 
 
 # Printable ASCII in the WHATWG path percent-encode set (URL Standard, section 1.3).
@@ -1319,6 +1341,20 @@ def answers_challenge(
 ) -> bool:
     """Whether the compliance server answers flow_runner's first request with a 402 challenge.
 
+    See answering_case, which also says which case's challenge it is.
+    """
+    return answering_case(flow_case, cases_by_path, hops, method, query) is not None
+
+
+def answering_case(
+    flow_case: dict[str, Any] | None,
+    cases_by_path: dict[str, dict[str, Any]] | None,
+    hops: int = 0,
+    method: str = "GET",
+    query: str = "",
+) -> dict[str, Any] | None:
+    """The case whose 402 challenge answers flow_runner's first request, or None if none does.
+
     Only then does flow_runner call the adapter. The server finds a case by the request's
     pathname alone (compliance-server.ts caseByPath), so a case whose path holds a query or
     fragment is never found (404). A case with a no-challenge flag answers without one. A
@@ -1336,52 +1372,52 @@ def answers_challenge(
     """
     while True:
         if flow_case is None or hops > len(cases_by_path or {}):
-            return False
+            return None
         path = str(flow_case.get("path", "/"))
         # The request must reach this case: its path plus any initial_query has to normalize
         # back to the path itself (a query or fragment in path, or an initial_query that adds
         # path segments, sends it to another pathname, usually a 404).
         if lookup_path(path, query) != path:
-            return False
+            return None
         # The server's order (compliance-server.ts): discovery, json_rpc and force_status answer
         # first, then redirect_to, and only then no_payment, so a redirect wins over no_payment.
         if any(flow_case.get(flag) for flag in ("discovery", "json_rpc", "force_status")):
-            return False
+            return None
         # compliance-server.ts redirects only when redirect_to is truthy, so an empty string (or
         # a port offset with no target) is no redirect and the case answers as if unset.
         target = flow_case.get("redirect_to")
         if not target:
             if flow_case.get("no_payment"):
-                return False
+                return None
             # A case with expect_problem_details answers the first request with that
             # problem's status; only a 402 carries the challenge flow_runner parses.
             problem = flow_case.get("expect_problem_details")
             if problem and problem.get("status") != 402:
-                return False
+                return None
             # mpp.charge validates the case's request (compliance-server.ts baseMethod: string
             # amount, currency, recipient and expires, optional string resource) and throws
             # before any 402 when it doesn't fit, so flow_runner never reaches the adapter.
             # A case without request gets the server's default one, which fits.
-            return charge_request_fits(flow_case.get("request"))
+            return flow_case if charge_request_fits(flow_case.get("request")) else None
         if method not in {"GET", "HEAD", "POST"}:
-            return False
+            return None
         try:
             split = urllib.parse.urlsplit(str(target))
         except ValueError:
             # A target urllib cannot parse (such as "http://[") is never followed.
-            return False
+            return None
         # compliance-server.ts listens on port and port + 1 with the same handler; only offset 1
         # (a JSON integer, not a bool) reaches a listener. Other offsets get connection refused.
         offset = flow_case.get("redirect_to_port_offset")
         if offset and not (type(offset) is int and offset == 1):
-            return False
+            return None
         if cases_by_path is None or split.scheme or split.netloc:
-            return False
+            return None
         # urllib's default HTTPRedirectHandler follows at most max_redirections (10)
         # redirects and raises HTTPError on the next 302, which flow_runner reads as an
         # unexpected status before any adapter call.
         if hops >= urllib.request.HTTPRedirectHandler.max_redirections:
-            return False
+            return None
         target_path = urllib.parse.urljoin(path, split.path) if split.path else path
         next_method = "HEAD" if method == "HEAD" else "GET"
         # Follow the redirect: the target is requested with no initial_query. A loop stops

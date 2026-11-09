@@ -15,6 +15,7 @@ import unittest.mock
 from pathlib import Path
 
 from gap_report import (
+    first_challenge_case,
     Claim,
     Requirement,
     answers_challenge,
@@ -1321,6 +1322,29 @@ class FlowOperationsTest(unittest.TestCase):
             flow_operations({}, {"receipt": None}), ("challenge.parse", "credential.format")
         )
         self.assertEqual(flow_operations({}, None), ("challenge.parse", "credential.format"))
+
+    def test_the_answering_case_decides_invalid_www_authenticate(self) -> None:
+        receipt = {"receipt": {"status": "success"}}
+        flagged = {"name": "f", "path": "/f", "invalid_www_authenticate": True}
+        valid = {"name": "v", "path": "/v"}
+        # The flag on the claiming case is moot when the challenge comes from a valid case:
+        # the parse succeeds and flow_runner goes on to credential.format.
+        via_valid = {**flagged, "challenge_path": "/v"}
+        cases = {"/f": flagged, "/v": valid}
+        self.assertEqual(
+            flow_operations(via_valid, receipt, first_challenge_case(via_valid, cases)),
+            ("challenge.parse", "credential.format", "receipt.parse"),
+        )
+        # A claiming case without the flag whose challenge comes from a flagged case
+        # ends at the parse's rejection.
+        via_flagged = {"name": "c", "path": "/c", "challenge_path": "/f"}
+        self.assertEqual(
+            flow_operations(via_flagged, receipt, first_challenge_case(via_flagged, cases)),
+            ("challenge.parse",),
+        )
+        # A redirect lands on the case that answers.
+        redirect = {"name": "r", "path": "/r", "redirect_to": "/f"}
+        self.assertEqual(first_challenge_case(redirect, {**cases, "/r": redirect}), flagged)
 
     def test_profile_credit_needs_every_operation_the_case_calls(self) -> None:
         parse_only = ["challenge.parse"]
