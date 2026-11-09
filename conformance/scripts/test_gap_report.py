@@ -1219,6 +1219,10 @@ class FlowModeForcedStatusTest(unittest.TestCase):
             "raw_http",
         )
         self.assertEqual(flow_mode({"name": "r", "path": "/r", "redirect_to": "http://x/t"}, cases), "raw_http")
+        # The server redirects before it looks at no_payment.
+        via = {"name": "v", "path": "/v", "challenge_path": "/np"}
+        both = {"/np": {"name": "np", "path": "/np", "no_payment": True, "redirect_to": "/t"}, **cases}
+        self.assertEqual(flow_mode(via, both), "ordinary")
         loop = {"/a": {"name": "a", "path": "/a", "redirect_to": "/b"}, "/b": {"name": "b", "path": "/b", "redirect_to": "/a"}}
         self.assertEqual(flow_mode(loop["/a"], loop), "raw_http")
 
@@ -1541,6 +1545,18 @@ class AttributeListDefinitionTest(unittest.TestCase):
             requirements, warnings, _, _ = extract_all(specs)
         self.assertEqual([r.id_problem for r in requirements], ["duplicate", "duplicate"])
         self.assertTrue(any("req-tempo-charge-001 already used" in w for w in warnings))
+
+
+class StripCommentsEscapeTest(unittest.TestCase):
+    def test_backtick_after_escaped_backslash_opens_a_code_span(self) -> None:
+        from gap_report import strip_comments
+        # Two backslashes render one, so the backticks after them quote '<!--': no comment.
+        visible, closers, _ = strip_comments("Path C:BBTT<!--TT is literal. Servers MUST x.".replace("B", chr(92)).replace("TT", chr(96)), None)
+        self.assertIsNone(closers)
+        self.assertIn("MUST", visible)
+        # One backslash escapes the backtick, so the '<!--' after it does open a comment.
+        _, closers, _ = strip_comments("Tick BTT<!-- hidden".replace("B", chr(92)).replace("TT", chr(96)), None)
+        self.assertEqual(closers, ("-->",))
 
 
 if __name__ == "__main__":

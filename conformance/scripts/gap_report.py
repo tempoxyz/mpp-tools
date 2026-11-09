@@ -132,9 +132,11 @@ RENDERED_SECTION_RE = re.compile(
 )
 # kramdown comments: an HTML comment, or a {::comment} extension that '{:/comment}' or
 # '{:/}' closes. Either can open and close mid-line or run over several lines. A run of
-# backticks is matched too, so strip_comments can step over code spans.
+# backticks is matched too, so strip_comments can step over code spans: as in BACKTICKS_RE,
+# after an even number of backslashes (group 1 is the run), since a doubled backslash is a
+# literal one and the backtick after it opens a span.
 COMMENT_CLOSERS = {"<!--": ("-->",), "{::comment}": ("{:/comment}", "{:/}")}
-COMMENT_OPEN_RE = re.compile(r"<!--|\{::comment\}|(?<!\\)\x60+")
+COMMENT_OPEN_RE = re.compile(r"<!--|\{::comment\}|(?<!\\)(?:\\\\)*(\x60+)")
 # A backtick run (group 2) after an even number of backslashes (group 1), as kramdown
 # reads it: two backslashes and a backtick open a span (the first backslash escapes the
 # second), one backslash and a backtick is an escaped backtick.
@@ -335,8 +337,8 @@ def strip_comments(
             visible.append(line[position:])
             break
         token = match.group()
-        if token.startswith("\x60"):
-            close = code_span_end(line, match.start(), match.end())
+        if match.group(1):
+            close = code_span_end(line, match.start(1), match.end(1))
             end = close if close is not None else match.end()
             visible.append(line[position:end])
             position = end
@@ -1079,11 +1081,13 @@ def answers_challenge(
     path = str(flow_case.get("path", "/"))
     if "?" in path or "#" in path:
         return False
-    if any(flow_case.get(flag) for flag in NO_CHALLENGE_FLAGS):
+    # The server's order (compliance-server.ts): discovery, json_rpc and force_status answer
+    # first, then redirect_to, and only then no_payment, so a redirect wins over no_payment.
+    if any(flow_case.get(flag) for flag in ("discovery", "json_rpc", "force_status")):
         return False
     target = flow_case.get("redirect_to")
     if target is None:
-        return True
+        return not flow_case.get("no_payment")
     split = urllib.parse.urlsplit(str(target))
     if cases_by_path is None or flow_case.get("redirect_to_port_offset") or split.scheme or split.netloc:
         return False
