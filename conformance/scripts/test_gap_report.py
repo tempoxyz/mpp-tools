@@ -477,6 +477,13 @@ class ReportTests(unittest.TestCase):
             with self.subTest(extra=extra):
                 self.assertEqual(charge_request_fits({**base, **extra}), fits)
 
+    def test_bound_resource_replaces_the_case_resource(self) -> None:
+        request = {"amount": "1", "currency": "0x1", "recipient": "0x2", "expires": "2099-01-01T00:00:00Z", "resource": 7}
+        case = {"name": "b", "path": "/b", "request": request}
+        self.assertFalse(answers_challenge(case, {"/b": case}))
+        bound = {**case, "bind_request_resource": True}
+        self.assertTrue(answers_challenge(bound, {"/b": bound}))
+
     def test_unsendable_first_request_headers_never_reach_the_server(self) -> None:
         for key in ("accept_payment", "idempotency_key"):
             for value, sendable in (("tempo/charge", True), ("a\r\nX: y", False), ("a\n", False), ("—", False)):

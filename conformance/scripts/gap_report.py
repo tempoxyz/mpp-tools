@@ -1525,7 +1525,12 @@ def answering_case(
             # amount, currency, recipient and expires, optional string resource) and throws
             # before any 402 when it doesn't fit, so flow_runner never reaches the adapter.
             # A case without request gets the server's default one, which fits.
-            return flow_case if charge_request_fits(flow_case.get("request")) else None
+            # requestForFlowCase replaces resource with the request path when
+            # bind_request_resource is set, so the case's own resource never reaches mppx.
+            request = flow_case.get("request")
+            if flow_case.get("bind_request_resource") and isinstance(request, dict):
+                request = {**request, "resource": "/"}
+            return flow_case if charge_request_fits(request) else None
         if method not in {"GET", "HEAD", "POST"}:
             return None
         try:
