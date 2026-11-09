@@ -2499,6 +2499,14 @@ class RendererTests(unittest.TestCase):
             )
             self.assertEqual(locked_kramdown_rfc_version(root), "1.7.40")
 
+    def test_locked_version_with_shell_characters_is_ignored(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Gemfile.lock").write_text(
+                "GEM\n  specs:\n    kramdown-rfc (1.7;touch_x)\n", encoding="utf-8"
+            )
+            self.assertEqual(locked_kramdown_rfc_version(root), KRAMDOWN_RFC_VERSION)
+
     def test_version_is_checked(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             command = fake_kramdown(Path(directory), "print('kramdown-rfc 1.7.43')\n")

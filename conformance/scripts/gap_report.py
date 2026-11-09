@@ -77,7 +77,9 @@ KRAMDOWN_RFC_VERSION = "1.7.39"
 # DEPENDENCIES and CHECKSUMS entries name the same version or a constraint.
 # How much of Gemfile.lock is read; the mpp-specs lockfile is a few KiB.
 MAX_LOCKFILE_BYTES = 1 << 20
-GEMFILE_LOCK_RE = re.compile(r"^    kramdown-rfc \(([^()\s]+)\)$", re.MULTILINE)
+# The version is limited to the characters a gem version uses, since it is printed in a
+# suggested gem install command; a lockfile with anything else falls back to the default.
+GEMFILE_LOCK_RE = re.compile(r"^    kramdown-rfc \(([0-9A-Za-z][0-9A-Za-z.]*)\)$", re.MULTILINE)
 # 'kramdown-rfc --version' prints 'kramdown-rfc 1.7.39'.
 KRAMDOWN_VERSION_RE = re.compile(r"^kramdown-rfc (\S+)\s*$", re.MULTILINE)
 # How long one draft may take to render; real drafts take about a second.
