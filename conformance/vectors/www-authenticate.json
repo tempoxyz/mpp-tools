@@ -713,7 +713,7 @@
     },
     {
       "name": "tempo_zones_list_method_details",
-      "description": "Tempo charge challenge listing the Zone IDs it accepts withdrawals from: methodDetails.zones is a non-empty list of positive integer Zone IDs (wevm/mppx#1216). Order and integer type must survive parse and format.",
+      "description": "Tempo charge challenge listing the Zone IDs it accepts withdrawals from: methodDetails.zones is a non-empty list of positive integer Zone IDs (wevm/mppx#1216). Order and integer type must survive parse and format: the list is [7, 3], out of ascending order, so an SDK that sorts it fails.",
       "tags": [
         "happy-path",
         "nested-object",
@@ -743,15 +743,15 @@
           "methodDetails": {
             "chainId": 4217,
             "zones": [
-              3,
-              7
+              7,
+              3
             ]
           },
           "recipient": "0x742d35Cc6634c0532925a3b844bC9e7595F8fE00"
         },
         "expires": "2099-01-01T00:00:00Z"
       },
-      "wire": "Payment id=\"ch_zones_list\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJtZXRob2REZXRhaWxzIjp7ImNoYWluSWQiOjQyMTcsInpvbmVzIjpbMyw3XX0sInJlY2lwaWVudCI6IjB4NzQyZDM1Q2M2NjM0YzA1MzI5MjVhM2I4NDRiQzllNzU5NUY4ZkUwMCJ9\", expires=\"2099-01-01T00:00:00Z\"",
+      "wire": "Payment id=\"ch_zones_list\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJtZXRob2REZXRhaWxzIjp7ImNoYWluSWQiOjQyMTcsInpvbmVzIjpbNywzXX0sInJlY2lwaWVudCI6IjB4NzQyZDM1Q2M2NjM0YzA1MzI5MjVhM2I4NDRiQzllNzU5NUY4ZkUwMCJ9\", expires=\"2099-01-01T00:00:00Z\"",
       "tests": {
         "parse": true,
         "format": true,

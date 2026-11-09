@@ -1394,7 +1394,8 @@
       "expected": {
         "ok": false,
         "error": {
-          "type": "verification_error"
+          "type": "verification_error",
+          "messageContains": "is not accepted for this challenge"
         }
       }
     },
@@ -1463,13 +1464,14 @@
       "expected": {
         "ok": false,
         "error": {
-          "type": "verification_error"
+          "type": "verification_error",
+          "messageContains": "is not accepted for this challenge"
         }
       }
     },
     {
       "name": "zone_id_zero_rejected",
-      "description": "Zone ID 0 is not a Zone: a zone credential naming it is rejected even when methodDetails.zones is true (wevm/mppx#1216).",
+      "description": "Zone ID 0 is not a Zone: a zone credential naming it is rejected even when methodDetails.zones is true and Zone 0's portal address logs a settled WithdrawalProcessed event for the sender tag, so only the Zone ID check rejects it (wevm/mppx#1216).",
       "tags": [
         "security",
         "tempo",
@@ -1516,7 +1518,7 @@
           "status": "0x1",
           "logs": [
             {
-              "address": "0x5ad0000000000000000000000000000000000003",
+              "address": "0x5ad0000000000000000000000000000000000000",
               "topics": [
                 "0x65042ea6dad60c26f055e80ec401b3437c854ed586a0704d305bb4e9ea4518cf",
                 "0x0000000000000000000000004567890123456789012345678901234567890123",
@@ -1536,7 +1538,7 @@
     },
     {
       "name": "zone_id_out_of_range_rejected",
-      "description": "Zone IDs are positive integers below 2^32: a zone credential naming 4294967296 is rejected even when methodDetails.zones is true (wevm/mppx#1216).",
+      "description": "Zone IDs are positive integers below 421700000, where Zone chain IDs start: a zone credential naming 4294967296 (2^32) is rejected even when methodDetails.zones is true and the portal addresses it would map to, full-width and truncated to 32 bits, both log a settled WithdrawalProcessed event for the sender tag (wevm/mppx#1216).",
       "tags": [
         "security",
         "tempo",
@@ -1583,7 +1585,92 @@
           "status": "0x1",
           "logs": [
             {
-              "address": "0x5ad0000000000000000000000000000000000003",
+              "address": "0x5ad0000000000000000000000000000100000000",
+              "topics": [
+                "0x65042ea6dad60c26f055e80ec401b3437c854ed586a0704d305bb4e9ea4518cf",
+                "0x0000000000000000000000004567890123456789012345678901234567890123",
+                "0x3333333333333333333333333333333333333333333333333333333333333333"
+              ],
+              "data": "0x000000000000000000000000123456789012345678901234567890123456789000000000000000000000000000000000000000000000000000000000000003e80000000000000000000000000000000000000000000000000000000000000001"
+            },
+            {
+              "address": "0x5ad0000000000000000000000000000000000000",
+              "topics": [
+                "0x65042ea6dad60c26f055e80ec401b3437c854ed586a0704d305bb4e9ea4518cf",
+                "0x0000000000000000000000004567890123456789012345678901234567890123",
+                "0x3333333333333333333333333333333333333333333333333333333333333333"
+              ],
+              "data": "0x000000000000000000000000123456789012345678901234567890123456789000000000000000000000000000000000000000000000000000000000000003e80000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "ok": false,
+        "error": {
+          "type": "verification_error"
+        }
+      }
+    },
+    {
+      "name": "zone_id_at_zone_chain_id_base_rejected",
+      "description": "Zone ID 421700000 is the first Zone chain ID, not a Zone ID (viem's portal lookup reads it as Zone 0's chain ID): a zone credential naming it is rejected even when methodDetails.zones is true and both its full-width portal address and Zone 0's portal log a settled WithdrawalProcessed event for the sender tag (wevm/mppx#1216).",
+      "tags": [
+        "security",
+        "tempo",
+        "zones"
+      ],
+      "adapters": [
+        "typescript",
+        "rust",
+        "python",
+        "go"
+      ],
+      "sdkVersions": {
+        "typescript": ">0.17.3",
+        "rust": ">0.19.0",
+        "python": ">0.20.0",
+        "go": ">0.8.0"
+      },
+      "input": {
+        "credential": {
+          "challenge": {
+            "id": "challenge-123",
+            "realm": "api.example.com",
+            "method": "tempo",
+            "intent": "charge",
+            "expires": "2030-01-01T00:00:00Z",
+            "request": {
+              "amount": "1000",
+              "currency": "0x1234567890123456789012345678901234567890",
+              "recipient": "0x4567890123456789012345678901234567890123",
+              "methodDetails": {
+                "zones": true
+              }
+            }
+          },
+          "payload": {
+            "type": "zone",
+            "hash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "senderTag": "0x3333333333333333333333333333333333333333333333333333333333333333",
+            "zoneId": 421700000
+          }
+        },
+        "receipt": {
+          "transactionHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "status": "0x1",
+          "logs": [
+            {
+              "address": "0x5ad000000000000000000000000000001922a1a0",
+              "topics": [
+                "0x65042ea6dad60c26f055e80ec401b3437c854ed586a0704d305bb4e9ea4518cf",
+                "0x0000000000000000000000004567890123456789012345678901234567890123",
+                "0x3333333333333333333333333333333333333333333333333333333333333333"
+              ],
+              "data": "0x000000000000000000000000123456789012345678901234567890123456789000000000000000000000000000000000000000000000000000000000000003e80000000000000000000000000000000000000000000000000000000000000001"
+            },
+            {
+              "address": "0x5ad0000000000000000000000000000000000000",
               "topics": [
                 "0x65042ea6dad60c26f055e80ec401b3437c854ed586a0704d305bb4e9ea4518cf",
                 "0x0000000000000000000000004567890123456789012345678901234567890123",
@@ -1801,7 +1888,8 @@
       "expected": {
         "ok": false,
         "error": {
-          "type": "verification_error"
+          "type": "verification_error",
+          "messageContains": "withdrawal not settled"
         }
       }
     },
@@ -1868,7 +1956,8 @@
       "expected": {
         "ok": false,
         "error": {
-          "type": "verification_error"
+          "type": "verification_error",
+          "messageContains": "withdrawal not settled"
         }
       }
     },
@@ -1937,7 +2026,8 @@
       "expected": {
         "ok": false,
         "error": {
-          "type": "verification_error"
+          "type": "verification_error",
+          "messageContains": "withdrawal bounced"
         }
       }
     }

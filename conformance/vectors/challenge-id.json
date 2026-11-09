@@ -531,7 +531,7 @@
     },
     {
       "name": "zones_list_binding",
-      "description": "methodDetails.zones is part of the canonical request, so the id binds the accepted Zones: the list keeps its order and integer IDs ([7, 3] gives AOnoSs_J_H214VGdlU2IftFha1Xtl2ei94M0eaKuE0o, [3] gives FJtFTkXyO2imdJTNdXzOHLlcIN_QZfoBwrLqVKulPRI) (wevm/mppx#1216).",
+      "description": "methodDetails.zones is part of the canonical request, so the id binds the accepted Zones: the list keeps its order and integer IDs; the input lists [7, 3] out of ascending order so an SDK that sorts the list fails ([3, 7] gives O9tB4xEk5DH5YeDaJ-ou6t4Zs0jgca_b51Hmu5oUi5I, [3] gives FJtFTkXyO2imdJTNdXzOHLlcIN_QZfoBwrLqVKulPRI) (wevm/mppx#1216).",
       "tags": [
         "happy-path",
         "tempo",
@@ -562,14 +562,14 @@
           "methodDetails": {
             "chainId": 4217,
             "zones": [
-              3,
-              7
+              7,
+              3
             ]
           },
           "recipient": "0x742d35Cc6634c0532925a3b844bC9e7595F8fE00"
         }
       },
-      "expected": "O9tB4xEk5DH5YeDaJ-ou6t4Zs0jgca_b51Hmu5oUi5I"
+      "expected": "AOnoSs_J_H214VGdlU2IftFha1Xtl2ei94M0eaKuE0o"
     },
     {
       "name": "zones_any_binding",

@@ -174,7 +174,7 @@
     },
     {
       "name": "tempo_zone_credential",
-      "description": "Tempo charge credential paying from a Zone (wevm/mppx#1216): payload {type: zone, hash, senderTag, zoneId} with the settlement transaction hash, the withdrawal's sender tag and the integer Zone ID, echoing a challenge whose methodDetails.zones lists Zone IDs.",
+      "description": "Tempo charge credential paying from a Zone (wevm/mppx#1216): payload {type: zone, hash, senderTag, zoneId} with the settlement transaction hash, the withdrawal's sender tag and the integer Zone ID, echoing a challenge whose methodDetails.zones lists Zone IDs out of ascending order ([7, 3]), which the echo must keep.",
       "tags": [
         "happy-path",
         "tempo",
@@ -204,8 +204,8 @@
             "methodDetails": {
               "chainId": 4217,
               "zones": [
-                3,
-                7
+                7,
+                3
               ]
             },
             "recipient": "0x742d35Cc6634c0532925a3b844bC9e7595F8fE00"
@@ -220,7 +220,7 @@
         },
         "source": "did:pkh:eip155:4217:0xabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd"
       },
-      "wire": "Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJjaF96b25lIiwicmVhbG0iOiJhcGkuZXhhbXBsZS5jb20iLCJtZXRob2QiOiJ0ZW1wbyIsImludGVudCI6ImNoYXJnZSIsImV4cGlyZXMiOiIyMDk5LTAxLTAxVDAwOjAwOjAwWiIsInJlcXVlc3QiOiJleUpoYlc5MWJuUWlPaUl4TURBd0lpd2lZM1Z5Y21WdVkza2lPaUl3ZURJd1l6QXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQWlMQ0p0WlhSb2IyUkVaWFJoYVd4eklqcDdJbU5vWVdsdVNXUWlPalF5TVRjc0lucHZibVZ6SWpwYk15dzNYWDBzSW5KbFkybHdhV1Z1ZENJNklqQjROelF5WkRNMVEyTTJOak0wWXpBMU16STVNalZoTTJJNE5EUmlRemxsTnpVNU5VWTRaa1V3TUNKOSJ9LCJwYXlsb2FkIjp7InR5cGUiOiJ6b25lIiwiaGFzaCI6IjB4MjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMiIsInNlbmRlclRhZyI6IjB4MzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMyIsInpvbmVJZCI6N30sInNvdXJjZSI6ImRpZDpwa2g6ZWlwMTU1OjQyMTc6MHhhYmNkYWJjZGFiY2RhYmNkYWJjZGFiY2RhYmNkYWJjZGFiY2RhYmNkIn0",
+      "wire": "Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJjaF96b25lIiwicmVhbG0iOiJhcGkuZXhhbXBsZS5jb20iLCJtZXRob2QiOiJ0ZW1wbyIsImludGVudCI6ImNoYXJnZSIsImV4cGlyZXMiOiIyMDk5LTAxLTAxVDAwOjAwOjAwWiIsInJlcXVlc3QiOiJleUpoYlc5MWJuUWlPaUl4TURBd0lpd2lZM1Z5Y21WdVkza2lPaUl3ZURJd1l6QXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQWlMQ0p0WlhSb2IyUkVaWFJoYVd4eklqcDdJbU5vWVdsdVNXUWlPalF5TVRjc0lucHZibVZ6SWpwYk55d3pYWDBzSW5KbFkybHdhV1Z1ZENJNklqQjROelF5WkRNMVEyTTJOak0wWXpBMU16STVNalZoTTJJNE5EUmlRemxsTnpVNU5VWTRaa1V3TUNKOSJ9LCJwYXlsb2FkIjp7InR5cGUiOiJ6b25lIiwiaGFzaCI6IjB4MjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMiIsInNlbmRlclRhZyI6IjB4MzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMyIsInpvbmVJZCI6N30sInNvdXJjZSI6ImRpZDpwa2g6ZWlwMTU1OjQyMTc6MHhhYmNkYWJjZGFiY2RhYmNkYWJjZGFiY2RhYmNkYWJjZGFiY2RhYmNkIn0",
       "tests": {
         "parse": true,
         "format": true,
