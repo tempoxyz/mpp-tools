@@ -81,8 +81,7 @@ def draft_short_name(docname: str) -> str:
     name = name.removeprefix("draft-")
     if name == "httpauth-payment":
         return "core"
-    name = name.removeprefix("payment-")
-    return name.removeprefix("intent-")
+    return name.removeprefix("payment-")
 
 
 def slugify(text: str) -> str:

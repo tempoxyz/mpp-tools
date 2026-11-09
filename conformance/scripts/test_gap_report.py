@@ -93,7 +93,7 @@ class ExtractTests(unittest.TestCase):
         self.assertEqual(draft_short_name("draft-httpauth-payment-01.md"), "core")
         self.assertEqual(draft_short_name("draft-tempo-charge-00.md"), "tempo-charge")
         self.assertEqual(
-            draft_short_name("draft-payment-intent-charge-00.md"), "charge"
+            draft_short_name("draft-payment-intent-charge-00.md"), "intent-charge"
         )
         self.assertEqual(draft_short_name("draft-payment-discovery-01.md"), "discovery")
 
