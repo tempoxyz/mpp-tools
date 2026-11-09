@@ -1354,6 +1354,52 @@ class AttributeListDefinitionTest(unittest.TestCase):
         )
         self.assertEqual(warnings, [])
 
+    def test_consecutive_block_ials_all_apply_to_the_rule(self) -> None:
+        # kramdown applies each IAL line right after a block to that block, so the last
+        # ID any of them sets is the rule's: a later non-requirement ID revokes an earlier
+        # requirement ID, whether set directly or through a definition. After a blank line
+        # an IAL tags nothing. All checked with kramdown-rfc.
+        requirements, warnings, _ = read_draft(
+            "A MUST a.\n{: #req-tempo-charge-001}\n{: #note}\n\n"
+            "B MUST b.\n{: #note}\n{: #req-tempo-charge-002}\n\n"
+            "C MUST c.\n{: viadef}\n{: #other}\n\n"
+            "D MUST d.\n{: #req-tempo-charge-004}\n{: .class}\n\n"
+            "E MUST e.\n{: #req-tempo-charge-005}\n\n{: #note2}\n\n"
+            "{:viadef: #req-tempo-charge-003}\n"
+        )
+        self.assertEqual(
+            [r.req_id for r in requirements],
+            [None, "req-tempo-charge-002", None, "req-tempo-charge-004", "req-tempo-charge-005"],
+        )
+        self.assertEqual(warnings, [])
+
+    def test_indented_definition_or_ial_in_a_paragraph_is_text(self) -> None:
+        # ALD_START and IAL_BLOCK_START allow at most 3 leading spaces: indented 4 or more
+        # inside a paragraph, the line is more paragraph text and defines nothing
+        # (checked with kramdown-rfc). With 3 spaces it is a definition.
+        requirements, _, _ = read_draft(
+            "P MUST a.\n    {:ref: #req-tempo-charge-003}\n{: ref}\n\n"
+            "Q MUST b.\n    {: #req-tempo-charge-006}\n\n"
+            "R MUST c.\n   {:ref2: #req-tempo-charge-004}\nS MUST d.\n{: ref2}\n"
+        )
+        self.assertEqual(
+            [r.req_id for r in requirements], [None, None, None, "req-tempo-charge-004"]
+        )
+
+    def test_shared_definitions_resolve_in_linear_time(self) -> None:
+        # Each definition referencing the next one twice would expand 2^60 times without
+        # memoizing; resolved once per name it is instant.
+        chain = "".join(f"{{:d{i}: d{i + 1} d{i + 1}}}\n" for i in range(60))
+        requirements, _, _ = read_draft(
+            f"P MUST a.\n{{: d0}}\n\n{chain}{{:d60: #req-tempo-charge-001}}\n"
+        )
+        self.assertEqual([r.req_id for r in requirements], ["req-tempo-charge-001"])
+
+    def test_empty_draft_name_component_is_malformed(self) -> None:
+        requirements, warnings, _ = read_draft("P MUST a.\n{: #req-core--001}\n")
+        self.assertEqual([r.id_problem for r in requirements], ["malformed"])
+        self.assertTrue(any("does not match req-<draft>-<nnn>" in w for w in warnings))
+
     def test_duplicate_check_sees_expanded_ids(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             specs = write_specs(

@@ -56,7 +56,10 @@ KEYWORD_RE = re.compile(
 QUOTED_KEYWORD_RE = re.compile(
     r'"(?:MUST NOT|SHALL NOT|SHOULD NOT|NOT RECOMMENDED|MUST|REQUIRED|SHALL|SHOULD|RECOMMENDED|MAY|OPTIONAL)"'
 )
-REQ_ID_RE = re.compile(r"^req-[a-z0-9-]+-[0-9]{3}$")
+# req-<draft>-<nnn>, where <draft> is a short draft name: lowercase words joined by single
+# hyphens, so an empty component such as req-core--001 is malformed. The schemas use the
+# same pattern.
+REQ_ID_RE = re.compile(r"^req-[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{3}$")
 # A block IAL alone on its line, such as '{: #req-core-001}'. kramdown extension tags
 # ('{::boilerplate ...}', '{:/}') match too; ial_req_id reads no ID from them.
 IAL_LINE_RE = re.compile(r"^\s*\{:(?P<body>[^}]*)\}\s*$")
@@ -348,28 +351,40 @@ def ial_id(body: str, alds: dict[str, list[str]] | None = None) -> str | None:
     """
     if body.startswith((":", "/")) or ALD_RE.match(body):
         return None
-    ids = attribute_ids(body, alds or {}, frozenset())
-    return ids[-1] if ids else None
+    return final_id(body, alds or {}, {})
 
 
-def attribute_ids(attrs: str, alds: dict[str, list[str]], seen: frozenset[str]) -> list[str]:
-    """Return the IDs an attribute string sets, in the order kramdown applies them.
+def final_id(attrs: str, alds: dict[str, list[str]], memo: dict[str, str | None]) -> str | None:
+    """Return the last ID an attribute string sets, in the order kramdown applies them.
 
     Mirrors mpp-specs' scripts/lint_requirements.py (ial_ids): referenced definitions'
-    IDs first, then the string's own '#name' and id="..." IDs. seen holds the
-    definitions already being expanded, so a reference cycle stops instead of recursing.
+    IDs first, then the string's own '#name' and id="..." IDs, so an own ID wins over
+    any referenced one, and among references the last one that sets an ID wins.
+
+    Only the final ID matters, so each definition name is resolved once and kept in
+    memo: a definition reachable along many paths ('{:a: b b}', '{:b: c c}', ...)
+    costs one expansion, not one per path, which keeps a chain of n definitions linear
+    instead of 2^n. memo maps a name to None while it is being expanded, so a
+    reference cycle stops there instead of recursing.
     """
-    own: list[str] = []
-    referenced: list[str] = []
+    own: str | None = None
+    referenced: str | None = None
     for token in IAL_TOKEN_RE.finditer(attrs):
         if token.group("key") == "id":
-            own.append(IAL_VALUE_ESCAPE_RE.sub(r"\1", token.group("value")))
+            own = IAL_VALUE_ESCAPE_RE.sub(r"\1", token.group("value"))
         elif token.group("names"):
-            own.extend(IAL_ID_NAME_RE.findall(token.group("names")))
-        elif (ref := token.group("ref")) in alds and ref not in seen:
-            for definition in alds[ref]:
-                referenced.extend(attribute_ids(definition, alds, seen | {ref}))
-    return referenced + own
+            names = IAL_ID_NAME_RE.findall(token.group("names"))
+            if names:
+                own = names[-1]
+        elif (ref := token.group("ref")) in alds:
+            if ref not in memo:
+                memo[ref] = None  # in progress: a cycle back to ref resolves to nothing
+                resolved = None
+                for definition in alds[ref]:
+                    resolved = final_id(definition, alds, memo) or resolved
+                memo[ref] = resolved
+            referenced = memo[ref] or referenced
+    return own or referenced
 
 
 def ial_req_id(body: str, alds: dict[str, list[str]] | None = None) -> str | None:
@@ -432,6 +447,11 @@ def extract_requirements(
     # first reading, every one in the draft on the second.
     found_alds: dict[str, list[str]] = {}
     known_alds = alds or {}
+    # Block IALs right after the current unit, one per line, not yet applied. kramdown
+    # applies each consecutive IAL line to the same block, so the block's ID is the last
+    # one any of them sets: '{: #req-core-001}' then '{: #note}' leaves it 'note', with
+    # no requirement ID. The unit is flushed once the run of IAL lines ends.
+    ial_bodies: list[str] = []
 
     def flush(req_id: str | None = None) -> None:
         nonlocal unit
@@ -493,6 +513,24 @@ def extract_requirements(
             )
         )
 
+    def apply_ials() -> None:
+        """Flush the unit with the ID its run of block IALs gives it, if one is pending."""
+        if not ial_bodies:
+            return
+        final = None
+        for body in ial_bodies:
+            final = ial_id(body, known_alds) or final
+        ial_bodies.clear()
+        flush(final if final and final.startswith("req-") else None)
+
+    def is_block_ial(line: str) -> bool:
+        """Whether a line is a block IAL that sets attributes (not an extension or ALD)."""
+        match = IAL_LINE_RE.match(line)
+        if not match:
+            return False
+        body = match.group("body")
+        return not body.startswith((":", "/")) and not ALD_RE.match(body)
+
     def commit_table() -> None:
         nonlocal table_rows
         table_rows += sum(table_row_keywords(row) for _, _, row in pending)
@@ -517,6 +555,8 @@ def extract_requirements(
     fence_base = 0
     boundary = True  # whether the next line starts at a kramdown block boundary
     for number, raw in enumerate(lines, start=1):
+        if ial_bodies and not is_block_ial(QUOTE_RE.sub("", raw.expandtabs(4))):
+            apply_ials()  # the run of IAL lines ended: every other line is handled below
         if sectionized:
             if number == 1:
                 continue
@@ -587,7 +627,12 @@ def extract_requirements(
             stripped = line.strip()
             # Text right after a comment is no block boundary for a table still pending.
             revert_table()
-        ald = ALD_DEF_RE.match(line)
+        # A '{:...}' line indented 4 or more columns past the open list item's text, inside
+        # a paragraph, is no definition or IAL: kramdown reads it as more paragraph text
+        # (ALD_START and IAL_BLOCK_START allow at most 3 leading spaces). With no
+        # paragraph open, such a line is an indented code block and was skipped above.
+        indented = bool(unit) and column >= item_indent + 4
+        ald = None if indented else ALD_DEF_RE.match(line)
         if ald:
             # A definition, not an IAL: kramdown reads it before trying a block IAL, so it
             # tags nothing, yet it ends the paragraph before it. Code and comments were
@@ -596,15 +641,21 @@ def extract_requirements(
             flush()
             boundary = True
             continue
-        ial = IAL_LINE_RE.match(line)
+        ial = None if indented else IAL_LINE_RE.match(line)
         if ial:
+            boundary = True
+            if ial_bodies:
+                ial_bodies.append(ial.group("body"))  # the next IAL line on the same block
+                continue
+            if unit and is_block_ial(line):
+                ial_bodies.append(ial.group("body"))  # applied once the run of IALs ends
+                continue
             req_id = ial_req_id(ial.group("body"), known_alds)
             if req_id and not unit:
                 warnings.append(
                     f"{relative}:{number}: {req_id} is not on the line right after a rule, so it tags nothing"
                 )
             flush(req_id)
-            boundary = True
             continue
         if not stripped:
             flush()
@@ -629,6 +680,7 @@ def extract_requirements(
                 continue
             unit_line = number
         unit.append(stripped)
+    apply_ials()
     commit_table()
     flush()
     if alds is None and found_alds:
