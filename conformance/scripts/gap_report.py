@@ -1206,8 +1206,10 @@ def answers_challenge(
     fragment is never found (404). A case with a no-challenge flag answers without one. A
     redirect_to case answers 302, and flow_runner's urllib follows it: it reaches the adapter
     only when the target is another case on the same server that answers a challenge. A
-    redirect to another port (redirect_to_port_offset) or host, to no case, a loop, or any
-    redirect when cases_by_path is unknown does not count. urllib follows the server's 302
+    redirect_to_port_offset 1 lands on the server's second listener (port + 1), which serves
+    the same handler and cases, so it counts like a same-server redirect; any other offset has
+    no listener. A redirect to another host, to no case, a loop, or any redirect when
+    cases_by_path is unknown does not count. urllib follows the server's 302
     only for GET, HEAD and POST (POST turns into GET), so a PUT, PATCH, DELETE or OPTIONS
     request stops at the 302 before any adapter call.
     """
@@ -1236,7 +1238,12 @@ def answers_challenge(
     if method not in {"GET", "HEAD", "POST"}:
         return False
     split = urllib.parse.urlsplit(str(target))
-    if cases_by_path is None or flow_case.get("redirect_to_port_offset") or split.scheme or split.netloc:
+    # compliance-server.ts listens on port and port + 1 with the same handler; only offset 1
+    # (a JSON integer, not a bool) reaches a listener. Other offsets get connection refused.
+    offset = flow_case.get("redirect_to_port_offset")
+    if offset and not (type(offset) is int and offset == 1):
+        return False
+    if cases_by_path is None or split.scheme or split.netloc:
         return False
     target_path = urllib.parse.urljoin(path, split.path) if split.path else path
     next_method = "HEAD" if method == "HEAD" else "GET"

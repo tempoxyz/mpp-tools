@@ -1307,8 +1307,21 @@ class FlowModeForcedStatusTest(unittest.TestCase):
         self.assertEqual(flow_mode({"name": "r", "path": "/r", "redirect_to": "/t"}, cases), "ordinary")
         self.assertEqual(flow_mode({"name": "r", "path": "/r", "redirect_to": "/n"}, cases), "raw_http")
         self.assertEqual(flow_mode({"name": "r", "path": "/r", "redirect_to": "/gone"}, cases), "raw_http")
+        # The server's second listener on port + 1 serves the same cases; no other offset listens.
         self.assertEqual(
             flow_mode({"name": "r", "path": "/r", "redirect_to": "/t", "redirect_to_port_offset": 1}, cases),
+            "ordinary",
+        )
+        self.assertEqual(
+            flow_mode({"name": "r", "path": "/r", "redirect_to": "/n", "redirect_to_port_offset": 1}, cases),
+            "raw_http",
+        )
+        self.assertEqual(
+            flow_mode({"name": "r", "path": "/r", "redirect_to": "/t", "redirect_to_port_offset": 2}, cases),
+            "raw_http",
+        )
+        self.assertEqual(
+            flow_mode({"name": "r", "path": "/r", "redirect_to": "/t", "redirect_to_port_offset": True}, cases),
             "raw_http",
         )
         self.assertEqual(flow_mode({"name": "r", "path": "/r", "redirect_to": "http://x/t"}, cases), "raw_http")
