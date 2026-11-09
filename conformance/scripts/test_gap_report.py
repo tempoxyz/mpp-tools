@@ -8,6 +8,7 @@ import io
 import json
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -463,35 +464,43 @@ class FixtureTests(unittest.TestCase):
                 )
 
 
+class HelperTests(unittest.TestCase):
+    def test_git_commit_root_dirty_and_nested(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory) / "specs"
+            repo.mkdir()
+
+            def run(*args: str) -> str:
+                return subprocess.run(
+                    ["git", "-C", str(repo), *args],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+
+            run("init", "-q")
+            (repo / "a.md").write_text("x\n")
+            run("add", "a.md")
+            run("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init")
+            head = run("rev-parse", "HEAD")
+            self.assertEqual(git_commit(repo), head)
+            (repo / "a.md").write_text("y\n")
+            self.assertEqual(git_commit(repo), f"{head}-dirty")
+            nested = repo / "nested"
+            nested.mkdir()
+            self.assertIsNone(git_commit(nested))
+
+    def test_parse_heading_is_linear_and_reads_anchors(self) -> None:
+        self.assertEqual(
+            parse_heading("## Extension Fields {#extension-fields}"),
+            ("Extension Fields", "extension-fields"),
+        )
+        self.assertEqual(parse_heading("# Title  "), ("Title", None))
+        self.assertIsNone(parse_heading("Not a heading"))
+        start = time.monotonic()
+        parse_heading("# a" + " " * 20000 + "b" + " " * 20000 + "{")
+        self.assertLess(time.monotonic() - start, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
-
-
-def test_git_commit_root_dirty_and_nested(tmp_path):
-    import subprocess as sp
-
-    repo = tmp_path / "specs"
-    repo.mkdir()
-    run = lambda *a: sp.run(["git", "-C", str(repo), *a], check=True, capture_output=True)
-    run("init", "-q")
-    (repo / "a.md").write_text("x\n")
-    run("add", "a.md")
-    run("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init")
-    head = sp.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
-    assert git_commit(repo) == head
-    (repo / "a.md").write_text("y\n")
-    assert git_commit(repo) == f"{head}-dirty"
-    nested = repo / "nested"
-    nested.mkdir()
-    assert git_commit(nested) is None
-
-
-def test_parse_heading_is_linear_and_reads_anchors():
-    import time
-
-    assert parse_heading("## Extension Fields {#extension-fields}") == ("Extension Fields", "extension-fields")
-    assert parse_heading("# Title  ") == ("Title", None)
-    assert parse_heading("Not a heading") is None
-    start = time.monotonic()
-    parse_heading("# a" + " " * 20000 + "b" + " " * 20000 + "{")
-    assert time.monotonic() - start < 1
