@@ -422,9 +422,21 @@ def version_checker(
     """
     runner = VectorRunner(sdk_version_resolver=resolver)
     unresolved: set[str] = set()
+    invalid: set[str] = set()
 
     def applies(claim: Claim, adapter: str) -> bool:
-        if not claim.sdk_versions or adapter not in claim.sdk_versions:
+        if not claim.sdk_versions:
+            return True
+        # The vector runner rejects a scenario whose sdkVersions has unknown adapter keys
+        # (or non-string values) before running it for any adapter, so it is coverage for none.
+        try:
+            runner.scenario_version_constraints({"sdkVersions": claim.sdk_versions})
+        except ValueError as error:
+            if claim.source not in invalid:
+                invalid.add(claim.source)
+                warnings.append(f"{claim.source}: {error}; not counted as coverage")
+            return False
+        if adapter not in claim.sdk_versions:
             return True
         config = AdapterConfig(name=adapter, command=[], capabilities=[])
         try:

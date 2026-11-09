@@ -309,6 +309,18 @@ class ReportTests(unittest.TestCase):
         self.assertTrue(claim_applies(claim, "python", ["challenge.parse"], applies))
         self.assertEqual(warnings, [])
 
+    def test_unknown_sdk_versions_keys_are_not_coverage(self) -> None:
+        warnings: list[str] = []
+        applies = version_checker(warnings, resolver=lambda adapter: "1.0.0")
+        claim = Claim(
+            "vectors/a.json#x", ["req-core-001"], sdk_versions={"golang": ">=0.5.0"}
+        )
+        # The runner refuses the scenario outright, so no SDK gets credit for it.
+        self.assertFalse(claim_applies(claim, "go", [], applies))
+        self.assertFalse(claim_applies(claim, "python", [], applies))
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("golang", warnings[0])
+
     def test_unresolved_sdk_version_is_not_coverage(self) -> None:
         def missing(adapter: str) -> str:
             raise subprocess.CalledProcessError(1, ["cargo"])
