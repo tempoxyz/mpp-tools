@@ -1252,17 +1252,28 @@ def flow_mode(
     return "ordinary" if answers_challenge(first, cases_by_path, method=method, query=query) else "raw_http"
 
 
+# Printable ASCII in the WHATWG path percent-encode set (URL Standard, section 1.3).
+PATH_PERCENT_ENCODE = frozenset('"<>^{}' + "\x60")
+
+
 def lookup_path(path: str, query: str = "") -> str | None:
     """The pathname the compliance server looks a request for path + query up by.
 
     None when no case can match it: the server keys cases by the WHATWG-normalized
-    pathname, so dot segments, backslashes, spaces, controls and non-ASCII text
-    (which urllib refuses or the URL parser rewrites) never find the declared path.
+    pathname, so dot segments, backslashes, characters the URL parser percent-encodes,
+    and spaces, controls or non-ASCII text anywhere in path + query (which urllib
+    refuses to send) never find the declared path.
     """
+    # http.client refuses a request target with a space or control character (InvalidURL)
+    # and cannot encode non-ASCII text, so such a path or initial_query is never sent.
+    if any(ord(char) <= 0x20 or ord(char) >= 0x7F for char in path + query):
+        return None
     pathname = urllib.parse.urlsplit(path + query).path
     if not pathname.startswith("/") or "\\" in pathname:
         return None
-    if any(ord(char) <= 0x20 or ord(char) >= 0x7F for char in pathname):
+    # The WHATWG path percent-encode set: the server's URL parser encodes these, so the
+    # pathname it looks up is no longer the declared one.
+    if any(char in PATH_PERCENT_ENCODE for char in pathname):
         return None
     dots = {".", "..", "%2e", ".%2e", "%2e.", "%2e%2e"}
     if any(segment.lower() in dots for segment in pathname.split("/")):

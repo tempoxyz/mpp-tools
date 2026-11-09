@@ -31,6 +31,7 @@ from gap_report import (
     parse_heading,
     load_claims,
     load_profiles,
+    lookup_path,
     main,
     md_code,
     operation_input_error,
@@ -1367,6 +1368,17 @@ class OperationInputErrorTest(unittest.TestCase):
         self.assertIsNone(operation_input_error(vector, good, "v"))
         # Legacy command vectors are not checked.
         self.assertIsNone(operation_input_error({"commands": {"parse": "p"}}, bad, "v"))
+
+
+class LookupPathEncodingTest(unittest.TestCase):
+    def test_percent_encoded_and_unsendable_targets_find_no_case(self) -> None:
+        # The server's URL parser percent-encodes these, so the declared path is not found.
+        for char in '"<>^{}' + "\x60":
+            self.assertIsNone(lookup_path(f"/a{char}b"), char)
+        # urllib never sends a space, control or non-ASCII character in the query either.
+        self.assertIsNone(lookup_path("/a", "?x=1 2"))
+        self.assertIsNone(lookup_path("/a", "?x=\u00e9"))
+        self.assertEqual(lookup_path("/a", "?x=1"), "/a")
 
 
 class MarkdownEscapingTest(unittest.TestCase):
