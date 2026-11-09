@@ -513,6 +513,14 @@ def extract_requirements(
                             f"has {leading_id}; kramdown-rfc puts it on the list, not the item"
                         )
                     req_id = leading_id
+                elif req_id:
+                    # The item's own IAL sets no requirement ID, so an ID on the next line
+                    # still goes on the list, not the item: the item stays untagged.
+                    warnings.append(
+                        f"{relative}:{unit_line}: {req_id} follows a list item with its own IAL; "
+                        "kramdown-rfc puts it on the list, not the item"
+                    )
+                    req_id = None
                 text = text[: item.end()] + text[leading.end() :]
         trailing = TRAILING_IAL_RE.search(text)
         trailing_id = ial_req_id(trailing.group("body"), known_alds) if trailing else None
@@ -765,7 +773,9 @@ def extract_requirements(
         seen[requirement.fallback_key] = count
         if count > 1:
             requirement.fallback_key = f"{requirement.fallback_key}-{count}"
-        if requirement.req_id and not requirement.req_id.startswith(f"req-{draft}-"):
+        # Exactly req-{draft}-NNN: a bare prefix check would take req-{draft}-charge-001,
+        # an ID of draft {draft}-charge, as this draft's own.
+        if requirement.req_id and not re.fullmatch(rf"req-{re.escape(draft)}-[0-9]{{3}}", requirement.req_id):
             requirement.id_problem = requirement.id_problem or "foreign"
             warnings.append(
                 f"{relative}:{requirement.line}: {requirement.req_id} does not use this draft's prefix req-{draft}-; not counted as covered"
@@ -1058,8 +1068,9 @@ def flow_mode(
     if flow_case.get("challenge_path") and cases_by_path is not None:
         # flow_runner fails with missing_challenge_case, before any adapter call.
         first = cases_by_path.get(str(flow_case["challenge_path"]))
-    # flow_runner sends that first request with the case's own method (perform_request).
-    method = str(flow_case.get("http_method", "GET")).upper()
+    # flow_runner sends that first request with the method of the case it goes to
+    # (perform_request(url, challenge_case)), the challenge_path case's when one is named.
+    method = str((first or flow_case).get("http_method", "GET")).upper()
     return "ordinary" if answers_challenge(first, cases_by_path, method=method) else "raw_http"
 
 

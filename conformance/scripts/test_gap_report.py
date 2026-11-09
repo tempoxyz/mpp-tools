@@ -161,6 +161,21 @@ class ExtractTests(unittest.TestCase):
             )
         )
 
+    def test_id_extending_the_draft_name_is_foreign(self) -> None:
+        specs = write_specs(
+            self.root / "checkout",
+            {"specs/a/draft-tempo-00.md": "# A\n\nX MUST hold.\n{: #req-tempo-charge-001}\n"},
+        )
+        requirements, warnings, _, _ = extract_all(specs)
+        self.assertEqual(requirements[0].id_problem, "foreign")
+        self.assertTrue(any("does not use this draft's prefix req-tempo-" in w for w in warnings))
+
+    def test_next_line_id_after_an_item_ial_without_one_goes_on_the_list(self) -> None:
+        self.path.write_text("# A\n\n- {: #note} Client MUST pay.\n{: #req-x-001}\n", encoding="utf-8")
+        requirements, warnings, _ = extract_requirements(self.path, "specs/x.md")
+        self.assertIsNone(requirements[0].req_id)
+        self.assertTrue(any("puts it on the list" in w for w in warnings))
+
     def test_warns_on_detached_ids(self) -> None:
         self.path.write_text(
             "# A\n\nX MUST hold.\n\n{: #req-tempo-charge-001}\n\n{: #req-tempo-charge-002}\nY MAY hold.\n",
@@ -1225,6 +1240,13 @@ class FlowModeForcedStatusTest(unittest.TestCase):
         self.assertEqual(flow_mode(via, both), "ordinary")
         loop = {"/a": {"name": "a", "path": "/a", "redirect_to": "/b"}, "/b": {"name": "b", "path": "/b", "redirect_to": "/a"}}
         self.assertEqual(flow_mode(loop["/a"], loop), "raw_http")
+        # The first request uses the challenge_path case's own method, not the claiming case's.
+        put_redirect = {"/pr": {"name": "pr", "path": "/pr", "redirect_to": "/t", "http_method": "PUT"}, **cases}
+        self.assertEqual(flow_mode({"name": "c", "path": "/c", "challenge_path": "/pr"}, put_redirect), "raw_http")
+        get_redirect = {"/gr": {"name": "gr", "path": "/gr", "redirect_to": "/t"}, **cases}
+        self.assertEqual(
+            flow_mode({"name": "c", "path": "/c", "challenge_path": "/gr", "http_method": "PUT"}, get_redirect), "ordinary"
+        )
         # urllib follows a 302 only for GET, HEAD and POST.
         for method, mode in [("POST", "ordinary"), ("HEAD", "ordinary"), ("PUT", "raw_http"), ("DELETE", "raw_http")]:
             case = {"name": "r", "path": "/r", "redirect_to": "/t", "http_method": method}
