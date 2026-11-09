@@ -529,7 +529,7 @@ class ReportTests(unittest.TestCase):
         self.assertTrue(answers_challenge(ok, {"/charge/r": ok, "/charge/landing": landing}))
 
     def test_operation_expected_the_runner_cannot_compare_voids_the_file(self) -> None:
-        for bad in (True, [1], {"ok": False, "error": "boom"}):
+        for bad in (True, [1], {"ok": False, "error": "boom"}, {"ok": False, "error": {"type": "parse_error", "messageContains": 5}}):
             with self.subTest(expected=bad), tempfile.TemporaryDirectory() as directory:
                 vectors = Path(directory) / "vectors"
                 vectors.mkdir()

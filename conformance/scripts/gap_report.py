@@ -1113,15 +1113,24 @@ def load_claims(
             # it is not modelled, so this errs toward less coverage, never more.
             # compare_adapter_response reads an operation scenario's expected as an
             # object, and its error as one when ok is false; the schema allows any value,
-            # and anything else raises AttributeError, which also aborts the file. Treated
-            # like the generate crash below: for the listed adapters, or for all.
+            # and anything else raises AttributeError, which also aborts the file. A
+            # messageContains that isn't a string raises TypeError in its "in" test once the
+            # adapter returns the expected error type, which is the case the vector is for.
+            # Treated like the generate crash below: for the listed adapters, or for all.
             expected = scenario.get("expected")
+            error = expected.get("error") if isinstance(expected, dict) else None
             if commands.get("operation") and (
                 not isinstance(expected, dict)
                 or (
                     expected.get("ok") is False
                     and "error" in expected
-                    and not isinstance(expected["error"], dict)
+                    and (
+                        not isinstance(error, dict)
+                        or (
+                            error.get("messageContains") is not None
+                            and not isinstance(error["messageContains"], str)
+                        )
+                    )
                 )
             ):
                 selected = scenario.get("adapters")
