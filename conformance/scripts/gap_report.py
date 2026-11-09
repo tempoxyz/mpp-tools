@@ -354,19 +354,37 @@ def ial_id(body: str, alds: dict[str, list[str]] | None = None) -> str | None:
     return final_id(body, alds or {}, {})
 
 
-def final_id(attrs: str, alds: dict[str, list[str]], memo: dict[str, str | None]) -> str | None:
+# kramdown resolves definitions without a depth limit; past this many nested references
+# the report stops with an error instead of exhausting Python's recursion limit.
+MAX_ALD_DEPTH = 100
+# memo's marker for a definition being expanded, distinct from one that sets no ID (None)
+# and one that sets an empty ID ('').
+_EXPANDING = object()
+
+
+def final_id(
+    attrs: str,
+    alds: dict[str, list[str]],
+    memo: dict[str, object],
+    depth: int = 0,
+) -> str | None:
     """Return the last ID an attribute string sets, in the order kramdown applies them.
 
     Mirrors mpp-specs' scripts/lint_requirements.py (ial_ids): referenced definitions'
     IDs first, then the string's own '#name' and id="..." IDs, so an own ID wins over
-    any referenced one, and among references the last one that sets an ID wins.
+    any referenced one, and among references the last one that sets an ID wins. An
+    explicit id="" is an ID too: kramdown renders it as anchor="", which replaces any
+    earlier ID, so it returns '' (no ID set at all is None).
 
     Only the final ID matters, so each definition name is resolved once and kept in
     memo: a definition reachable along many paths ('{:a: b b}', '{:b: c c}', ...)
     costs one expansion, not one per path, which keeps a chain of n definitions linear
-    instead of 2^n. memo maps a name to None while it is being expanded, so a
-    reference cycle stops there instead of recursing.
+    instead of 2^n. A name being expanded maps to _EXPANDING, so a reference cycle
+    resolves to nothing instead of recursing. A chain deeper than MAX_ALD_DEPTH raises
+    ValueError, which the report shows as an error rather than a traceback.
     """
+    if depth > MAX_ALD_DEPTH:
+        raise ValueError(f"attribute list definitions nest more than {MAX_ALD_DEPTH} deep")
     own: str | None = None
     referenced: str | None = None
     for token in IAL_TOKEN_RE.finditer(attrs):
@@ -378,13 +396,17 @@ def final_id(attrs: str, alds: dict[str, list[str]], memo: dict[str, str | None]
                 own = names[-1]
         elif (ref := token.group("ref")) in alds:
             if ref not in memo:
-                memo[ref] = None  # in progress: a cycle back to ref resolves to nothing
-                resolved = None
+                memo[ref] = _EXPANDING
+                resolved: str | None = None
                 for definition in alds[ref]:
-                    resolved = final_id(definition, alds, memo) or resolved
+                    found = final_id(definition, alds, memo, depth + 1)
+                    if found is not None:
+                        resolved = found
                 memo[ref] = resolved
-            referenced = memo[ref] or referenced
-    return own or referenced
+            value = memo[ref]
+            if isinstance(value, str):
+                referenced = value
+    return own if own is not None else referenced
 
 
 def ial_req_id(body: str, alds: dict[str, list[str]] | None = None) -> str | None:
@@ -519,7 +541,9 @@ def extract_requirements(
             return
         final = None
         for body in ial_bodies:
-            final = ial_id(body, known_alds) or final
+            found = ial_id(body, known_alds)
+            if found is not None:  # an empty id="" replaces an earlier ID too
+                final = found
         ial_bodies.clear()
         flush(final if final and final.startswith("req-") else None)
 
@@ -647,6 +671,22 @@ def extract_requirements(
             if ial_bodies:
                 ial_bodies.append(ial.group("body"))  # the next IAL line on the same block
                 continue
+            if unit and item_indent and column < item_indent and LIST_ITEM_RE.match(unit[0]):
+                # Left of the item's text, kramdown ends the list here and puts the IAL on
+                # the whole list, not the item (checked with kramdown-rfc), so the item's
+                # rule gets no ID from it. flush still warns when the item has its own.
+                req_id = ial_req_id(ial.group("body"), known_alds)
+                marker = LIST_ITEM_RE.match(unit[0])
+                if marker and LEADING_IAL_RE.match(unit[0], marker.end()):
+                    flush(req_id)  # flush keeps the item's leading ID and warns about this one
+                    continue
+                if req_id:
+                    warnings.append(
+                        f"{relative}:{number}: {req_id} is not indented to its list item's text, "
+                        "so kramdown-rfc puts it on the whole list"
+                    )
+                flush()
+                continue
             if unit and is_block_ial(line):
                 ial_bodies.append(ial.group("body"))  # applied once the run of IALs ends
                 continue
@@ -667,7 +707,13 @@ def extract_requirements(
             item_indent = 0
             section = heading[1] or slugify(heading[0])
             continue
-        item = LIST_ITEM_RE.match(line) or DEFINITION_RE.match(line)
+        item = LIST_ITEM_RE.match(line)
+        if item and unit and not item_indent:
+            # A bullet or number can't interrupt a top-level paragraph: kramdown reads
+            # '402. more' or '- more' after a line of prose as more of that paragraph
+            # (checked with kramdown-rfc). Inside a list item it starts the next item.
+            item = None
+        item = item or DEFINITION_RE.match(line)
         if item:
             flush()
             item_indent = item.end()

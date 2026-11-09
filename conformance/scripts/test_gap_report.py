@@ -1318,6 +1318,31 @@ class LeadingListItemIdTest(unittest.TestCase):
         self.assertTrue(any("req-tempo-charge-002 follows a list item" in w for w in warnings))
 
 
+class ListBoundaryTest(unittest.TestCase):
+    def test_list_marker_does_not_interrupt_a_paragraph(self) -> None:
+        # kramdown reads '402. more' or '- more' right after prose as more of the
+        # paragraph, so the rule stays whole and keeps its ID (checked with kramdown-rfc).
+        requirements, _, _ = read_draft(
+            "Servers MUST answer with status\n402. Clients retry.\n{: #req-tempo-charge-001}\n\n"
+            "Text MUST a\n- more text\n{: #req-tempo-charge-002}\n\n"
+            "Intro.\n\n- A MUST x\n- B MUST y\n"
+        )
+        self.assertEqual(
+            [r.req_id for r in requirements],
+            ["req-tempo-charge-001", "req-tempo-charge-002", None, None],
+        )
+
+    def test_ial_left_of_item_text_tags_the_list_not_the_item(self) -> None:
+        # '- Item.\n{: #id}' puts the ID on the list; indented to the item's text it tags
+        # the item (checked with kramdown-rfc).
+        requirements, warnings, _ = read_draft(
+            "- Client MUST pay.\n{: #req-tempo-charge-001}\n\n"
+            "- Server MUST charge.\n  {: #req-tempo-charge-002}\n"
+        )
+        self.assertEqual([r.req_id for r in requirements], [None, "req-tempo-charge-002"])
+        self.assertTrue(any("req-tempo-charge-001 is not indented" in w for w in warnings))
+
+
 class AttributeListDefinitionTest(unittest.TestCase):
     def test_ial_naming_a_definition_gets_its_id(self) -> None:
         # kramdown applies an ALD's attributes to every IAL that names it, resolving the
@@ -1399,6 +1424,22 @@ class AttributeListDefinitionTest(unittest.TestCase):
         requirements, warnings, _ = read_draft("P MUST a.\n{: #req-core--001}\n")
         self.assertEqual([r.id_problem for r in requirements], ["malformed"])
         self.assertTrue(any("does not match req-<draft>-<nnn>" in w for w in warnings))
+
+    def test_empty_id_clears_the_requirement_id(self) -> None:
+        # kramdown renders id="" as anchor="", replacing any earlier ID, whether from the
+        # same IAL, a definition or an earlier IAL line (checked with kramdown-rfc).
+        requirements, _, _ = read_draft(
+            'A MUST a.\n{: #req-tempo-charge-001}\n{: id=""}\n\n'
+            'B MUST b.\n{: d id=""}\n\n'
+            'C MUST c.\n{: #req-tempo-charge-003 id=""}\n\n'
+            "{:d: #req-tempo-charge-002}\n"
+        )
+        self.assertEqual([r.req_id for r in requirements], [None, None, None])
+
+    def test_too_deep_definition_chain_is_an_error(self) -> None:
+        chain = "".join(f"{{:d{i}: d{i + 1}}}\n" for i in range(150))
+        with self.assertRaisesRegex(ValueError, "nest more than"):
+            read_draft(f"P MUST a.\n{{: d0}}\n\n{chain}{{:d150: #req-tempo-charge-001}}\n")
 
     def test_duplicate_check_sees_expanded_ids(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
