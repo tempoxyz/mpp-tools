@@ -850,11 +850,16 @@ def draft_paths(specs_dir: Path) -> list[Path]:
     if specs.is_symlink():
         raise ValueError(f"{specs} is a symlink; pass an mpp-specs checkout")
     root = specs.resolve()
+    # A symlinked draft is refused rather than skipped: skipping it would drop its rules
+    # from a report that still names a clean commit.
+    links = sorted(p for p in specs.rglob("*.md") if p.is_symlink())
+    if links:
+        raise ValueError(f"{links[0]} is a symlink; drafts must be regular files")
     paths = sorted(
         p
         for p in specs.rglob("*.md")
         # is_file: rglob also matches a directory named *.md, which read_text cannot read.
-        if not p.is_symlink() and p.is_file() and p.resolve().is_relative_to(root)
+        if p.is_file() and p.resolve().is_relative_to(root)
     )
     # Every specs/**/*.md is read as a draft, as mpp-specs' gen.sh and linter do, but a
     # tree with no draft-*.md at all (only a README, say) is not an mpp-specs checkout.
@@ -945,7 +950,7 @@ class Claim:
     operation: str | None = None
     adapters: list[str] | None = None
     sdk_versions: dict[str, str] | None = None
-    # Flow cases only: server_only, raw_http, client_flow or ordinary, as flow_runner runs them.
+    # Flow cases only: server_only, unsent, raw_http, client_flow or ordinary, as flow_runner runs them.
     flow_mode: str | None = None
     # Why no SDK can pass this claim for real, if none can: the vector runner refuses the
     # claim's whole file, or the scenario calls a legacy command that maps to no adapter
@@ -1328,10 +1333,22 @@ def flow_mode(
     # Same order as flow_runner's dispatch: discovery and JSON-RPC cases send raw
     # HTTP without the adapter; client_flow wins over no_payment; a remaining
     # no_payment case also never calls the adapter.
-    if flow_case.get("discovery") or flow_case.get("json_rpc"):
+    # A JSON-RPC case posts a fixed JSON payload (perform_json_request), always sendable.
+    if flow_case.get("json_rpc"):
         return "raw_http"
+    # A discovery case sends its own request through perform_request.
+    if flow_case.get("discovery"):
+        return "raw_http" if request_sendable(flow_case) else "unsent"
     if flow_case.get("client_flow"):
         return "client_flow"
+    # Every other case first sends the challenge_path case's request (its own when none
+    # is named). When perform_request cannot send it, the case raises before the server
+    # sees anything, so it checks nothing: "unsent", never coverage.
+    first = flow_case
+    if flow_case.get("challenge_path") and cases_by_path is not None:
+        first = cases_by_path.get(str(flow_case["challenge_path"])) or flow_case
+    if not request_sendable(first):
+        return "unsent"
     if flow_case.get("no_payment"):
         return "raw_http"
     # The first request goes to challenge_path's case when one is named. The compliance
@@ -1359,29 +1376,37 @@ def first_challenge_case(
     # flow_runner sends that first request with the method of the case it goes to
     # (perform_request(url, challenge_case)), the challenge_path case's when one is named.
     method = str((first or flow_case).get("http_method", "GET")).upper()
-    # perform_request encodes that case's body as UTF-8 for a POST, PUT or PATCH (its
-    # http_method as written) before it sends anything; a body that is not a string, or
-    # holds a lone surrogate, raises there, so no request reaches the server.
-    if first is not None and first.get("http_method", "GET") in {"POST", "PUT", "PATCH"}:
-        body = first.get("body")
-        if body is not None:
-            if not isinstance(body, str):
-                return None
-            try:
-                body.encode("utf-8")
-            except UnicodeEncodeError:
-                return None
-    # perform_request also adds that case's Accept-Payment and Idempotency-Key headers
-    # (str() of each truthy value); http.client refuses a value with CR or LF and cannot
-    # encode one outside Latin-1, so such a case never sends its first request.
-    if first is not None:
-        for key in ("accept_payment", "idempotency_key"):
-            value = first.get(key)
-            if value and not header_value_sendable(str(value)):
-                return None
+    if first is not None and not request_sendable(first):
+        return None
     # flow_runner appends that case's initial_query to its path (flow_case_url).
     query = str((first or {}).get("initial_query") or "")
     return answering_case(first, cases_by_path, method=method, query=query)
+
+
+def request_sendable(case: dict[str, Any]) -> bool:
+    """Whether flow_runner's perform_request can send this case's request at all.
+
+    perform_request encodes the case's body as UTF-8 for a POST, PUT or PATCH (its
+    http_method as written) before it sends anything; a body that is not a string, or
+    holds a lone surrogate, raises there. It also adds the case's Accept-Payment and
+    Idempotency-Key headers (str() of each truthy value), which http.client refuses
+    when they hold CR or LF or fall outside Latin-1. Either way no request reaches the
+    server.
+    """
+    if case.get("http_method", "GET") in {"POST", "PUT", "PATCH"}:
+        body = case.get("body")
+        if body is not None:
+            if not isinstance(body, str):
+                return False
+            try:
+                body.encode("utf-8")
+            except UnicodeEncodeError:
+                return False
+    for key in ("accept_payment", "idempotency_key"):
+        value = case.get(key)
+        if value and not header_value_sendable(str(value)):
+            return False
+    return True
 
 
 def header_value_sendable(value: str) -> bool:
@@ -1635,7 +1660,7 @@ def claim_applies(
     if claim.flow_mode is not None:
         # server_only and raw_http cases never call the adapter; only client_flow
         # cases drive the adapter's http.payment_request.
-        if claim.flow_mode in ("server_only", "raw_http"):
+        if claim.flow_mode in ("server_only", "unsent", "raw_http"):
             return False
         if claim.flow_mode == "client_flow":
             return "http.payment_request" in capabilities
@@ -1805,6 +1830,13 @@ def build_report(
         # they are; client_flow and ordinary ones count only when some adapter runs them.
         if claim.flow_mode == "server_only":
             message = f"{claim.source}: server_only flow cases are not run; not counted as coverage"
+            if message not in warnings:
+                warnings.append(message)
+            continue
+        # An unsent case raises in perform_request before its first request leaves the
+        # runner, so it checks nothing.
+        if claim.flow_mode == "unsent":
+            message = f"{claim.source}: its first request cannot be sent; not counted as coverage"
             if message not in warnings:
                 warnings.append(message)
             continue
@@ -2031,7 +2063,7 @@ def git_commit(path: Path) -> str | None:
     Comparing the files themselves rather than parsing 'git status' also covers
     untracked, gitignored, oddly named and nested-repository files.
 
-    Symlinked drafts are left out on both sides, as draft discovery skips them. A file
+    Symlinked drafts are left out on both sides; draft discovery refuses them. A file
     whose raw bytes do not hash to HEAD's blob is hashed again by 'git hash-object',
     which applies the checkout's clean filters (such as CRLF conversion under
     core.autocrlf or .gitattributes) the way 'git add' would, so a clean checkout with

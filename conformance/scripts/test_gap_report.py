@@ -622,6 +622,27 @@ class ReportTests(unittest.TestCase):
                     found = first_challenge_case(case, {"/h": case})
                     self.assertEqual(found is not None, sendable)
 
+    def test_unsendable_raw_http_cases_are_unsent(self) -> None:
+        bad = {"accept_payment": "a\r\nX: y"}
+        self.assertEqual(flow_mode({"name": "d", "path": "/d", "discovery": True, **bad}), "unsent")
+        self.assertEqual(flow_mode({"name": "p", "path": "/p", "no_payment": True, **bad}), "unsent")
+        self.assertEqual(flow_mode({"name": "p", "path": "/p", "no_payment": True}), "raw_http")
+        # A no_payment case sends the challenge_path case's request.
+        target = {"name": "t", "path": "/t", **bad}
+        via = {"name": "v", "path": "/v", "no_payment": True, "challenge_path": "/t"}
+        self.assertEqual(flow_mode(via, {"/t": target, "/v": via}), "unsent")
+        # A JSON-RPC case posts a fixed payload, so its own fields never block it.
+        self.assertEqual(flow_mode({"name": "j", "path": "/j", "json_rpc": True, **bad}), "raw_http")
+        warnings: list[str] = []
+        requirement = Requirement(
+            draft="draft-x-00", file="specs/x.md", line=1, section="",
+            text="A MUST b.", req_id="req-core-001", keywords=["MUST"],
+        )
+        claim = Claim(source="flows/f.json#d", requirements=["req-core-001"], flow_mode="unsent")
+        report = build_report([requirement], [claim], {}, warnings, {}, adapters={})
+        self.assertEqual(report["coverage"], {})
+        self.assertIn("flows/f.json#d: its first request cannot be sent", warnings[0])
+
     def test_unencodable_first_request_body_never_reaches_the_server(self) -> None:
         good = {"name": "g", "path": "/g", "http_method": "POST", "body": "{}"}
         self.assertEqual(first_challenge_case(good, {"/g": good}), good)
@@ -629,7 +650,7 @@ class ReportTests(unittest.TestCase):
             case = {"name": "b", "path": "/b", "http_method": "POST", "body": body}
             with self.subTest(body=body):
                 self.assertIsNone(first_challenge_case(case, {"/b": case}))
-                self.assertEqual(flow_mode(case, {"/b": case}), "raw_http")
+                self.assertEqual(flow_mode(case, {"/b": case}), "unsent")
         # A GET sends no body, so its body is never encoded.
         get = {"name": "q", "path": "/q", "body": "\ud800"}
         self.assertEqual(first_challenge_case(get, {"/q": get}), get)
@@ -838,14 +859,15 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(len(requirements), 1)
         self.assertEqual(rows, 2)
 
-    def test_symlinked_drafts_are_skipped(self) -> None:
+    def test_symlinked_drafts_are_refused(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "specs").mkdir()
             (root / "specs/draft-a-00.md").write_text("A MUST b.\n", encoding="utf-8")
             (root / "outside.md").write_text("Secret MUST x.\n", encoding="utf-8")
             (root / "specs/draft-b-00.md").symlink_to(root / "outside.md")
-            self.assertEqual([p.name for p in draft_paths(root)], ["draft-a-00.md"])
+            with self.assertRaisesRegex(ValueError, "draft-b-00.md is a symlink"):
+                draft_paths(root)
 
     def test_directory_named_like_a_draft_is_skipped(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
