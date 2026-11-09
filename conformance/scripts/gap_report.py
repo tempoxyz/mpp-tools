@@ -1236,9 +1236,12 @@ def claim_applies(
         # cases drive the adapter's http.payment_request.
         if claim.flow_mode in ("server_only", "raw_http"):
             return False
-        return (
-            claim.flow_mode != "client_flow" or "http.payment_request" in capabilities
-        )
+        if claim.flow_mode == "client_flow":
+            return "http.payment_request" in capabilities
+        # An ordinary case drives the SDK through challenge.parse, then credential.format;
+        # AdapterClient.call answers an operation the adapter lacks locally, so without
+        # both the SDK never runs the case.
+        return "challenge.parse" in capabilities and "credential.format" in capabilities
     if claim.adapters is not None and adapter not in claim.adapters:
         return False
     if claim.operation is not None and claim.operation not in capabilities:

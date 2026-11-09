@@ -296,8 +296,11 @@ class ReportTests(unittest.TestCase):
         server = Claim("flows/flows.json#c", ["req-core-001"], flow_mode="server_only")
         raw = Claim("flows/flows.json#d", ["req-core-001"], flow_mode="raw_http")
         self.assertFalse(claim_applies(raw, "typescript", ["http.payment_request"]))
-        # Ruby and Java run ordinary flows without any http.* capability.
-        self.assertTrue(claim_applies(ordinary, "java", ["challenge.parse"]))
+        # Ruby and Java run ordinary flows without any http.* capability, but the SDK
+        # only sees one through challenge.parse and credential.format.
+        self.assertTrue(claim_applies(ordinary, "java", ["challenge.parse", "credential.format"]))
+        self.assertFalse(claim_applies(ordinary, "java", ["challenge.parse"]))
+        self.assertFalse(claim_applies(ordinary, "java", ["credential.format"]))
         self.assertFalse(claim_applies(client, "java", ["challenge.parse"]))
         self.assertTrue(claim_applies(client, "go", ["http.payment_request"]))
         self.assertFalse(
