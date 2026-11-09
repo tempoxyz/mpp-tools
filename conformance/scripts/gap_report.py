@@ -37,6 +37,7 @@ from harness import (
     load_flow_results,
     load_json,
     load_vector,
+    request_input_for_command,
     validate_value,
 )
 from vector_runner import VectorRunner, expects_failure
@@ -1037,12 +1038,20 @@ def operation_input_error(
     the request with validate_input on, and AdapterClient.call validates it against
     adapter-request.schema.json before starting the adapter. An input the schema rejects
     raises there, the runner records a failure, and no SDK process runs, so the claim checks
-    nothing. A negative scenario skips that validation and reaches the SDK. Legacy parse,
-    format and generate commands build their requests from the scenario differently and are
-    not checked here, which errs toward counting them.
+    nothing. A negative scenario skips that validation and reaches the SDK.
+
+    Legacy parse, format and generate tests go through run_legacy_command, which builds the
+    request with request_input_for_command and validates it the same way unless that test
+    expects success: false. A request it cannot build or the schema rejects becomes an error
+    result, so that test fails for every SDK, and the claim counts for nothing. Only the
+    first call of each test is checked here; the semantic and roundtrip follow-up parses take
+    adapter output, which is not known in advance.
     """
-    operation = vector.get("commands", {}).get("operation")
-    if not operation or expects_failure(scenario.get("expected"), "ok"):
+    commands = vector.get("commands", {})
+    operation = commands.get("operation")
+    if not operation:
+        return legacy_input_error(commands, scenario)
+    if expects_failure(scenario.get("expected"), "ok"):
         return None
     request = {
         "schema": 1,
@@ -1054,6 +1063,46 @@ def operation_input_error(
         validate_value(request, "adapter-request.schema.json", "request")
     except ValueError as error:
         return f"its input fails the adapter request schema, so the runner fails it before any SDK runs ({error})"
+    return None
+
+
+def legacy_input_error(commands: dict[str, Any], scenario: dict[str, Any]) -> str | None:
+    """Why run_legacy_command fails a legacy test's first call for every SDK, if it does.
+
+    Mirrors vector_runner._run_scenario: a generate command alone when present, else a parse
+    test on the wire value and a format test on the object, each with the input and the
+    expectation the runner gives it.
+    """
+    tests = scenario.get("tests") or {}
+    parse, format_, generate = commands.get("parse"), commands.get("format"), commands.get("generate")
+    calls: list[tuple[str, Any, Any]] = []
+    if generate is not None:
+        test = tests.get("generate")
+        expected = test if test is not None and test is not True else {"success": True}
+        calls.append((generate, json.dumps(scenario.get("input")), expected))
+    else:
+        base64url = bool(parse) and str(parse).startswith("base64url-")
+        obj = scenario.get("decoded") if base64url else scenario.get("object")
+        wire = scenario.get("encoded") if base64url else VectorRunner().scenario_wire(scenario)
+        parse_test = tests.get("parse")
+        if parse_test is not None and parse and wire is not None:
+            calls.append((parse, wire, {"success": True} if parse_test is True else parse_test))
+        format_test = tests.get("format")
+        if format_test is not None and format_ and obj is not None:
+            expected = {"success": True} if format_test in (True, "exact") else format_test
+            calls.append((format_, obj if base64url else json.dumps(obj), expected))
+    for command, input_data, expected in calls:
+        if expects_failure(expected):
+            continue
+        try:
+            op, input_value = request_input_for_command(command, input_data)
+            request = {"schema": 1, "op": op, "input": input_value}
+            validate_value(request, "adapter-request.schema.json", "request")
+        except Exception as error:  # noqa: BLE001 - run_adapter turns any of them into a failure
+            return (
+                f"its {command} request fails the adapter request schema, so the runner "
+                f"fails that test before any SDK runs ({error})"
+            )
     return None
 
 
@@ -1434,6 +1483,19 @@ def answering_case(
         if offset and not (type(offset) is int and offset == 1):
             return None
         if cases_by_path is None or split.scheme or split.netloc:
+            return None
+        # compliance-server.ts resolves the target with WHATWG new URL, which differs from
+        # urljoin on some inputs: "///x" is another host, "\\" counts as "/", empty
+        # segments ("a//b") are kept where urljoin drops them, percent-encoded dot segments
+        # are removed, and tabs, newlines and edge spaces are stripped. Follow only targets
+        # both resolve alike: printable ASCII without those forms; others count as no
+        # challenge, which can only under-count.
+        raw_target = str(target)
+        if (
+            raw_target.startswith("//")
+            or "//" in split.path
+            or any(not ("!" <= char <= "~") or char in "\\%" for char in raw_target)
+        ):
             return None
         # urllib's default HTTPRedirectHandler follows at most max_redirections (10)
         # redirects and raises HTTPError on the next 302, which flow_runner reads as an

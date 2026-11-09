@@ -15,6 +15,7 @@ import unittest.mock
 from pathlib import Path
 
 from gap_report import (
+    legacy_input_error,
     charge_request_fits,
     first_challenge_case,
     Claim,
@@ -406,6 +407,35 @@ class ReportTests(unittest.TestCase):
         ):
             with self.subTest(expires=expires):
                 self.assertEqual(charge_request_fits({**base, "expires": expires}), fits)
+
+    def test_redirect_targets_whatwg_resolves_differently_are_not_followed(self) -> None:
+        landing = {"name": "l", "path": "/charge/landing"}
+        for target in ("///charge/landing", "landing//x", "\\charge\\landing", "%2e/landing", " /charge/landing"):
+            case = {"name": "r", "path": "/charge/r", "redirect_to": target}
+            cases = {"/charge/r": case, "/charge/landing": landing, "/charge/landing/x": landing}
+            with self.subTest(target=target):
+                self.assertFalse(answers_challenge(case, cases))
+        ok = {"name": "r", "path": "/charge/r", "redirect_to": "landing"}
+        self.assertTrue(answers_challenge(ok, {"/charge/r": ok, "/charge/landing": landing}))
+
+    def test_legacy_requests_the_schema_rejects_cover_nothing(self) -> None:
+        commands = {"parse": "parse-www-authenticate", "format": "format-www-authenticate"}
+        # A format test whose object is not a JSON object cannot form a valid request.
+        bad_object = {"name": "o", "object": "not an object", "tests": {"format": True}}
+        self.assertIn(
+            "format-www-authenticate request", legacy_input_error(commands, bad_object) or ""
+        )
+        # The same input expecting failure skips validation and reaches the SDK.
+        negative = {**bad_object, "tests": {"format": {"success": False}}}
+        self.assertIsNone(legacy_input_error(commands, negative))
+        # No wire value: the parse test is skipped, so nothing is checked.
+        self.assertIsNone(legacy_input_error(commands, {"name": "b", "tests": {"parse": True}}))
+        good = {"name": "g", "wire": 'Payment id="a"', "tests": {"parse": True}}
+        self.assertIsNone(legacy_input_error(commands, good))
+        # An unknown command fails request_input_for_command for every SDK.
+        self.assertIn(
+            "parse-nothing request", legacy_input_error({"parse": "parse-nothing"}, good) or ""
+        )
 
     def test_unencodable_first_request_body_never_reaches_the_server(self) -> None:
         good = {"name": "g", "path": "/g", "http_method": "POST", "body": "{}"}
