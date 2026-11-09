@@ -513,6 +513,15 @@ class HelperTests(unittest.TestCase):
             # Untracked files outside specs/ don't change the counted rules.
             (repo / "notes.txt").write_text("n\n")
             self.assertEqual(git_commit(repo), head)
+            # A gitignored draft is read by discovery too.
+            (repo / ".gitignore").write_text("specs/ignored-*.md\n")
+            run("add", ".gitignore")
+            run("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "ignore")
+            head = run("rev-parse", "HEAD")
+            self.assertEqual(git_commit(repo), head)
+            (repo / "specs" / "ignored-c.md").write_text("hidden\n")
+            self.assertEqual(git_commit(repo), f"{head}-dirty")
+            (repo / "specs" / "ignored-c.md").unlink()
             # An untracked draft is read by discovery, so the checkout is dirty.
             (repo / "specs" / "b.md").write_text("new\n")
             self.assertEqual(git_commit(repo), f"{head}-dirty")
