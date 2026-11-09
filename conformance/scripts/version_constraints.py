@@ -15,7 +15,9 @@ def matches_constraint(version: str, expression: str) -> bool:
 
     try:
         constraint = NpmSpec(expression)
-    except (TypeError, ValueError) as exc:
+    # semantic_version 2.10 raises AttributeError on some hyphen ranges such as
+    # ">=0.4 - 0.6"; report every parse failure as an invalid constraint.
+    except (TypeError, ValueError, AttributeError) as exc:
         raise ValueError(f"Invalid SemVer constraint: {expression!r}") from exc
 
     return constraint.match(actual)

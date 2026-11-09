@@ -1276,6 +1276,18 @@ def first_challenge_case(
     # flow_runner sends that first request with the method of the case it goes to
     # (perform_request(url, challenge_case)), the challenge_path case's when one is named.
     method = str((first or flow_case).get("http_method", "GET")).upper()
+    # perform_request encodes that case's body as UTF-8 for a POST, PUT or PATCH (its
+    # http_method as written) before it sends anything; a body that is not a string, or
+    # holds a lone surrogate, raises there, so no request reaches the server.
+    if first is not None and first.get("http_method", "GET") in {"POST", "PUT", "PATCH"}:
+        body = first.get("body")
+        if body is not None:
+            if not isinstance(body, str):
+                return None
+            try:
+                body.encode("utf-8")
+            except UnicodeEncodeError:
+                return None
     # flow_runner appends that case's initial_query to its path (flow_case_url).
     query = str((first or {}).get("initial_query") or "")
     return answering_case(first, cases_by_path, method=method, query=query)
@@ -1315,6 +1327,12 @@ def lookup_path(path: str, query: str = "") -> str | None:
     return pathname
 
 
+# mppx's datetime() pattern (src/zod.ts), with ASCII digits as in JavaScript.
+MPPX_DATETIME = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})"
+)
+
+
 def charge_request_fits(request: Any) -> bool:
     """Whether the compliance server's mpp.charge accepts a flow case's request object.
 
@@ -1328,6 +1346,10 @@ def charge_request_fits(request: Any) -> bool:
         return False
     required = ("amount", "currency", "recipient", "expires")
     if any(not isinstance(request.get(key), str) for key in required):
+        return False
+    # mpp.charge lifts expires into the Challenge, whose schema (mppx zod.datetime)
+    # rejects anything but this ISO 8601 form, so the server throws before any 402.
+    if not MPPX_DATETIME.fullmatch(request["expires"]):
         return False
     return "resource" not in request or isinstance(request["resource"], str)
 
@@ -1644,14 +1666,16 @@ def build_report(
         # sdkVersions (and its file's) let it run. Otherwise every adapter skips the
         # scenario and nothing checks the rule. A server_only flow case is never run:
         # flow_runner skips it (it only defines a route other cases reach), so it checks
-        # nothing either. Other flow cases run against the reference server; raw_http ones
-        # need no adapter, so they count suite-wide as they are.
+        # nothing either. raw_http flow cases need no adapter, so they count suite-wide as
+        # they are; client_flow and ordinary ones count only when some adapter runs them.
         if claim.flow_mode == "server_only":
             message = f"{claim.source}: server_only flow cases are not run; not counted as coverage"
             if message not in warnings:
                 warnings.append(message)
             continue
-        if claim.flow_mode is None and not any(
+        # client_flow and ordinary flow cases drive an adapter too, so they need one that
+        # takes part (claim_applies); only raw_http cases check the server alone.
+        if claim.flow_mode in (None, "client_flow", "ordinary") and not any(
             claim_applies(claim, adapter, capabilities, version_applies)
             for adapter, capabilities in sorted(adapters.items())
         ):

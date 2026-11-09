@@ -15,6 +15,7 @@ import unittest.mock
 from pathlib import Path
 
 from gap_report import (
+    charge_request_fits,
     first_challenge_case,
     Claim,
     Requirement,
@@ -351,10 +352,72 @@ class ReportTests(unittest.TestCase):
             for line in (1, 2)
         ]
         warnings: list[str] = []
-        report = build_report(requirements, claims, {}, warnings, {}, adapters={})
+        adapters = {"ts": ["challenge.parse", "credential.format"]}
+        report = build_report(requirements, claims, {}, warnings, {}, adapters=adapters)
         self.assertEqual(report["coverage"], {"req-core-001": ["flows/flows.json#ok"]})
         self.assertEqual(len(warnings), 1)
         self.assertIn("flows.json#bad: challenge_path /nowhere", warnings[0])
+
+    def test_adapter_driven_flow_cases_need_an_adapter_suite_wide(self) -> None:
+        # client_flow and ordinary cases run nothing when no adapter takes part, so
+        # they count nowhere; a raw_http case needs no adapter.
+        claims = [
+            Claim(source="flows/f.json#client", requirements=["req-core-001"], flow_mode="client_flow"),
+            Claim(
+                source="flows/f.json#ordinary",
+                requirements=["req-core-002"],
+                flow_mode="ordinary",
+                operations=("challenge.parse", "credential.format"),
+            ),
+            Claim(source="flows/f.json#raw", requirements=["req-core-003"], flow_mode="raw_http"),
+        ]
+        requirements = [
+            Requirement(
+                draft="draft-x-00", file="specs/x.md", line=line, section="",
+                text="A MUST b.", req_id=f"req-core-00{line}", keywords=["MUST"],
+            )
+            for line in (1, 2, 3)
+        ]
+        warnings: list[str] = []
+        report = build_report(
+            requirements, claims, {}, warnings, {}, adapters={"go": ["challenge.parse"]}
+        )
+        self.assertEqual(report["coverage"], {"req-core-003": ["flows/f.json#raw"]})
+        self.assertEqual(len(warnings), 2)
+        report = build_report(
+            requirements,
+            claims,
+            {},
+            [],
+            {},
+            adapters={"ts": ["challenge.parse", "credential.format", "http.payment_request"]},
+        )
+        self.assertEqual(sorted(report["coverage"]), ["req-core-001", "req-core-002", "req-core-003"])
+
+    def test_charge_request_needs_an_mppx_datetime_expires(self) -> None:
+        base = {"amount": "1", "currency": "0x1", "recipient": "0x2"}
+        for expires, fits in (
+            ("2099-01-01T00:00:00Z", True),
+            ("2099-01-01T00:00:00.123+01:00", True),
+            ("2099-01-01", False),
+            ("tomorrow", False),
+            ("2099-01-01T00:00:00Z\n", False),
+            ("\u0662099-01-01T00:00:00Z", False),
+        ):
+            with self.subTest(expires=expires):
+                self.assertEqual(charge_request_fits({**base, "expires": expires}), fits)
+
+    def test_unencodable_first_request_body_never_reaches_the_server(self) -> None:
+        good = {"name": "g", "path": "/g", "http_method": "POST", "body": "{}"}
+        self.assertEqual(first_challenge_case(good, {"/g": good}), good)
+        for body in ("\ud800", {"a": 1}):
+            case = {"name": "b", "path": "/b", "http_method": "POST", "body": body}
+            with self.subTest(body=body):
+                self.assertIsNone(first_challenge_case(case, {"/b": case}))
+                self.assertEqual(flow_mode(case, {"/b": case}), "raw_http")
+        # A GET sends no body, so its body is never encoded.
+        get = {"name": "q", "path": "/q", "body": "\ud800"}
+        self.assertEqual(first_challenge_case(get, {"/q": get}), get)
 
     def test_flow_modes_from_cases(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
