@@ -1297,6 +1297,15 @@ class FlowModeForcedStatusTest(unittest.TestCase):
             case = {"name": "r", "path": "/r", "redirect_to": "/t", "http_method": method}
             self.assertEqual(flow_mode(case, cases), mode, method)
 
+    def test_empty_redirect_to_is_no_redirect(self) -> None:
+        # compliance-server.ts checks if (flowCase.redirect_to), so "" never redirects.
+        cases = {"/t": {"name": "t", "path": "/t"}}
+        self.assertEqual(flow_mode({"name": "e", "path": "/e", "redirect_to": ""}, cases), "ordinary")
+        self.assertEqual(
+            flow_mode({"name": "e", "path": "/e", "redirect_to": "", "redirect_to_port_offset": 1}, cases), "ordinary"
+        )
+        self.assertEqual(flow_mode({"name": "e", "path": "/e", "redirect_to": "", "no_payment": True}, cases), "raw_http")
+
 
 class GenerateCommitStabilityTest(unittest.TestCase):
     def test_checkout_moving_while_read_fails(self) -> None:

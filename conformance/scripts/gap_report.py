@@ -1170,8 +1170,10 @@ def answers_challenge(
     # first, then redirect_to, and only then no_payment, so a redirect wins over no_payment.
     if any(flow_case.get(flag) for flag in ("discovery", "json_rpc", "force_status")):
         return False
+    # compliance-server.ts redirects only when redirect_to is truthy, so an empty string (or
+    # a port offset with no target) is no redirect and the case answers as if unset.
     target = flow_case.get("redirect_to")
-    if target is None:
+    if not target:
         return not flow_case.get("no_payment")
     if method not in {"GET", "HEAD", "POST"}:
         return False
