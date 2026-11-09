@@ -15,6 +15,7 @@ from pathlib import Path
 
 from gap_report import (
     Claim,
+    Requirement,
     build_report,
     claim_applies,
     draft_short_name,
@@ -318,6 +319,21 @@ class ReportTests(unittest.TestCase):
         # The runner refuses the scenario outright, so no SDK gets credit for it.
         self.assertFalse(claim_applies(claim, "go", [], applies))
         self.assertFalse(claim_applies(claim, "python", [], applies))
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("golang", warnings[0])
+
+    def test_runner_rejected_claims_are_not_suite_coverage(self) -> None:
+        requirement = Requirement(
+            draft="draft-x-00", file="specs/x.md", line=1, section="",
+            text="A MUST b.", req_id="req-core-001", keywords=["MUST"],
+        )
+        claim = Claim(
+            "vectors/a.json#x", ["req-core-001"], sdk_versions={"golang": ">=0.5.0"}
+        )
+        warnings: list[str] = []
+        report = build_report([requirement], [claim], {}, warnings, {})
+        self.assertEqual(report["totals"]["covered"], 0)
+        self.assertEqual(report["coverage"], {})
         self.assertEqual(len(warnings), 1)
         self.assertIn("golang", warnings[0])
 

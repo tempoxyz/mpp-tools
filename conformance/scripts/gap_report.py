@@ -412,6 +412,25 @@ def claim_applies(
     return version_applies is None or version_applies(claim, adapter)
 
 
+def rejected_by_runner(claim: Claim, warnings: list[str]) -> bool:
+    """Whether the vector runner refuses this claim's scenario outright.
+
+    The runner rejects a scenario whose sdkVersions has unknown adapter keys (or
+    non-string values) before running it for any adapter, so such a claim is
+    coverage for no SDK and for no suite-wide total. Warns once per claim.
+    """
+    if not claim.sdk_versions:
+        return False
+    try:
+        VectorRunner().scenario_version_constraints({"sdkVersions": claim.sdk_versions})
+    except ValueError as error:
+        message = f"{claim.source}: {error}; not counted as coverage"
+        if message not in warnings:
+            warnings.append(message)
+        return True
+    return False
+
+
 def version_checker(
     warnings: list[str], resolver: Callable[[str], str] | None = None
 ) -> VersionCheck:
@@ -422,19 +441,11 @@ def version_checker(
     """
     runner = VectorRunner(sdk_version_resolver=resolver)
     unresolved: set[str] = set()
-    invalid: set[str] = set()
 
     def applies(claim: Claim, adapter: str) -> bool:
         if not claim.sdk_versions:
             return True
-        # The vector runner rejects a scenario whose sdkVersions has unknown adapter keys
-        # (or non-string values) before running it for any adapter, so it is coverage for none.
-        try:
-            runner.scenario_version_constraints({"sdkVersions": claim.sdk_versions})
-        except ValueError as error:
-            if claim.source not in invalid:
-                invalid.add(claim.source)
-                warnings.append(f"{claim.source}: {error}; not counted as coverage")
+        if rejected_by_runner(claim, warnings):
             return False
         if adapter not in claim.sdk_versions:
             return True
@@ -479,6 +490,9 @@ def build_report(
     version_applies: VersionCheck | None = None,
 ) -> dict[str, Any]:
     """Assemble the JSON report: per-draft counts, uncovered rules and profile coverage."""
+    # Claims the runner refuses outright count nowhere: not in the suite-wide coverage,
+    # the per-draft and total counts, or any SDK profile.
+    claims = [claim for claim in claims if not rejected_by_runner(claim, warnings)]
     coverage: dict[str, list[str]] = {}
     for claim in claims:
         for req_id in claim.requirements:
