@@ -522,6 +522,14 @@ class HelperTests(unittest.TestCase):
             (repo / "specs" / "ignored-c.md").write_text("hidden\n")
             self.assertEqual(git_commit(repo), f"{head}-dirty")
             (repo / "specs" / "ignored-c.md").unlink()
+            # An ignored directory without drafts leaves the checkout clean.
+            (repo / ".git" / "info" / "exclude").write_text("specs/build/\n")
+            (repo / "specs" / "build").mkdir()
+            (repo / "specs" / "build" / "out.html").write_text("<p>\n")
+            self.assertEqual(git_commit(repo), head)
+            (repo / "specs" / "build" / "draft.md").write_text("hidden\n")
+            self.assertEqual(git_commit(repo), f"{head}-dirty")
+            (repo / "specs" / "build" / "draft.md").unlink()
             # An untracked draft is read by discovery, so the checkout is dirty.
             (repo / "specs" / "b.md").write_text("new\n")
             self.assertEqual(git_commit(repo), f"{head}-dirty")

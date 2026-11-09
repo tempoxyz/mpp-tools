@@ -623,16 +623,17 @@ def git_commit(path: Path) -> str | None:
         if Path(git("rev-parse", "--show-toplevel")).resolve() != path.resolve():
             return None
         commit = git("rev-parse", "HEAD")
-        dirty = bool(
-            git(
-                "status",
-                "--porcelain",
-                "--untracked-files=all",
-                "--ignored=matching",
-                "--",
-                ":(glob)specs/**/*.md",
-            )
+        # --ignored=traditional with --untracked-files=all lists each file inside an
+        # ignored directory rather than the directory itself; keep only .md entries.
+        status = git(
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+            "--ignored=traditional",
+            "--",
+            ":(glob)specs/**/*.md",
         )
+        dirty = any(line.rstrip("/").endswith(".md") for line in status.splitlines())
     except (OSError, subprocess.CalledProcessError):
         return None
     if not commit:
