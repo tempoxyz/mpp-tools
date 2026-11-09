@@ -75,6 +75,8 @@ EXCERPT_LENGTH = 160
 KRAMDOWN_RFC_VERSION = "1.7.39"
 # The resolved gem in a Gemfile.lock's GEM specs, indented four spaces; the two-space
 # DEPENDENCIES and CHECKSUMS entries name the same version or a constraint.
+# How much of Gemfile.lock is read; the mpp-specs lockfile is a few KiB.
+MAX_LOCKFILE_BYTES = 1 << 20
 GEMFILE_LOCK_RE = re.compile(r"^    kramdown-rfc \(([^()\s]+)\)$", re.MULTILINE)
 # 'kramdown-rfc --version' prints 'kramdown-rfc 1.7.39'.
 KRAMDOWN_VERSION_RE = re.compile(r"^kramdown-rfc (\S+)\s*$", re.MULTILINE)
@@ -248,8 +250,13 @@ def locked_kramdown_rfc_version(specs_dir: Path) -> str:
     it), or KRAMDOWN_RFC_VERSION for a checkout without one.
     """
     lock = specs_dir / "Gemfile.lock"
+    # Like the drafts, a symlinked lockfile is not followed, and only its first
+    # MAX_LOCKFILE_BYTES are read (a real one is a few KiB).
+    if lock.is_symlink() or not lock.is_file():
+        return KRAMDOWN_RFC_VERSION
     try:
-        text = lock.read_text(encoding="utf-8")
+        with lock.open("rb") as handle:
+            text = handle.read(MAX_LOCKFILE_BYTES).decode("utf-8", "replace")
     except OSError:
         return KRAMDOWN_RFC_VERSION
     match = GEMFILE_LOCK_RE.search(text)

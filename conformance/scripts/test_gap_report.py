@@ -2545,6 +2545,23 @@ class RendererTests(unittest.TestCase):
                 KramdownRfc(command)("# A\u2028\n".encode()), "1 1 # A\u2028\n"
             )
 
+    def test_locked_version_ignores_a_symlinked_lockfile(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "elsewhere.lock"
+            target.write_text("    kramdown-rfc (9.9.9)\n", encoding="utf-8")
+            checkout = root / "checkout"
+            checkout.mkdir()
+            (checkout / "Gemfile.lock").symlink_to(target)
+            self.assertEqual(
+                gap_report.locked_kramdown_rfc_version(checkout), KRAMDOWN_RFC_VERSION
+            )
+            (checkout / "Gemfile.lock").unlink()
+            (checkout / "Gemfile.lock").write_text(
+                "GEM\n    kramdown-rfc (9.9.9)\n", encoding="utf-8"
+            )
+            self.assertEqual(gap_report.locked_kramdown_rfc_version(checkout), "9.9.9")
+
     def test_render_refuses_include_directives(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             command = fake_kramdown(
