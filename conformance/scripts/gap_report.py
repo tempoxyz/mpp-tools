@@ -63,8 +63,12 @@ TRAILING_IAL_RE = re.compile(r"(?<![\\*_\x60\])>])\{:(?P<body>[^{}]*)\}\s*$")
 # key="value" (or 'value'), one or more #id and .class names run together, or a bare
 # reference name, each separated by whitespace. Only a '#name' token sets the ID, so
 # '#req-...' inside a quoted value such as title="#req-core-001" sets nothing.
+# Inside the quotes a backslash is matched only as the start of an escape pair and every
+# other character only on its own ('[^\\]'), so each character has exactly one way to
+# match: a value that never closes fails in linear time instead of backtracking
+# exponentially over a long backslash run (ReDoS).
 IAL_TOKEN_RE = re.compile(
-    r"""(?:^|(?<=\s))(?:\w[\w-]*=(?P<quote>["'])(?:\\.|(?!(?P=quote)).)*(?P=quote)|(?P<names>(?:[#.]\w[\w-]*)+)|\w[\w-]*)(?=\s|$)"""
+    r"""(?:^|(?<=\s))(?:\w[\w-]*=(?P<quote>["'])(?:\\.|(?!(?P=quote))[^\\\n])*(?P=quote)|(?P<names>(?:[#.]\w[\w-]*)+)|\w[\w-]*)(?=\s|$)"""
 )
 IAL_ID_NAME_RE = re.compile(r"#(\w[\w-]*)")
 # '{:name: attributes}' is an attribute list definition: it names attributes for later
@@ -79,7 +83,10 @@ DEFINITION_RE = re.compile(r"^\s*:\s+")
 # kramdown-rfc fences code with ~~~ only; a ``` pair renders as inline verbatim, whose
 # keywords keywords_in already ignores. A fence line indented 4 or more is code.
 FENCE_RE = re.compile(r"^( *)(~{3,})(.*)$")
-QUOTE_RE = re.compile(r"^ {0,3}> ?")
+# Every blockquote marker at the start of a line: kramdown parses a quote's content as
+# blocks again, so '> > text' (or '>> text') is a quote nested in a quote, and a block
+# IAL inside it ('> > {: #req-core-001}') tags the nested paragraph.
+QUOTE_RE = re.compile(r"^(?: {0,3}> ?)+")
 # A table delimiter row, with or without outer pipes: | --- | :---: | or --- | ---
 TABLE_DELIMITER_RE = re.compile(r"^\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?$")
 # kramdown starts a table at a block boundary on a line with a pipe that is neither
@@ -434,8 +441,9 @@ def extract_requirements(
             if in_front_matter or not rendered:
                 continue
         at_boundary, boundary = boundary, False
-        # Tabs stop every 4 columns as kramdown counts them; a blockquote marker is removed
-        # before any boundary is decided, so a bare '>' separates quoted paragraphs.
+        # Tabs stop every 4 columns as kramdown counts them; all blockquote markers (nested
+        # quotes included) are removed before any boundary is decided, so a bare '>'
+        # separates quoted paragraphs.
         line = QUOTE_RE.sub("", raw.expandtabs(4))
         stripped = line.strip()
         column = len(line) - len(line.lstrip())
@@ -456,7 +464,12 @@ def extract_requirements(
             if not stripped or IAL_LINE_RE.match(line) or ends_item:
                 commit_table()
             elif is_table_line(stripped):
-                pending.append((number, stripped, stripped))
+                # Read the row's visible text only, as for the table's first row: a
+                # keyword inside an HTML or {::comment} comment is no rule, whether the
+                # rows end up a table or a paragraph. A comment the row leaves open
+                # carries on to the next lines.
+                visible, comment, _ = strip_comments(line, None)
+                pending.append((number, visible.strip(), visible.strip()))
                 continue
             else:
                 revert_table()
@@ -779,6 +792,21 @@ def load_profiles(adapters_dir: Path = ADAPTERS_DIR) -> dict[str, dict[str, Any]
     return profiles
 
 
+def load_capabilities(adapters_dir: Path = ADAPTERS_DIR) -> dict[str, list[str]]:
+    """Read every adapter manifest's name and capabilities, profile or not.
+
+    These are the adapters the vector runner discovers and can run (harness's
+    discover_adapters reads the same manifests), so they decide whether any SDK runs a
+    vector claim at all.
+    """
+    capabilities: dict[str, list[str]] = {}
+    for manifest_path in sorted(adapters_dir.glob("*/adapter.json")):
+        manifest = load_json(manifest_path)
+        validate_value(manifest, "adapter-manifest.schema.json", str(manifest_path))
+        capabilities[manifest["name"]] = manifest["capabilities"]
+    return capabilities
+
+
 VersionCheck = Callable[[Claim, str], bool]
 
 
@@ -924,6 +952,7 @@ def build_report(
     table_rows: dict[str, int] | None = None,
     version_applies: VersionCheck | None = None,
     draft_files: dict[str, str] | None = None,
+    adapters: dict[str, list[str]] | None = None,
 ) -> dict[str, Any]:
     """Assemble the JSON report: per-draft counts, uncovered rules and profile coverage.
 
@@ -931,12 +960,30 @@ def build_report(
     rules, such as one whose keywords are all in tables, still gets an entry, its table
     rows still count in the totals, and a profile claiming it does not call it unknown.
     A rule whose ID is a duplicate or another draft's (id_problem) is never covered.
+    adapters maps every adapter the runner can run to its capabilities (all manifests
+    under adapters/ when omitted); a vector claim no adapter runs covers nothing.
     """
     # Claims the runner refuses outright count nowhere: not in the suite-wide coverage,
     # the per-draft and total counts, or any SDK profile.
     claims = [claim for claim in claims if not rejected_by_runner(claim, warnings)]
+    if adapters is None:
+        adapters = load_capabilities()
     coverage: dict[str, list[str]] = {}
     for claim in claims:
+        # A vector scenario counts suite-wide only when at least one adapter would run it,
+        # as vector_runner decides per adapter: the scenario's adapters list selects it,
+        # it advertises every operation the scenario calls, and the scenario's
+        # sdkVersions (and its file's) let it run. Otherwise every adapter skips the
+        # scenario and nothing checks the rule. Flow cases are left alone: server_only
+        # and raw_http cases check the reference server without any adapter.
+        if claim.flow_mode is None and not any(
+            claim_applies(claim, adapter, capabilities, version_applies)
+            for adapter, capabilities in sorted(adapters.items())
+        ):
+            message = f"{claim.source}: no adapter runs it (adapters, capabilities or sdkVersions); not counted as coverage"
+            if message not in warnings:
+                warnings.append(message)
+            continue
         for req_id in claim.requirements:
             coverage.setdefault(req_id, []).append(claim.source)
     known = {requirement.req_id for requirement in requirements if requirement.req_id}
@@ -1161,6 +1208,7 @@ def generate(specs_dir: Path, source: str) -> dict[str, Any]:
     requirements, warnings, table_rows, draft_files = extract_all(specs_dir)
     claims = load_claims()
     profiles = load_profiles()
+    adapters = load_capabilities()
     specs: dict[str, str | None] = {"source": source, "commit": git_commit(specs_dir)}
     return build_report(
         requirements,
@@ -1171,6 +1219,7 @@ def generate(specs_dir: Path, source: str) -> dict[str, Any]:
         table_rows,
         version_applies=version_checker(warnings),
         draft_files=draft_files,
+        adapters=adapters,
     )
 
 

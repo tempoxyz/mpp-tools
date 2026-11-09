@@ -23,6 +23,7 @@ from gap_report import (
     extract_all,
     extract_requirements,
     git_commit,
+    ial_req_id,
     parse_heading,
     load_claims,
     load_profiles,
@@ -987,6 +988,93 @@ class CoverageCorrectnessTests(unittest.TestCase):
             (repo / "specs" / "a.md").write_bytes(b"x\r\nchanged\r\n")
             self.assertEqual(git_commit(repo), f"{head}-dirty")
 
+
+class CyclopsFindingTests(unittest.TestCase):
+    """Regression tests for the Cyclops findings on 9f14fe8 (kramdown cases checked
+    with kramdown-rfc 1.7.39 in the ietf-spec-tools image)."""
+
+    def test_unclosed_quoted_ial_value_with_backslashes_is_linear(self) -> None:
+        # Each backslash used to match either alone or as half of an escape pair, so an
+        # unclosed value with n backslashes backtracked through ~1.7^n splits (40 took
+        # most of a minute). Now there is one way to match each character.
+        for body in (
+            'title="' + "\\" * 40 + '"x',
+            'title="' + "\\" * 40 + "x",
+            "title='" + "\\" * 100000 + "'x #req-tempo-charge-001",
+        ):
+            start = time.monotonic()
+            ial_req_id(body)
+            self.assertLess(time.monotonic() - start, 1)
+        # Escapes still read as kramdown-rfc reads them.
+        self.assertEqual(ial_req_id('title="a\\" #req-tempo-charge-010'), "req-tempo-charge-010")
+        self.assertIsNone(ial_req_id('title="a\\" #req-tempo-charge-011" '))
+        self.assertEqual(ial_req_id('title="a\\\\" #req-tempo-charge-012'), "req-tempo-charge-012")
+
+    def test_nested_blockquote_ials_tag_their_paragraph(self) -> None:
+        for body in (
+            "> > Servers MUST nest.\n> > {: #req-tempo-charge-001}\n",
+            ">> Servers MUST nest.\n>> {: #req-tempo-charge-001}\n",
+            "> Servers MUST nest.\n> {: #req-tempo-charge-001}\n",
+        ):
+            with self.subTest(body=body):
+                requirements, warnings, _ = read_draft(body)
+                self.assertEqual(
+                    [(r.text, r.req_id) for r in requirements],
+                    [("Servers MUST nest.", "req-tempo-charge-001")],
+                )
+                self.assertEqual(warnings, [])
+
+    def test_comments_in_later_table_rows_hide_their_keywords(self) -> None:
+        # body: (rule keywords, keyword table rows)
+        cases = {
+            "| a | b |\n|---|---|\n| x <!-- MUST --> | y |\n"
+            "| z {::comment}SHOULD{:/comment} | w |\n\nAfter.\n": ([], 0),
+            "| a | b |\n|---|---|\n| x <!-- MUST --> | REQUIRED |\n\nAfter.\n": ([], 1),
+            # a comment a row leaves open hides the lines it runs over
+            "| a | b |\n| x <!-- open | y |\nMUST hidden -->\n\nAfter.\n": ([], 0),
+            # rows that fall back to a paragraph keep only their visible text
+            "| a | b |\n| c <!-- MUST --> | d |\nplain SHOULD.\n": ([["SHOULD"]], 0),
+        }
+        for body, (keywords, rows) in cases.items():
+            with self.subTest(body=body):
+                requirements, _, table_rows = read_draft(body)
+                self.assertEqual(([r.keywords for r in requirements], table_rows), (keywords, rows))
+
+    def test_vector_claims_no_adapter_runs_are_not_suite_coverage(self) -> None:
+        requirements = [
+            Requirement(
+                draft="core", file="specs/x.md", line=n, section="",
+                text=f"A MUST {n}.", req_id=f"req-core-00{n}", keywords=["MUST"],
+            )
+            for n in range(1, 6)
+        ]
+        adapters = {"go": ["challenge.parse"], "rust": ["challenge.parse", "challenge.format"]}
+        claims = [
+            # run by go and rust
+            Claim("vectors/a.json#run", ["req-core-001"], operation="challenge.parse"),
+            # no adapter advertises the operation
+            Claim("vectors/a.json#op", ["req-core-002"], operation="receipt.parse"),
+            # the one adapter selected lacks the operation
+            Claim("vectors/a.json#sel", ["req-core-003"], operation="challenge.format", adapters=["go"]),
+            # sdkVersions rule out the only adapter with the operation
+            Claim(
+                "vectors/a.json#ver", ["req-core-004"], operation="challenge.format",
+                sdk_versions={"rust": ">=9.0.0"},
+            ),
+            # flow cases check the reference server without an adapter
+            Claim("flows/flows.json#s", ["req-core-005"], flow_mode="server_only"),
+        ]
+        warnings: list[str] = []
+        applies = version_checker(warnings, resolver=lambda adapter: "1.0.0")
+        report = build_report(
+            requirements, claims, {}, warnings, {}, version_applies=applies, adapters=adapters
+        )
+        self.assertEqual(sorted(report["coverage"]), ["req-core-001", "req-core-005"])
+        self.assertEqual(report["totals"]["covered"], 2)
+        self.assertEqual(
+            sorted(w.split(":")[0] for w in warnings if "no adapter runs it" in w),
+            ["vectors/a.json#op", "vectors/a.json#sel", "vectors/a.json#ver"],
+        )
 
 if __name__ == "__main__":
     unittest.main()
