@@ -1334,18 +1334,18 @@ def flow_mode(
     """
     if flow_case.get("server_only"):
         return "server_only"
-    # Same order as flow_runner's dispatch: discovery and JSON-RPC cases send raw
+    # Same order as flow_runner's dispatch (discovery before JSON-RPC): both send raw
     # HTTP without the adapter; client_flow wins over no_payment; a remaining
     # no_payment case also never calls the adapter.
+    # A discovery case sends its own request through perform_request.
+    if flow_case.get("discovery"):
+        return "raw_http" if request_sendable(flow_case) else "unsent"
     # A JSON-RPC case posts a JSON payload (perform_json_request) to base_url + path:
     # the payload always encodes, but urllib refuses a path with a control character,
     # space or non-ASCII text, so such a case is never sent.
     if flow_case.get("json_rpc"):
         path = str(flow_case.get("path", "/"))
         return "raw_http" if all(0x20 < ord(char) < 0x7F for char in path) else "unsent"
-    # A discovery case sends its own request through perform_request.
-    if flow_case.get("discovery"):
-        return "raw_http" if request_sendable(flow_case) else "unsent"
     if flow_case.get("client_flow"):
         return "client_flow"
     # Every other case first sends the challenge_path case's request (its own when none

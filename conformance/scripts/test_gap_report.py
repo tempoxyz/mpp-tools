@@ -643,6 +643,10 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(flow_mode(via, {"/t": target, "/v": via}), "unsent")
         # A JSON-RPC case posts a fixed payload, so its own fields never block it.
         self.assertEqual(flow_mode({"name": "j", "path": "/j", "json_rpc": True, **bad}), "raw_http")
+        # flow_runner dispatches discovery first, so a case with both flags follows
+        # the discovery rule, which checks its headers too.
+        both = {"name": "b", "path": "/b", "json_rpc": True, "discovery": True, **bad}
+        self.assertEqual(flow_mode(both), "unsent")
         # Its path is still sent as written, so one urllib refuses is never sent.
         for path in ("/j k", "/j\x01", "/j\u00e9"):
             self.assertEqual(flow_mode({"name": "j", "path": path, "json_rpc": True}), "unsent", path)
