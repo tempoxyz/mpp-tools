@@ -625,6 +625,9 @@ def extract_requirements(
     item_indent = 0  # text column of the latest list item, for its fences and code
     fence_base = 0
     boundary = True  # whether the next line starts at a kramdown block boundary
+    # Whether the line before ended a block that is no paragraph (heading, table, code):
+    # kramdown puts a block IAL right after such a block on it, not on the next block.
+    after_block = False
     for number, raw in enumerate(lines, start=1):
         if ial_bodies and not is_block_ial(QUOTE_RE.sub("", raw.expandtabs(4))):
             apply_ials()  # the run of IAL lines ended: every other line is handled below
@@ -650,6 +653,7 @@ def extract_requirements(
             if in_front_matter or not rendered:
                 continue
         at_boundary, boundary = boundary, False
+        prev_block, after_block = after_block, False
         # Tabs stop every 4 columns as kramdown counts them; all blockquote markers (nested
         # quotes included) are removed before any boundary is decided, so a bare '>'
         # separates quoted paragraphs.
@@ -665,6 +669,7 @@ def extract_requirements(
                 and not fence_match.group(3).strip()
             ):
                 fence = None
+                after_block = True
             continue
         if pending and comment is None:
             # Decide the pending table first: kramdown checks for its end before anything
@@ -679,6 +684,7 @@ def extract_requirements(
                 # carries on to the next lines.
                 visible, comment, _ = strip_comments(line, None)
                 pending.append((number, visible.strip(), visible.strip()))
+                after_block = True
                 continue
             else:
                 revert_table()
@@ -692,6 +698,7 @@ def extract_requirements(
                 continue
             if stripped and not unit and column >= item_indent + 4:
                 drop_held("a code block")
+                after_block = True
                 continue  # indented code block: kramdown renders it as code, not prose
         visible, comment, had_comment = strip_comments(line, comment)
         if had_comment:
@@ -740,6 +747,13 @@ def extract_requirements(
             if unit and is_block_ial(line):
                 ial_bodies.append(ial.group("body"))  # applied once the run of IALs ends
                 continue
+            if not unit and prev_block:
+                # Right after a heading, table or code block: kramdown puts it on that
+                # block, so it tags no rule.
+                req_id = ial_req_id(ial.group("body"), known_alds)
+                if req_id:
+                    warnings.append(f"{relative}:{number}: {req_id} goes on the block before it, so it tags nothing")
+                continue
             if not unit:
                 # No block right before it: kramdown holds it for the next block.
                 found_id = ial_id(ial.group("body"), known_alds)
@@ -770,6 +784,7 @@ def extract_requirements(
                 )
             unit_held = None
             section = (heading[1] or slugify(heading[0])) if heading else section
+            after_block = True
             continue
         heading = parse_heading(line)
         if heading:
@@ -777,6 +792,7 @@ def extract_requirements(
             drop_held("a heading")
             item_indent = 0
             section = heading[1] or slugify(heading[0])
+            after_block = True
             continue
         item = LIST_ITEM_RE.match(line)
         if item and unit and not item_indent:
@@ -795,6 +811,7 @@ def extract_requirements(
                 drop_held("a table")
                 pending.append((number, stripped, row.strip()))
                 pending_in_item = bool(item)
+                after_block = True
                 continue
             if item:
                 drop_held("the list, not its item")

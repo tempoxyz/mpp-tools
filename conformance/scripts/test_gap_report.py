@@ -1508,6 +1508,17 @@ class SetextAndEscapeTest(unittest.TestCase):
         self.assertEqual(len(warnings), 1)
         self.assertIn(":14: req-tempo-charge-001 goes on a heading", warnings[0])
 
+    def test_ial_right_after_a_heading_table_or_code_tags_it(self) -> None:
+        # kramdown puts a block IAL with no blank line before it on the block above.
+        requirements, warnings, _ = read_draft(
+            "# T\n{: #req-tempo-charge-001}\n\nX MUST a.\n\n"
+            "| a | b |\n|---|---|\n| c | d |\n{: #req-tempo-charge-002}\n\nY MUST b.\n\n"
+            "~~~\ncode\n~~~\n{: #req-tempo-charge-003}\n\nZ MUST c.\n"
+        )
+        self.assertEqual([r.req_id for r in requirements], [None, None, None])
+        dropped = [w for w in warnings if "goes on the block before it" in w]
+        self.assertEqual(len(dropped), 3)
+
     def test_escaped_brace_in_ial_value(self) -> None:
         requirements, _, _ = read_draft('P MUST a.\n{: title="a\\}" id="req-tempo-charge-001"}\n')
         self.assertEqual([r.req_id for r in requirements], ["req-tempo-charge-001"])
