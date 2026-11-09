@@ -478,6 +478,17 @@ class FixtureTests(unittest.TestCase):
 
 
 class HelperTests(unittest.TestCase):
+    def test_duplicate_draft_names_keep_highest_revision(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            specs = Path(directory) / "specs" / "methods"
+            specs.mkdir(parents=True)
+            body = "---\ntitle: T\n---\n\n--- middle\n\nClients MUST do {0}.\n"
+            (specs / "draft-x-charge-00.md").write_text(body.format("old"))
+            (specs / "draft-x-charge-01.md").write_text(body.format("new"))
+            requirements, warnings, _ = extract_all(Path(directory))
+        self.assertEqual([r.file for r in requirements], ["specs/methods/draft-x-charge-01.md"])
+        self.assertTrue(any("skipped" in w for w in warnings))
+
     def test_git_commit_root_dirty_and_nested(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory) / "specs"

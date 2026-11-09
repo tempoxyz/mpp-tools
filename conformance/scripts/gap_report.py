@@ -271,8 +271,18 @@ def extract_all(specs_dir: Path) -> tuple[list[Requirement], list[str], dict[str
     requirements: list[Requirement] = []
     warnings: list[str] = []
     table_rows: dict[str, int] = {}
-    for path in draft_paths(specs_dir):
+    first_path: dict[str, str] = {}
+    # Highest revision first, so a stray older copy of a draft is the one skipped.
+    for path in sorted(draft_paths(specs_dir), key=lambda p: p.name, reverse=True):
         relative = path.relative_to(specs_dir).as_posix()
+        short = draft_short_name(path.name)
+        if short in first_path:
+            # Two files with one short name would merge their rules into one draft.
+            warnings.append(
+                f"{relative}: same draft name '{short}' as {first_path[short]}; skipped"
+            )
+            continue
+        first_path[short] = relative
         found, found_warnings, rows = extract_requirements(path, relative)
         requirements.extend(found)
         warnings.extend(found_warnings)
