@@ -485,6 +485,22 @@ class ReportTests(unittest.TestCase):
                     claims = load_claims(vectors, flows)
                 self.assertEqual([claim.source for claim in claims], ["vectors/challenge-id.json#good"])
                 self.assertIn("no expected value", claims[0].runner_error or "")
+        # Restricted to one adapter, the scenario crashes the file only for that adapter;
+        # the runner skips it, and runs the file normally, for every other adapter.
+        only_go = dict(base, name="bad", adapters=["go"], tests={"generate": True})
+        with tempfile.TemporaryDirectory() as directory:
+            vectors = Path(directory) / "vectors"
+            vectors.mkdir()
+            (vectors / "challenge-id.json").write_text(json.dumps(dict(source, scenarios=[good, only_go])), encoding="utf-8")
+            flows = Path(directory) / "flows.json"
+            flows.write_text(json.dumps({"version": "1.0.0", "cases": [{"name": "a", "path": "/a"}]}), encoding="utf-8")
+            claims = load_claims(vectors, flows)
+        self.assertEqual([claim.source for claim in claims], ["vectors/challenge-id.json#good"])
+        self.assertIsNone(claims[0].runner_error)
+        self.assertEqual(claims[0].crashed_adapters, ("go",))
+        capabilities = [claims[0].operation, *claims[0].operations] if claims[0].operation else []
+        self.assertFalse(claim_applies(claims[0], "go", capabilities))
+        self.assertTrue(claim_applies(claims[0], "python", capabilities))
         # An explicit expectation in tests.generate needs no expected.
         ok = dict(base, name="ok", tests={"generate": {"success": False, "error_type": "generation_error"}})
         with tempfile.TemporaryDirectory() as directory:

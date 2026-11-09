@@ -955,6 +955,10 @@ class Claim:
     # runner walks the file for an adapter it resolves the adapter's SDK version and parses
     # each such expression; if either raises, the whole file is aborted for that adapter.
     file_constraints: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    # Vector claims only: adapters for which the runner crashes on this claim's file (an
+    # adapter-restricted generate scenario with no expected value), so it covers nothing
+    # for them while the other adapters run the file normally.
+    crashed_adapters: tuple[str, ...] = ()
 
 
 def scenario_commands(vector: dict[str, Any], scenario: dict[str, Any]) -> tuple[str, ...]:
@@ -1036,6 +1040,8 @@ def load_claims(
         # over a file, and one invalid scenario aborts the whole file for every adapter. So
         # one bad scenario, tagged or not, makes every claim in the file coverage for nothing.
         file_error = None
+        # Adapters for which the runner crashes on this file, when only some of them do.
+        crashed: set[str] = set()
         commands = vector.get("commands", {})
         for scenario in vector["scenarios"]:
             try:
@@ -1045,7 +1051,11 @@ def load_claims(
                 break
             # A generate scenario whose tests.generate is missing or true is compared with
             # scenario["expected"]; without one the runner raises KeyError, which aborts
-            # the whole file (_run_scenarios lets it escape), so nothing in it runs.
+            # the whole file (_run_scenarios lets it escape), so nothing in it runs. The
+            # runner drops a scenario whose adapters list leaves the adapter out before it
+            # runs any, so such a scenario crashes the file only for the adapters it lists
+            # (all of them when it lists none). A version skip would also spare an adapter;
+            # it is not modelled, so this errs toward less coverage, never more.
             generate = scenario.get("tests", {}).get("generate")
             if (
                 commands.get("generate")
@@ -1053,6 +1063,10 @@ def load_claims(
                 and "expected" not in scenario
                 and generate in (None, True)
             ):
+                selected = scenario.get("adapters")
+                if selected:
+                    crashed.update(selected)
+                    continue
                 file_error = (
                     f"the runner crashes on its file (vectors/{path.name}#{scenario['name']} "
                     "has no expected value for its generate test)"
@@ -1098,6 +1112,7 @@ def load_claims(
                     sdk_versions=scenario.get("sdkVersions"),
                     runner_error=error,
                     file_constraints=file_constraints,
+                    crashed_adapters=tuple(sorted(crashed)),
                 )
             )
     flow_cases = load_flow_cases(flow_cases_path)
@@ -1314,6 +1329,8 @@ def claim_applies(
         # both the SDK never runs the case.
         return "challenge.parse" in capabilities and "credential.format" in capabilities
     if claim.adapters is not None and adapter not in claim.adapters:
+        return False
+    if adapter in claim.crashed_adapters:
         return False
     if claim.operation is not None and claim.operation not in capabilities:
         return False
