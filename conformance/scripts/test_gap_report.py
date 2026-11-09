@@ -2545,6 +2545,19 @@ class RendererTests(unittest.TestCase):
                 KramdownRfc(command)("# A\u2028\n".encode()), "1 1 # A\u2028\n"
             )
 
+    def test_render_refuses_include_directives(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            command = fake_kramdown(
+                Path(directory), "import sys\nprint(sys.stdin.read(), end='')\n"
+            )
+            for markdown in (b"# A\n{::include rules.md}\n", b"{::include-fold x.md}\n"):
+                with self.assertRaisesRegex(ValueError, "include"):
+                    KramdownRfc(command)(markdown)
+            # Inside a line it is prose, which kramdown-rfc never expands.
+            self.assertEqual(
+                KramdownRfc(command)(b"see {::include x}\n"), "see {::include x}\n"
+            )
+
     def test_render_failure_and_timeout_are_errors(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             failing = fake_kramdown(

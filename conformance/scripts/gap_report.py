@@ -87,6 +87,10 @@ RENDER_TIMEOUT_SECONDS = 300
 # which the report never reads, and KRAMDOWN_OFFLINE keeps reference lookups off the
 # network (a non-standalone render only declares references as entities anyway).
 RENDER_ENV = {"KRAMDOWN_SAFE": "1", "KRAMDOWN_NO_SOURCE": "1", "KRAMDOWN_OFFLINE": "1"}
+# An include directive kramdown-rfc expands unless KRAMDOWN_SAFE is set (its
+# process_includes pattern). A draft with one fails the render instead of losing the
+# rules the published build would include.
+INCLUDE_RE = re.compile(rb"^\{::include(?:-[a-z0-9.]+)*\s", re.MULTILINE)
 
 # Longest alternatives first so "MUST NOT" is not read as "MUST". keywords_in collapses
 # whitespace before matching, so a two-word keyword wrapped across lines ("MUST" at the
@@ -333,6 +337,11 @@ class KramdownRfc:
 
     def __call__(self, markdown: bytes) -> str:
         """Return the XML kramdown-rfc renders markdown to, or raise ValueError."""
+        if INCLUDE_RE.search(markdown):
+            raise ValueError(
+                "the draft uses {::include}, which safe mode does not expand, so the "
+                "rules it includes would be missed"
+            )
         try:
             result = subprocess.run(
                 self.render_command(),
