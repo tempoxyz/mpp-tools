@@ -1337,9 +1337,26 @@ def first_challenge_case(
                 body.encode("utf-8")
             except UnicodeEncodeError:
                 return None
+    # perform_request also adds that case's Accept-Payment and Idempotency-Key headers
+    # (str() of each truthy value); http.client refuses a value with CR or LF and cannot
+    # encode one outside Latin-1, so such a case never sends its first request.
+    if first is not None:
+        for key in ("accept_payment", "idempotency_key"):
+            value = first.get(key)
+            if value and not header_value_sendable(str(value)):
+                return None
     # flow_runner appends that case's initial_query to its path (flow_case_url).
     query = str((first or {}).get("initial_query") or "")
     return answering_case(first, cases_by_path, method=method, query=query)
+
+
+def header_value_sendable(value: str) -> bool:
+    """Whether http.client sends this header value: Latin-1 only, with no CR or LF.
+
+    http.client accepts a CR or LF followed by a space or tab (obsolete line folding),
+    but the compliance server's parser rejects those, so they count as unsendable too.
+    """
+    return "\r" not in value and "\n" not in value and all(ord(char) < 256 for char in value)
 
 
 # Printable ASCII in the WHATWG path percent-encode set (URL Standard, section 1.3).
@@ -1400,6 +1417,23 @@ def charge_request_fits(request: Any) -> bool:
     # rejects anything but this ISO 8601 form, so the server throws before any 402.
     if not MPPX_DATETIME.fullmatch(request["expires"]):
         return False
+    # The server spreads the whole request into mpp.charge, which also reads description,
+    # meta and scope as Challenge options (Challenge schema: description a string, meta a
+    # record of strings, scope merged into meta) and throws on a mistyped one or on a scope
+    # that conflicts with meta._mppx_scope. Only the plainly valid forms count.
+    if "description" in request and not isinstance(request["description"], str):
+        return False
+    meta = request.get("meta")
+    if "meta" in request and not (
+        isinstance(meta, dict) and all(isinstance(value, str) for value in meta.values())
+    ):
+        return False
+    if "scope" in request:
+        scope = request["scope"]
+        if not isinstance(scope, str):
+            return False
+        if isinstance(meta, dict) and "_mppx_scope" in meta and meta["_mppx_scope"] != scope:
+            return False
     return "resource" not in request or isinstance(request["resource"], str)
 
 

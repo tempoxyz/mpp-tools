@@ -437,6 +437,30 @@ class ReportTests(unittest.TestCase):
             "parse-nothing request", legacy_input_error({"parse": "parse-nothing"}, good) or ""
         )
 
+    def test_charge_request_needs_valid_challenge_options(self) -> None:
+        base = {"amount": "1", "currency": "0x1", "recipient": "0x2", "expires": "2099-01-01T00:00:00Z"}
+        for extra, fits in (
+            ({"description": "Coffee"}, True),
+            ({"description": 1}, False),
+            ({"meta": {"a": "b"}}, True),
+            ({"meta": {"a": 1}}, False),
+            ({"meta": "x"}, False),
+            ({"scope": "/r"}, True),
+            ({"scope": 1}, False),
+            ({"scope": "/r", "meta": {"_mppx_scope": "/other"}}, False),
+            ({"scope": "/r", "meta": {"_mppx_scope": "/r"}}, True),
+        ):
+            with self.subTest(extra=extra):
+                self.assertEqual(charge_request_fits({**base, **extra}), fits)
+
+    def test_unsendable_first_request_headers_never_reach_the_server(self) -> None:
+        for key in ("accept_payment", "idempotency_key"):
+            for value, sendable in (("tempo/charge", True), ("a\r\nX: y", False), ("a\n", False), ("—", False)):
+                case = {"name": "h", "path": "/h", key: value}
+                with self.subTest(key=key, value=value):
+                    found = first_challenge_case(case, {"/h": case})
+                    self.assertEqual(found is not None, sendable)
+
     def test_unencodable_first_request_body_never_reaches_the_server(self) -> None:
         good = {"name": "g", "path": "/g", "http_method": "POST", "body": "{}"}
         self.assertEqual(first_challenge_case(good, {"/g": good}), good)
