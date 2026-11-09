@@ -191,13 +191,40 @@ class ExtractTests(unittest.TestCase):
             encoding="utf-8",
         )
         requirements, warnings, _ = extract_requirements(self.path, "specs/x.md")
+        # kramdown holds both for the next block; the later one wins (kramdown-rfc).
         self.assertEqual(
-            [requirement.req_id for requirement in requirements], [None, None]
+            [requirement.req_id for requirement in requirements], [None, "req-tempo-charge-002"]
         )
-        self.assertEqual(len(warnings), 2)
-        self.assertIn(
-            "req-tempo-charge-001 is not on the line right after a rule", warnings[0]
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("req-tempo-charge-001 is replaced by the IAL on line 7", warnings[0])
+
+    def test_ial_before_a_paragraph_tags_it(self) -> None:
+        # Checked with kramdown-rfc: a held IAL tags the next paragraph, even across a
+        # blank line, and one after the paragraph wins over it.
+        self.path.write_text(
+            "# A\n\n{: #req-x-001}\nX MUST hold.\n\n{: #req-x-002}\n\nY MUST hold.\n\n"
+            "{: #req-x-003}\nZ MUST hold.\n{: #req-x-004}\n",
+            encoding="utf-8",
         )
+        requirements, warnings, _ = extract_requirements(self.path, "specs/x.md")
+        self.assertEqual(
+            [r.req_id for r in requirements], ["req-x-001", "req-x-002", "req-x-004"]
+        )
+        # Only the foreign-prefix warnings (specs/x.md is no draft named x): none dropped.
+        self.assertFalse([w for w in warnings if "prefix" not in w])
+
+    def test_held_ial_on_a_heading_or_list_tags_nothing(self) -> None:
+        self.path.write_text(
+            "# A\n\n{: #req-x-001}\n# B\n\nX MUST hold.\n\n{: #req-x-002}\n- Y MUST hold.\n\n"
+            "{: #req-x-003}\n",
+            encoding="utf-8",
+        )
+        requirements, warnings, _ = extract_requirements(self.path, "specs/x.md")
+        self.assertEqual([r.req_id for r in requirements], [None, None])
+        self.assertEqual(len(warnings), 3)
+        self.assertIn("req-x-001 goes on a heading", warnings[0])
+        self.assertIn("req-x-002 goes on the list, not its item", warnings[1])
+        self.assertIn("req-x-003 goes on no block after it", warnings[2])
 
     def test_front_matter_ending_with_section_marker(self) -> None:
         self.path.write_text(

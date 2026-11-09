@@ -490,13 +490,31 @@ def extract_requirements(
     # one any of them sets: '{: #req-core-001}' then '{: #note}' leaves it 'note', with
     # no requirement ID. The unit is flushed once the run of IAL lines ends.
     ial_bodies: list[str] = []
+    # A block IAL with no block right before it, held for the next block as kramdown
+    # does, even across blank lines: '{: #req-core-001}\n\nClient MUST pay.' tags the
+    # paragraph (checked with kramdown-rfc). (ID, line). A later held IAL replaces it.
+    held: tuple[str, int] | None = None
+    # The held ID the current unit took when it started, applied when it is flushed.
+    unit_held: str | None = None
+
+    def drop_held(where: str) -> None:
+        """Discard the held IAL at a block that is no rule, warning if it named one."""
+        nonlocal held
+        if held and held[0].startswith("req-"):
+            warnings.append(f"{relative}:{held[1]}: {held[0]} goes on {where}, so it tags nothing")
+        held = None
 
     def flush(req_id: str | None = None) -> None:
-        nonlocal unit
+        nonlocal unit, unit_held
         if not unit:
             return
         text = "\n".join(unit)
         unit = []
+        # An IAL after the block wins over one held before it: kramdown applies both in
+        # order, so the later ID is the element's.
+        if req_id is None and unit_held and unit_held.startswith("req-"):
+            req_id = unit_held
+        unit_held = None
         item = LIST_ITEM_RE.match(text)
         if item:
             leading = LEADING_IAL_RE.match(text, item.end())
@@ -561,6 +579,7 @@ def extract_requirements(
 
     def apply_ials() -> None:
         """Flush the unit with the ID its run of block IALs gives it, if one is pending."""
+        nonlocal unit_held
         if not ial_bodies:
             return
         final = None
@@ -569,6 +588,8 @@ def extract_requirements(
             if found is not None:  # an empty id="" replaces an earlier ID too
                 final = found
         ial_bodies.clear()
+        if final is not None:
+            unit_held = None  # any ID after the block replaces one held before it
         flush(final if final and final.startswith("req-") else None)
 
     def is_block_ial(line: str) -> bool:
@@ -615,6 +636,7 @@ def extract_requirements(
                 # the section's end is a block boundary for a table that ends it.
                 commit_table()
                 flush()
+                drop_held("no block before the section ends")
                 fence, comment, item_indent, boundary = None, None, 0, True
                 in_front_matter = False
                 if marker.group("name"):
@@ -663,9 +685,11 @@ def extract_requirements(
                 item_indent = 0  # a line left of the item's text ends its list
             if fence_match and len(fence_match.group(1)) <= item_indent + 3:
                 flush()
+                drop_held("a code block")
                 fence, fence_base = fence_match.group(2), item_indent
                 continue
             if stripped and not unit and column >= item_indent + 4:
+                drop_held("a code block")
                 continue  # indented code block: kramdown renders it as code, not prose
         visible, comment, had_comment = strip_comments(line, comment)
         if had_comment:
@@ -714,12 +738,17 @@ def extract_requirements(
             if unit and is_block_ial(line):
                 ial_bodies.append(ial.group("body"))  # applied once the run of IALs ends
                 continue
-            req_id = ial_req_id(ial.group("body"), known_alds)
-            if req_id and not unit:
-                warnings.append(
-                    f"{relative}:{number}: {req_id} is not on the line right after a rule, so it tags nothing"
-                )
-            flush(req_id)
+            if not unit:
+                # No block right before it: kramdown holds it for the next block.
+                found_id = ial_id(ial.group("body"), known_alds)
+                if found_id is not None:
+                    if held and held[0].startswith("req-") and found_id != held[0]:
+                        warnings.append(
+                            f"{relative}:{held[1]}: {held[0]} is replaced by the IAL on line {number}, so it tags nothing"
+                        )
+                    held = (found_id, number)
+                continue
+            flush(ial_req_id(ial.group("body"), known_alds))
             continue
         if not stripped:
             flush()
@@ -736,6 +765,7 @@ def extract_requirements(
         heading = parse_heading(line)
         if heading:
             flush()
+            drop_held("a heading")
             item_indent = 0
             section = heading[1] or slugify(heading[0])
             continue
@@ -753,9 +783,14 @@ def extract_requirements(
             # A list item's text starts its own block boundary; other text needs one.
             row = line[item.end() :] if item else stripped
             if (item or at_boundary) and is_table_line(row):
+                drop_held("a table")
                 pending.append((number, stripped, row.strip()))
                 pending_in_item = bool(item)
                 continue
+            if item:
+                drop_held("the list, not its item")
+            elif held:
+                unit_held, held = held[0], None
             unit_line = number
         unit.append(stripped)
     apply_ials()
@@ -786,6 +821,7 @@ def extract_requirements(
             warnings.append(
                 f"{relative}:{requirement.line}: {requirement.req_id} does not use this draft's prefix req-{draft}-; not counted as covered"
             )
+    drop_held("no block after it")
     return requirements, warnings, table_rows
 
 
