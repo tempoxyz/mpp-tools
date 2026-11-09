@@ -13,6 +13,11 @@
     "--build"
   ],
   "cwd": ".",
+  "profile": [
+    "core",
+    "tempo-charge",
+    "stripe-charge"
+  ],
   "capabilities": [
     "challenge.parse",
     "challenge.format",

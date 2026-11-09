@@ -9,3 +9,5 @@ results.json
 golden/adapter.mjs
 adapters/ruby/.bundle/
 adapters/ruby/vendor/
+gap-report.json
+gap-report.md
