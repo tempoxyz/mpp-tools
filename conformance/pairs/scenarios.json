@@ -153,6 +153,14 @@
             "replayed"
           ],
           "reason": "mpp-go answers a replayed credential with 403 verification-failed and no challenge (ErrCredentialReplayed, so auto-paying clients do not pay again); mppx answers 402 verification-failed with a fresh challenge."
+        },
+        {
+          "client": "*",
+          "server": "rust",
+          "steps": [
+            "replayed"
+          ],
+          "reason": "mpp-rs answers a replayed credential with 403 verification-failed and no challenge (ErrorCode::CredentialReplayed, so auto-paying clients do not pay again); mppx answers 402 verification-failed with a fresh challenge."
         }
       ]
     },

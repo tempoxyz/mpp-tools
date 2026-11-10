@@ -14,6 +14,8 @@ use std::net::TcpListener;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 
+mod http_server;
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2 {
@@ -431,6 +433,21 @@ fn handle_adapter_request() {
         match run_http_payment_request(&input_value) {
             Ok(value) => print_adapter_success(value),
             Err((error_type, message)) => print_adapter_error(&message, error_type),
+        }
+        return;
+    }
+
+    if op == "http.server" {
+        match http_server::HttpServer::start(&input_value).and_then(|server| {
+            let url = server.url()?;
+            Ok((server, url))
+        }) {
+            Ok((server, url)) => {
+                print_adapter_success(json!({ "url": url }));
+                let _ = io::stdout().flush();
+                server.serve();
+            }
+            Err(message) => print_adapter_error(&message, "http_error"),
         }
         return;
     }
@@ -1276,7 +1293,7 @@ fn generate_conformance_challenge_id(params: ChallengeIdParams<'_>) -> Result<St
     const MINIMUM_SECRET_KEY_BYTES: usize = 32;
     type HmacSha256 = Hmac<Sha256>;
 
-    if params.secret_key.as_bytes().len() < MINIMUM_SECRET_KEY_BYTES {
+    if params.secret_key.len() < MINIMUM_SECRET_KEY_BYTES {
         return Err(format!(
             "secretKey must be at least {} bytes",
             MINIMUM_SECRET_KEY_BYTES
