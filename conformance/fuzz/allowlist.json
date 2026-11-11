@@ -134,7 +134,7 @@
       ],
       "messagePattern": "(?i)method",
       "category": "harmless",
-      "reason": "pympp (1*LOWERALPHA) and mpp-go reject method ids with digits, ':', '_' or '-' after the first letter, which mppx and mpp-rs accept. vectors/www-authenticate.json extended_method_identifier is scoped to typescript and rust for the same reason."
+      "reason": "pympp and mpp-go follow the method grammar (1*LOWERALPHA) and reject digits, ':', '_' or '-', which the pinned mppx and mpp-rs still accept. Remove once the pinned mppx rejects them too (vectors/www-authenticate.json error_extended_method_identifier)."
     },
     {
       "id": "empty-realm-rejected",

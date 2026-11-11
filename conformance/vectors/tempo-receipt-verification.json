@@ -1,7 +1,7 @@
 {
   "version": "2.0.0",
   "spec_ref": "MPP Tempo receipt fixture verification",
-  "description": "Server-side Tempo receipt fixture verification must require auto-generated attribution memos to bind to the credential challenge id and realm when no explicit server memo is configured. These staged vectors use a transaction-hash credential with a did:pkh source and TIP-20 receipt logs (each TransferWithMemo paired with its Transfer), and split requests and does not exercise signed transaction deserialization.",
+  "description": "Server-side Tempo receipt fixture verification must accept a primary transfer without an attribution memo, or with a memo not in attribution format, when no explicit server memo is configured, and reject an attribution memo bound to another challenge id or realm. These staged vectors use a transaction-hash credential with a did:pkh source and TIP-20 receipt logs (each TransferWithMemo paired with its Transfer), and split requests and does not exercise signed transaction deserialization.",
   "commands": {
     "operation": "tempo.receipt.verify"
   },
@@ -71,14 +71,19 @@
       }
     },
     {
-      "name": "plain_transfer_without_challenge_bound_memo",
-      "description": "A matching plain Transfer log is not sufficient for a transaction credential when no explicit server memo is configured.",
+      "name": "plain_transfer_without_memo_accepted",
+      "description": "A matching plain Transfer log without a memo is accepted when no explicit server memo is configured: the attribution memo is optional.",
       "tags": [
-        "security",
         "tempo",
-        "challenge-bound-memo",
-        "oss-302"
+        "attribution-memo"
       ],
+      "sdkVersions": {
+        "typescript": ">0.18.0",
+        "rust": ">0.20.0",
+        "python": ">0.22.0",
+        "go": ">0.9.0",
+        "ruby": ">0.1.10"
+      },
       "input": {
         "credential": {
           "challenge": {
@@ -117,21 +122,27 @@
         }
       },
       "expected": {
-        "ok": false,
-        "error": {
-          "type": "verification_error"
+        "ok": true,
+        "value": {
+          "status": "success",
+          "reference": "0x1111111111111111111111111111111111111111111111111111111111111111"
         }
       }
     },
     {
-      "name": "non_mpp_memo_rejected",
-      "description": "A matching TransferWithMemo log with a non-MPP memo is not accepted as challenge-bound attribution.",
+      "name": "non_attribution_memo_accepted",
+      "description": "A matching TransferWithMemo log whose memo is not in attribution format is accepted when no explicit server memo is configured.",
       "tags": [
-        "security",
         "tempo",
-        "challenge-bound-memo",
-        "oss-302"
+        "attribution-memo"
       ],
+      "sdkVersions": {
+        "typescript": ">0.18.0",
+        "rust": ">0.20.0",
+        "python": ">0.22.0",
+        "go": ">0.9.0",
+        "ruby": ">0.1.10"
+      },
       "input": {
         "credential": {
           "challenge": {
@@ -181,15 +192,16 @@
         }
       },
       "expected": {
-        "ok": false,
-        "error": {
-          "type": "verification_error"
+        "ok": true,
+        "value": {
+          "status": "success",
+          "reference": "0x1111111111111111111111111111111111111111111111111111111111111111"
         }
       }
     },
     {
       "name": "unrelated_challenge_memo_rejected",
-      "description": "A matching TransferWithMemo log with an MPP memo for another challenge is rejected.",
+      "description": "A matching TransferWithMemo log with an attribution memo for another challenge is rejected.",
       "tags": [
         "security",
         "tempo",
@@ -253,7 +265,7 @@
     },
     {
       "name": "unrelated_realm_memo_rejected",
-      "description": "A matching TransferWithMemo log with an MPP memo for another server realm is rejected.",
+      "description": "A matching TransferWithMemo log with an attribution memo for another server realm is rejected.",
       "tags": [
         "security",
         "tempo",

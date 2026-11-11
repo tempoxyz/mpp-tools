@@ -3,7 +3,7 @@
   "op": "server.verify",
   "input": {
     "realm": "api.example.com",
-    "secretKey": "secret-key",
+    "secretKey": "server-verification-secret-32-bytes-minimum",
     "method": "tempo",
     "intent": "charge",
     "request": {
@@ -14,7 +14,7 @@
     "expires": "2099-01-01T00:00:00Z",
     "credential": {
       "challenge": {
-        "id": "Ip25HCkqcMaW6FT_ziOG9BT58-7_KEwkzhdUwX8tmI8",
+        "id": "xMxFn4gdQUiTjlszx7BRpIZ37dJiOsrVxNyiD9RxWb4",
         "realm": "api.example.com",
         "method": "tempo",
         "intent": "charge",

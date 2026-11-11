@@ -109,11 +109,22 @@
       "expectedFailures": [
         {
           "client": "*",
+          "server": "typescript",
+          "steps": [
+            "replayed"
+          ],
+          "fields": [
+            "body.type"
+          ],
+          "reason": "mppx 0.11.0 answers a replayed credential with verification-failed; the core spec answers 402 invalid-challenge with a fresh challenge."
+        },
+        {
+          "client": "*",
           "server": "python",
           "steps": [
             "replayed"
           ],
-          "reason": "pympp answers a replayed credential with 403 verification-failed and no challenge (CredentialReplayedError, so auto-paying clients do not pay again); mppx answers 402 verification-failed with a fresh challenge."
+          "reason": "pympp answers a replayed credential with 403 verification-failed and no challenge (CredentialReplayedError); the core spec answers 402 invalid-challenge with a fresh challenge."
         },
         {
           "client": "rust",
@@ -152,7 +163,7 @@
           "steps": [
             "replayed"
           ],
-          "reason": "mpp-go answers a replayed credential with 403 verification-failed and no challenge (ErrCredentialReplayed, so auto-paying clients do not pay again); mppx answers 402 verification-failed with a fresh challenge."
+          "reason": "mpp-go answers a replayed credential with 403 verification-failed and no challenge (ErrCredentialReplayed); the core spec answers 402 invalid-challenge with a fresh challenge."
         }
       ]
     },
@@ -801,6 +812,96 @@
           "steps": [
             "empty_payment",
             "other_scheme"
+          ],
+          "fields": [
+            "body",
+            "contentType"
+          ],
+          "reason": "mpp-go answers an unpaid request with a bare 402 (WWW-Authenticate and Cache-Control only, no body); mppx adds an application/problem+json payment-required body."
+        }
+      ]
+    },
+    {
+      "name": "multiple_credentials",
+      "description": "A request with more than one Payment credential, across Authorization and Payment-Authorization or comma-joined in one field, gets 400 bad-request and no challenge.",
+      "server": {
+        "realm": "pairs.conformance",
+        "routes": [
+          {
+            "path": "/paid",
+            "offers": [
+              {
+                "method": "tempo",
+                "intent": "charge",
+                "request": {
+                  "amount": "1000",
+                  "currency": "USD",
+                  "recipient": "merchant"
+                },
+                "expires": "2099-01-01T00:00:00Z"
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "name": "unpaid",
+          "kind": "request",
+          "path": "/paid"
+        },
+        {
+          "name": "both_fields",
+          "kind": "request",
+          "path": "/paid",
+          "headers": {
+            "Payment-Authorization": "Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJvdGhlci1jaGFsbGVuZ2UiLCJyZWFsbSI6InBhaXJzLmNvbmZvcm1hbmNlIiwibWV0aG9kIjoidGVtcG8iLCJpbnRlbnQiOiJjaGFyZ2UiLCJyZXF1ZXN0IjoiZTMwIn0sInBheWxvYWQiOnsidHlwZSI6InRyYW5zYWN0aW9uIiwic2lnbmF0dXJlIjoiMHhhYmMxMjMifX0"
+          },
+          "credential": {
+            "from": "unpaid",
+            "header": "Authorization"
+          }
+        },
+        {
+          "name": "comma_joined",
+          "kind": "request",
+          "path": "/paid",
+          "authorization": "Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJmaXJzdC1jaGFsbGVuZ2UiLCJyZWFsbSI6InBhaXJzLmNvbmZvcm1hbmNlIiwibWV0aG9kIjoidGVtcG8iLCJpbnRlbnQiOiJjaGFyZ2UiLCJyZXF1ZXN0IjoiZTMwIn0sInBheWxvYWQiOnsidHlwZSI6InRyYW5zYWN0aW9uIiwic2lnbmF0dXJlIjoiMHhhYmMxMjMifX0, Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJzZWNvbmQtY2hhbGxlbmdlIiwicmVhbG0iOiJwYWlycy5jb25mb3JtYW5jZSIsIm1ldGhvZCI6InRlbXBvIiwiaW50ZW50IjoiY2hhcmdlIiwicmVxdWVzdCI6ImUzMCJ9LCJwYXlsb2FkIjp7InR5cGUiOiJ0cmFuc2FjdGlvbiIsInNpZ25hdHVyZSI6IjB4YWJjMTIzIn19"
+        }
+      ],
+      "expectedFailures": [
+        {
+          "client": "*",
+          "server": "typescript",
+          "steps": [
+            "both_fields",
+            "comma_joined"
+          ],
+          "reason": "mppx 0.11.0 does not count Payment credentials yet; the core spec answers a request with more than one Payment credential with 400 bad-request and no challenge."
+        },
+        {
+          "client": "*",
+          "server": "python",
+          "steps": [
+            "both_fields",
+            "comma_joined"
+          ],
+          "reason": "pympp does not count Payment credentials yet; the core spec answers a request with more than one Payment credential with 400 bad-request and no challenge."
+        },
+        {
+          "client": "*",
+          "server": "go",
+          "steps": [
+            "both_fields",
+            "comma_joined"
+          ],
+          "reason": "mpp-go v0.6.0 does not count Payment credentials yet; the core spec answers a request with more than one Payment credential with 400 bad-request and no challenge."
+        },
+        {
+          "client": "*",
+          "server": "go",
+          "steps": [
+            "unpaid"
           ],
           "fields": [
             "body",

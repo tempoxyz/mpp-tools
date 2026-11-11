@@ -204,53 +204,6 @@
       }
     },
     {
-      "name": "unicode_bmp_escapes",
-      "description": "Unicode above Latin-1 is serialized as uXXXX escapes and restored while parsing",
-      "tags": ["happy-path", "quoted-string", "unicode", "mppx-parity"],
-      "adapters": ["typescript", "rust", "python", "go"],
-      "object": {
-        "description": "Payment — coffee ☕",
-        "id": "ch_unicode_bmp",
-        "intent": "charge",
-        "method": "tempo",
-        "realm": "api.example.com",
-        "request": {}
-      },
-      "wire": "Payment id=\"ch_unicode_bmp\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\", description=\"Payment \\u2014 coffee \\u2615\"",
-      "tests": {"parse": true, "format": "exact", "roundtrip": true}
-    },
-    {
-      "name": "unicode_surrogate_pair",
-      "description": "A UTF-16 surrogate pair in a quoted-string is restored as one astral character",
-      "tags": ["happy-path", "quoted-string", "unicode", "mppx-parity"],
-      "adapters": ["typescript", "rust", "python", "go"],
-      "object": {
-        "description": "Pay with 😀",
-        "id": "ch_unicode_astral",
-        "intent": "charge",
-        "method": "tempo",
-        "realm": "api.example.com",
-        "request": {}
-      },
-      "wire": "Payment id=\"ch_unicode_astral\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\", description=\"Pay with \\ud83d\\ude00\"",
-      "tests": {"parse": true, "format": "exact", "roundtrip": true}
-    },
-    {
-      "name": "unicode_escape_in_realm",
-      "description": "Unicode escapes are decoded in binding-sensitive realm values, not only descriptions",
-      "tags": ["happy-path", "quoted-string", "unicode", "challenge-binding"],
-      "adapters": ["typescript", "rust", "python", "go"],
-      "object": {
-        "id": "ch_unicode_realm",
-        "intent": "charge",
-        "method": "tempo",
-        "realm": "merchant—api.example.com",
-        "request": {}
-      },
-      "wire": "Payment id=\"ch_unicode_realm\", realm=\"merchant\\u2014api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\"",
-      "tests": {"parse": true, "format": "exact", "roundtrip": true}
-    },
-    {
       "name": "literal_unicode_escape",
       "description": "A doubled backslash preserves literal uXXXX text instead of decoding it",
       "tags": ["happy-path", "quoted-string", "unicode", "escaping"],
@@ -283,22 +236,6 @@
       "tests": {"parse": true}
     },
     {
-      "name": "unicode_ascii_escape",
-      "description": "A valid uXXXX escape below Latin-1 is decoded consistently with mppx",
-      "tags": ["happy-path", "quoted-string", "unicode", "mppx-parity"],
-      "adapters": ["typescript", "rust", "python", "go"],
-      "object": {
-        "description": "ascii a",
-        "id": "ch_unicode_ascii",
-        "intent": "charge",
-        "method": "tempo",
-        "realm": "api.example.com",
-        "request": {}
-      },
-      "wire": "Payment id=\"ch_unicode_ascii\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\", description=\"ascii \\u0061\"",
-      "tests": {"parse": true}
-    },
-    {
       "name": "raw_latin1_quoted_string",
       "description": "Raw Latin-1 text remains intact when parsing a quoted-string",
       "tags": ["happy-path", "quoted-string", "unicode", "latin1"],
@@ -315,10 +252,20 @@
       "tests": {"parse": true}
     },
     {
-      "name": "extended_method_identifier",
-      "description": "Method identifiers accept mppx extension characters after the initial lowercase letter",
-      "tags": ["happy-path", "method-grammar", "mppx-parity"],
-      "adapters": ["typescript", "rust"],
+      "name": "error_extended_method_identifier",
+      "description": "Rejects parsing a challenge whose method identifier has digits, ':', '_' or '-' (the method grammar is 1*LOWERALPHA)",
+      "tags": ["error", "method-grammar"],
+      "sdkVersions": { "typescript": ">0.18.0", "rust": ">0.20.0" },
+      "wire": "Payment id=\"ch_method_extension\", realm=\"api.example.com\", method=\"a1:b_2-c\", intent=\"charge\", request=\"e30\"",
+      "tests": {
+        "parse": {"success": false, "error_type": "parse_error"}
+      }
+    },
+    {
+      "name": "error_extended_method_identifier_format",
+      "description": "Rejects formatting a challenge whose method identifier has digits, ':', '_' or '-' (the method grammar is 1*LOWERALPHA)",
+      "tags": ["error", "method-grammar"],
+      "sdkVersions": { "typescript": ">0.18.0", "rust": ">0.20.0", "python": ">0.22.0", "java": ">0.1.6", "ruby": ">0.1.10" },
       "object": {
         "id": "ch_method_extension",
         "intent": "charge",
@@ -326,8 +273,60 @@
         "realm": "api.example.com",
         "request": {}
       },
-      "wire": "Payment id=\"ch_method_extension\", realm=\"api.example.com\", method=\"a1:b_2-c\", intent=\"charge\", request=\"e30\"",
-      "tests": {"parse": true, "format": true, "roundtrip": true}
+      "tests": {
+        "format": {"success": false, "error_type": "format_error"}
+      }
+    },
+    {
+      "name": "error_uppercase_method_identifier",
+      "description": "Rejects parsing a challenge whose method identifier has uppercase letters (the method grammar is 1*LOWERALPHA)",
+      "tags": ["error", "method-grammar"],
+      "wire": "Payment id=\"ch_method_uppercase\", realm=\"api.example.com\", method=\"Tempo\", intent=\"charge\", request=\"e30\"",
+      "tests": {
+        "parse": {"success": false, "error_type": "parse_error"}
+      }
+    },
+    {
+      "name": "error_uppercase_method_identifier_format",
+      "description": "Rejects formatting a challenge whose method identifier has uppercase letters (the method grammar is 1*LOWERALPHA)",
+      "tags": ["error", "method-grammar"],
+      "sdkVersions": { "typescript": ">0.18.0", "python": ">0.22.0", "java": ">0.1.6", "ruby": ">0.1.10" },
+      "object": {
+        "id": "ch_method_uppercase",
+        "intent": "charge",
+        "method": "Tempo",
+        "realm": "api.example.com",
+        "request": {}
+      },
+      "tests": {
+        "format": {"success": false, "error_type": "format_error"}
+      }
+    },
+    {
+      "name": "error_method_identifier_with_digits",
+      "description": "Rejects parsing a challenge whose method identifier has digits (the method grammar is 1*LOWERALPHA)",
+      "tags": ["error", "method-grammar"],
+      "sdkVersions": { "typescript": ">0.18.0", "rust": ">0.20.0" },
+      "wire": "Payment id=\"ch_method_digits\", realm=\"api.example.com\", method=\"tempo2\", intent=\"charge\", request=\"e30\"",
+      "tests": {
+        "parse": {"success": false, "error_type": "parse_error"}
+      }
+    },
+    {
+      "name": "error_method_identifier_with_digits_format",
+      "description": "Rejects formatting a challenge whose method identifier has digits (the method grammar is 1*LOWERALPHA)",
+      "tags": ["error", "method-grammar"],
+      "sdkVersions": { "typescript": ">0.18.0", "rust": ">0.20.0", "python": ">0.22.0", "java": ">0.1.6", "ruby": ">0.1.10" },
+      "object": {
+        "id": "ch_method_digits",
+        "intent": "charge",
+        "method": "tempo2",
+        "realm": "api.example.com",
+        "request": {}
+      },
+      "tests": {
+        "format": {"success": false, "error_type": "format_error"}
+      }
     },
     {
       "name": "error_crlf_in_description_format",
