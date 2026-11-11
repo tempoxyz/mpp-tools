@@ -162,7 +162,7 @@
     },
     {
       "name": "non_attribution_memo_cosigned",
-      "description": "A fee-payer envelope whose transfer memo is not in attribution format is cosigned: a pull credential may carry any memo when no explicit server memo is configured.",
+      "description": "A fee-payer envelope whose transfer memo is not in attribution format is cosigned: when no explicit server memo is configured, a pull credential may carry any memo that is not an attribution memo.",
       "tags": ["happy-path", "fee-payer", "attribution-memo"],
       "sdkVersions": { "ruby": ">0.1.10" },
       "input": {
@@ -213,9 +213,9 @@
       }
     },
     {
-      "name": "other_realm_memo_cosigned",
-      "description": "A fee-payer envelope whose transfer carries another realm's attribution memo is cosigned: for a pull credential only an attribution memo of this realm bound to a different challenge is rejected.",
-      "tags": ["happy-path", "fee-payer", "attribution-memo"],
+      "name": "other_realm_memo_rejected",
+      "description": "A fee-payer envelope whose transfer carries another realm's attribution memo is rejected before sponsor cosigning: a pull credential may carry only an attribution memo for this realm and this challenge, since the transaction could otherwise later be presented as a push credential at the other realm.",
+      "tags": ["security", "fee-payer", "attribution-memo"],
       "sdkVersions": { "ruby": ">0.1.10" },
       "input": {
         "payerPrivateKey": "0x1111111111111111111111111111111111111111111111111111111111111111",
@@ -254,13 +254,10 @@
         }
       },
       "expected": {
-        "ok": true,
-        "value": {
-          "type": "0x76",
-          "feeToken": "0x20c0000000000000000000000000000000000000",
-          "feePayerSignaturePresent": true,
-          "accessListLength": 0,
-          "callCount": 1
+        "ok": false,
+        "error": {
+          "type": "verification_error",
+          "messageContains": "no matching payment call found"
         }
       }
     },
