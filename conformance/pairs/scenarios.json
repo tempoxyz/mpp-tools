@@ -109,17 +109,6 @@
       "expectedFailures": [
         {
           "client": "*",
-          "server": "typescript",
-          "steps": [
-            "replayed"
-          ],
-          "fields": [
-            "body.type"
-          ],
-          "reason": "mppx 0.11.0 answers a replayed credential with verification-failed; the core spec answers 402 invalid-challenge with a fresh challenge."
-        },
-        {
-          "client": "*",
           "server": "python",
           "steps": [
             "replayed"

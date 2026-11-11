@@ -204,6 +204,22 @@
       }
     },
     {
+      "name": "unicode_escape_in_realm_is_quoted_pair",
+      "description": "A valid uXXXX escape in the binding-sensitive realm follows quoted-pair semantics: the backslash is dropped and the escape is not decoded",
+      "tags": ["happy-path", "quoted-string", "unicode", "challenge-binding"],
+      "adapters": ["typescript", "rust", "python", "go"],
+      "sdkVersions": { "typescript": ">0.18.0", "rust": ">0.20.0", "python": ">0.22.0", "go": ">0.9.0" },
+      "object": {
+        "id": "ch_unicode_realm",
+        "intent": "charge",
+        "method": "tempo",
+        "realm": "merchantu2014api.example.com",
+        "request": {}
+      },
+      "wire": "Payment id=\"ch_unicode_realm\", realm=\"merchant\\u2014api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\"",
+      "tests": {"parse": true}
+    },
+    {
       "name": "literal_unicode_escape",
       "description": "A doubled backslash preserves literal uXXXX text instead of decoding it",
       "tags": ["happy-path", "quoted-string", "unicode", "escaping"],

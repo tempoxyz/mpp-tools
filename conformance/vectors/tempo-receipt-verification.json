@@ -1,7 +1,7 @@
 {
   "version": "2.0.0",
   "spec_ref": "MPP Tempo receipt fixture verification",
-  "description": "Server-side Tempo receipt fixture verification must accept a primary transfer without an attribution memo, or with a memo not in attribution format, when no explicit server memo is configured, and reject an attribution memo bound to another challenge id or realm. These staged vectors use a transaction-hash credential with a did:pkh source and TIP-20 receipt logs (each TransferWithMemo paired with its Transfer), and split requests and does not exercise signed transaction deserialization.",
+  "description": "Server-side Tempo receipt fixture verification of push (hash) credentials must require the primary transfer to carry an attribution memo bound to the credential challenge id and realm when no explicit server memo is configured: a plain transfer, a memo not in attribution format, or an attribution memo for another challenge or realm is rejected. These staged vectors use a transaction-hash credential with a did:pkh source and TIP-20 receipt logs (each TransferWithMemo paired with its Transfer), and split requests and does not exercise signed transaction deserialization.",
   "commands": {
     "operation": "tempo.receipt.verify"
   },
@@ -71,19 +71,14 @@
       }
     },
     {
-      "name": "plain_transfer_without_memo_accepted",
-      "description": "A matching plain Transfer log without a memo is accepted when no explicit server memo is configured: the attribution memo is optional.",
+      "name": "plain_transfer_without_challenge_bound_memo",
+      "description": "A matching plain Transfer log is not sufficient for a push (hash) credential when no explicit server memo is configured: the challenge-bound attribution memo is required, so one transfer cannot satisfy more than one challenge.",
       "tags": [
+        "security",
         "tempo",
-        "attribution-memo"
+        "challenge-bound-memo",
+        "oss-302"
       ],
-      "sdkVersions": {
-        "typescript": ">0.18.0",
-        "rust": ">0.20.0",
-        "python": ">0.22.0",
-        "go": ">0.9.0",
-        "ruby": ">0.1.10"
-      },
       "input": {
         "credential": {
           "challenge": {
@@ -122,27 +117,21 @@
         }
       },
       "expected": {
-        "ok": true,
-        "value": {
-          "status": "success",
-          "reference": "0x1111111111111111111111111111111111111111111111111111111111111111"
+        "ok": false,
+        "error": {
+          "type": "verification_error"
         }
       }
     },
     {
-      "name": "non_attribution_memo_accepted",
-      "description": "A matching TransferWithMemo log whose memo is not in attribution format is accepted when no explicit server memo is configured.",
+      "name": "non_mpp_memo_rejected",
+      "description": "A matching TransferWithMemo log whose memo is not in attribution format is not accepted as challenge-bound attribution for a push (hash) credential.",
       "tags": [
+        "security",
         "tempo",
-        "attribution-memo"
+        "challenge-bound-memo",
+        "oss-302"
       ],
-      "sdkVersions": {
-        "typescript": ">0.18.0",
-        "rust": ">0.20.0",
-        "python": ">0.22.0",
-        "go": ">0.9.0",
-        "ruby": ">0.1.10"
-      },
       "input": {
         "credential": {
           "challenge": {
@@ -192,10 +181,9 @@
         }
       },
       "expected": {
-        "ok": true,
-        "value": {
-          "status": "success",
-          "reference": "0x1111111111111111111111111111111111111111111111111111111111111111"
+        "ok": false,
+        "error": {
+          "type": "verification_error"
         }
       }
     },
