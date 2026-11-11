@@ -2441,11 +2441,11 @@
         "node-reject"
       ],
       "sdkVersions": {
-        "go": ">0.7.0",
+        "go": ">0.8.0",
         "typescript": ">0.14.59"
       },
       "skipReasons": {
-        "go": "tempo-go Deserialize (pkg/transaction/deserialize.go:44) does not check CREATE placement, so it decodes a transaction the node rejects. Not fixed on tempo-go main (542c18e) either: re-check on the next tempo-go bump. Still unfixed in tempo-go v0.7.0.",
+        "go": "tempo-go Deserialize (pkg/transaction/deserialize.go:44) does not check CREATE placement, so it decodes a transaction the node rejects. Not fixed on tempo-go main (542c18e) either: re-check on the next tempo-go bump. Still unfixed in tempo-go v0.7.0 or v0.8.0.",
         "typescript": "ox TxEnvelopeTempo.deserialize does not check CREATE placement (TxEnvelopeTempo.assert, ox/tempo/TxEnvelopeTempo.ts:177-226), so it decodes a transaction the node rejects. Not fixed in ox yet: re-check on the next ox bump."
       },
       "source": "tempo-primitives tempo_transaction.rs validate_calls (AASigned decode validates)",
