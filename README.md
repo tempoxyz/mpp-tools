@@ -55,8 +55,6 @@ make flow         # run end-to-end 402 flow conformance
 ```text
 mpp-tools/
 ├── agents/               # Canonical AGENTS.md shape and shared MPP section, synced to every MPP repo
-├── agricola/             # Control plane for SDK change review
-├── ledger/               # Append-only Agricola decision records
 ├── conformance/          # Cross-SDK conformance test suite
 ├── tempo-conformance/    # Core Tempo SDK vectors, run against a local Tempo node
 │   ├── adapters/         # Per-language CLI adapters
@@ -65,13 +63,8 @@ mpp-tools/
 │   ├── scripts/          # Test runners and helpers
 │   └── vectors/          # Hand-authored protocol vectors
 ├── SPEC.md               # SDK conformance specification
-├── sdks.yaml             # Reviewed Agricola SDK manifest
 └── README.md
 ```
-
-## Agricola
-
-[Agricola](./agricola/README.md) is the propagation and drift-audit control plane for canonical SDK changes. It creates deterministic tracking plans, reconstructs authorized merge-time labels, verifies generated downstream changes, opens draft SDK pull requests, records maintainer decisions, and maintains one head-to-head SDK audit roll-up. Its deployment runbook is [docs/agricola-actions.md](./docs/agricola-actions.md).
 
 ## Conformance Suite
 

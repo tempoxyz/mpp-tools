@@ -9,33 +9,18 @@ class SelectAdaptersTests(unittest.TestCase):
     def test_selects_expected_scope(self) -> None:
         cases = [
             (
-                "Agricola workflow and implementation",
+                "conformance workflow",
                 "pull_request",
-                [
-                    ".github/agricola/propagate.md",
-                    ".github/workflows/agricola-audit.yml",
-                    ".github/workflows/agricola.yml",
-                    "agricola/service.py",
-                    "agricola/tests/test_service.py",
-                    "docs/agricola-actions.md",
-                    "sdks.yaml",
-                ],
-                [],
-                "only Agricola control-plane files changed",
-            ),
-            (
-                "Agricola state pull request",
-                "pull_request",
-                ["ledger/cursor.json", "ledger/wevm-mppx-123.json"],
-                [],
-                "only Agricola control-plane files changed",
-            ),
-            (
-                "mixed Agricola and conformance workflow",
-                "pull_request",
-                [".github/workflows/agricola.yml", ".github/workflows/conformance.yml"],
+                [".github/workflows/conformance.yml"],
                 ADAPTER_ORDER,
                 "shared conformance files changed",
+            ),
+            (
+                "documentation only",
+                "pull_request",
+                ["README.md"],
+                [],
+                "no conformance-affecting files changed",
             ),
             (
                 "adapter implementation",
@@ -54,7 +39,7 @@ class SelectAdaptersTests(unittest.TestCase):
             (
                 "push event",
                 "push",
-                ["agricola/service.py"],
+                ["conformance/vectors/challenge.json"],
                 ADAPTER_ORDER,
                 "non-PR event runs the full suite",
             ),

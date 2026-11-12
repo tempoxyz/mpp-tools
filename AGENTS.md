@@ -1,6 +1,6 @@
 # mpp-tools
 
-Tooling and test suites for MPP SDKs: the cross-SDK conformance suite, Tempo SDK conformance, the SDK change tooling in `agricola/`, and the shared AGENTS.md conventions every MPP repository follows.
+Tooling and test suites for MPP SDKs: the cross-SDK conformance suite, Tempo SDK conformance, and the shared AGENTS.md conventions every MPP repository follows.
 
 ## Commands
 
@@ -9,13 +9,6 @@ cd conformance && make all        # install pinned SDKs, run vectors, then the 4
 cd conformance && make test       # vector conformance against every adapter
 cd conformance && make flow       # end-to-end 402 flow conformance
 cd conformance && uv run --locked python -m unittest discover -s scripts -p "test_*.py"  # script tests
-
-uv sync --locked --group dev                                    # Agricola dev environment
-uv run --locked ruff format --check agricola                    # format
-uv run --locked ruff check agricola                             # lint
-uv run --locked ty check agricola                               # type-check
-uv run --locked coverage run -m unittest discover -s agricola/tests -v && uv run --locked coverage report
-uv run --locked agricola validate                               # validate sdks.yaml and state
 
 (cd agents && python3 -m unittest -v test_sync)                # AGENTS.md tooling and the sync workflow's renderer
 python3 agents/sync.py check AGENTS.md                          # this file's shape
@@ -27,9 +20,6 @@ Prerequisites for the conformance suite are in [conformance/README.md](./conform
 
 - `conformance/`: cross-SDK conformance suite. `vectors/*.json` are the normative fixtures, `adapters/` holds one thin CLI adapter per SDK, `flows/` the end-to-end 402 flows.
 - `tempo-conformance/`: core Tempo SDK vectors (viem/ox, tempo-primitives, tempo-go, pytempo) run against a local Tempo node.
-- `agricola/`: SDK change tooling; its runbook is `docs/agricola-actions.md`.
-- `ledger/`: append-only decision records.
-- `sdks.yaml`: the SDK manifest (targets, owners, changelog style, verify commands).
 - `agents/`: the AGENTS.md template, the shared `## MPP` conventions, and `sync.py`; see `agents/README.md`.
 - `SPEC.md`: the SDK conformance specification.
 
