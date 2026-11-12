@@ -896,6 +896,15 @@
         },
         {
           "client": "*",
+          "server": "rust",
+          "steps": [
+            "both_fields",
+            "comma_joined"
+          ],
+          "reason": "mpp-rs does not count Payment credentials yet; the core spec answers a request with more than one Payment credential with 400 bad-request and no challenge."
+        },
+        {
+          "client": "*",
           "server": "go",
           "steps": [
             "unpaid"
