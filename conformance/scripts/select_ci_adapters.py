@@ -32,17 +32,6 @@ ADAPTER_PATTERNS = {
     "java": ["conformance/adapters/java/**"],
 }
 
-AGRICOLA_PATTERNS = [
-    ".github/agricola/**",
-    ".github/workflows/agricola*.yml",
-    "agricola/**",
-    "docs/**",
-    "ledger/**",
-    "pyproject.toml",
-    "README.md",
-    "sdks.yaml",
-]
-
 FULL_PATTERNS = [
     ".github/actions/**",
     ".github/workflows/**",
@@ -112,11 +101,6 @@ def select_adapters(event_name: str, changed_files: list[str]) -> tuple[list[str
         return ADAPTER_ORDER, "non-PR event runs the full suite"
     if not changed_files:
         return ADAPTER_ORDER, "no changed file list; running the full suite"
-    if all(
-        any(path_matches(path, pattern) for pattern in AGRICOLA_PATTERNS)
-        for path in changed_files
-    ):
-        return [], "only Agricola control-plane files changed"
     if any(
         any(path_matches(path, pattern) for pattern in FULL_PATTERNS)
         for path in changed_files

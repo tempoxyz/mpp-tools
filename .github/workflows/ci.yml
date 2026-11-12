@@ -7,8 +7,6 @@ on:
       - synchronize
       - reopened
       - ready_for_review
-    paths-ignore:
-      - ledger/**
   push:
     branches:
       - main
@@ -20,63 +18,6 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  agricola-tests:
-    name: Agricola tests
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-
-    steps:
-      - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Setup uv
-        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
-        with:
-          version: "0.12.11"
-          python-version: "3.12"
-          enable-cache: true
-          save-cache: ${{ github.ref == 'refs/heads/main' }}
-          cache-dependency-glob: uv.lock
-
-      - name: Install Agricola development environment
-        run: uv sync --locked --group dev
-
-      - name: Check Agricola formatting
-        run: uv run --locked ruff format --check agricola
-
-      - name: Lint Agricola
-        run: uv run --locked ruff check agricola
-
-      - name: Type-check Agricola
-        run: uv run --locked ty check agricola
-
-      - name: Run Agricola tests with coverage
-        run: |
-          uv run --locked coverage run -m unittest discover -s agricola/tests -v
-          uv run --locked coverage report
-
-      - name: Validate Agricola state
-        run: uv run --locked agricola validate
-
-      - name: Setup Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-        with:
-          go-version: "1.26.10"
-          cache: false
-
-      - name: Lint Agricola workflows
-        run: >-
-          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
-          .github/workflows/agricola.yml
-          .github/workflows/agricola-audit.yml
-          .github/workflows/ci.yml
-
   script-tests:
     name: Python script tests
     runs-on: ubuntu-latest

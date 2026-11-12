@@ -1,20 +1,10 @@
 rules:
   template-injection:
     ignore:
-      # These control-plane workflows interpolate trusted manifest-derived
-      # matrices and internal step outputs into shell commands.
-      - agricola-audit.yml
-      - agricola.yml
+      # These workflows interpolate trusted matrices and internal step
+      # outputs into shell commands.
       - conformance-monitor.yml
       - conformance.yml
-  artipacked:
-    ignore:
-      # These checkout credentials are intentionally retained for the later
-      # state-branch and downstream publication pushes in the same jobs.
-      - agricola-audit.yml:289
-      - agricola.yml:47
-      - agricola.yml:443
-      - agricola.yml:530
   ref-version-mismatch:
     # tempoxyz/gh-actions has no version tags, so comments on its SHA pins
     # cannot match a tag. Third-party pin correctness is handled separately.
