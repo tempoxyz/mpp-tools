@@ -1,0 +1,12 @@
+{
+  "id": "mppx#915",
+  "source": {
+    "repo": "wevm/mppx",
+    "pr": 915,
+    "sha": "c7968cae78d8675ec045a8b60f48e417263bf589"
+  },
+  "labels": [
+    "agricola:all"
+  ],
+  "decisions": []
+}
