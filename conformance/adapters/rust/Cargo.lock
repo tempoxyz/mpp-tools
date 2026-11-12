@@ -3125,10 +3125,13 @@ dependencies = [
  "async-stream",
  "async-trait",
  "base64",
+ "bytes",
  "futures-core",
  "hex",
  "hmac 0.13.0",
  "http",
+ "http-body",
+ "http-body-util",
  "p256 0.13.2",
  "reqwest",
  "serde",
@@ -3140,6 +3143,8 @@ dependencies = [
  "thiserror 2.0.18",
  "time",
  "tokio",
+ "tower-layer",
+ "tower-service",
  "uuid",
 ]
 
@@ -3148,12 +3153,15 @@ name = "mpp-conformance-adapter"
 version = "0.1.0"
 dependencies = [
  "hmac 0.13.0",
+ "http",
  "mpp",
  "reqwest",
  "serde",
  "serde_json",
  "sha2 0.11.0",
  "tokio",
+ "tower-layer",
+ "tower-service",
 ]
 
 [[package]]

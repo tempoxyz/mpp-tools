@@ -153,6 +153,14 @@
             "replayed"
           ],
           "reason": "mpp-go answers a replayed credential with 403 verification-failed and no challenge (ErrCredentialReplayed); the core spec answers 402 invalid-challenge with a fresh challenge."
+        },
+        {
+          "client": "*",
+          "server": "rust",
+          "steps": [
+            "replayed"
+          ],
+          "reason": "mpp-rs answers a replayed credential with 403 verification-failed and no challenge (ErrorCode::CredentialReplayed); the core spec answers 402 invalid-challenge with a fresh challenge."
         }
       ]
     },
