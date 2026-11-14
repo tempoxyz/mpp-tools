@@ -1,7 +1,7 @@
 {
   "version": "2.0.0",
   "spec_ref": "MPP Tempo receipt fixture verification",
-  "description": "Server-side Tempo receipt fixture verification must require auto-generated attribution memos to bind to the credential challenge id and realm when no explicit server memo is configured. These staged vectors use a transaction-hash credential with a did:pkh source and TIP-20 receipt logs (each TransferWithMemo paired with its Transfer), and split requests and does not exercise signed transaction deserialization.",
+  "description": "Server-side Tempo receipt fixture verification of push (hash) credentials must require the primary transfer to carry an attribution memo bound to the credential challenge id and realm when no explicit server memo is configured: a plain transfer, a memo not in attribution format, or an attribution memo for another challenge or realm is rejected. These staged vectors use a transaction-hash credential with a did:pkh source and TIP-20 receipt logs (each TransferWithMemo paired with its Transfer), and split requests and does not exercise signed transaction deserialization.",
   "commands": {
     "operation": "tempo.receipt.verify"
   },
@@ -72,7 +72,7 @@
     },
     {
       "name": "plain_transfer_without_challenge_bound_memo",
-      "description": "A matching plain Transfer log is not sufficient for a transaction credential when no explicit server memo is configured.",
+      "description": "A matching plain Transfer log is not sufficient for a push (hash) credential when no explicit server memo is configured: the challenge-bound attribution memo is required, so one transfer cannot satisfy more than one challenge.",
       "tags": [
         "security",
         "tempo",
@@ -125,7 +125,7 @@
     },
     {
       "name": "non_mpp_memo_rejected",
-      "description": "A matching TransferWithMemo log with a non-MPP memo is not accepted as challenge-bound attribution.",
+      "description": "A matching TransferWithMemo log whose memo is not in attribution format is not accepted as challenge-bound attribution for a push (hash) credential.",
       "tags": [
         "security",
         "tempo",
@@ -189,7 +189,7 @@
     },
     {
       "name": "unrelated_challenge_memo_rejected",
-      "description": "A matching TransferWithMemo log with an MPP memo for another challenge is rejected.",
+      "description": "A matching TransferWithMemo log with an attribution memo for another challenge is rejected.",
       "tags": [
         "security",
         "tempo",
@@ -253,7 +253,7 @@
     },
     {
       "name": "unrelated_realm_memo_rejected",
-      "description": "A matching TransferWithMemo log with an MPP memo for another server realm is rejected.",
+      "description": "A matching TransferWithMemo log with an attribution memo for another server realm is rejected.",
       "tags": [
         "security",
         "tempo",

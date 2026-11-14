@@ -5,7 +5,7 @@
       "description": "Server verification accepts a credential echo that matches the route and has a future expires value.",
       "input": {
         "realm": "api.example.com",
-        "secretKey": "secret-key",
+        "secretKey": "server-verification-secret-32-bytes-minimum",
         "method": "tempo",
         "intent": "charge",
         "request": {
@@ -16,7 +16,7 @@
         "expires": "2099-01-01T00:00:00Z",
         "credential": {
           "challenge": {
-            "id": "Ip25HCkqcMaW6FT_ziOG9BT58-7_KEwkzhdUwX8tmI8",
+            "id": "xMxFn4gdQUiTjlszx7BRpIZ37dJiOsrVxNyiD9RxWb4",
             "realm": "api.example.com",
             "method": "tempo",
             "intent": "charge",
@@ -48,7 +48,7 @@
       "description": "Server verification rejects a credential challenge echo that omits expires while the route requires an expiry.",
       "input": {
         "realm": "api.example.com",
-        "secretKey": "secret-key",
+        "secretKey": "server-verification-secret-32-bytes-minimum",
         "method": "tempo",
         "intent": "charge",
         "request": {
@@ -59,7 +59,7 @@
         "expires": "2099-01-01T00:00:00Z",
         "credential": {
           "challenge": {
-            "id": "73URalxGl0MMCrlT4Yx32M5SQduyaDXWvs2rINyPPFA",
+            "id": "Wmsmoh3XWGvHSk8QdvyhI0HiAmXQK0JM32OkzQ_Dwlc",
             "realm": "api.example.com",
             "method": "tempo",
             "intent": "charge",
@@ -85,7 +85,7 @@
       "description": "Server verification rejects a credential with an expired challenge echo.",
       "input": {
         "realm": "api.example.com",
-        "secretKey": "secret-key",
+        "secretKey": "server-verification-secret-32-bytes-minimum",
         "method": "tempo",
         "intent": "charge",
         "request": {
@@ -96,7 +96,7 @@
         "expires": "2020-01-01T00:00:00Z",
         "credential": {
           "challenge": {
-            "id": "FvOsbLHtxODU_85N-iRtmoHPXtWdslgkA-vT15rLMXo",
+            "id": "KVXCf_USnYRnKQgF3eBT7aCpPufLX0mqx6VmZd5irW0",
             "realm": "api.example.com",
             "method": "tempo",
             "intent": "charge",
@@ -123,7 +123,7 @@
       "description": "Server verification rejects a credential whose challenge ID does not match its echoed fields.",
       "input": {
         "realm": "api.example.com",
-        "secretKey": "secret-key",
+        "secretKey": "server-verification-secret-32-bytes-minimum",
         "method": "tempo",
         "intent": "charge",
         "request": {
@@ -161,7 +161,7 @@
       "description": "Server verification rejects a credential whose echoed realm is not the route realm.",
       "input": {
         "realm": "api.example.com",
-        "secretKey": "secret-key",
+        "secretKey": "server-verification-secret-32-bytes-minimum",
         "method": "tempo",
         "intent": "charge",
         "request": {
@@ -172,7 +172,7 @@
         "expires": "2099-01-01T00:00:00Z",
         "credential": {
           "challenge": {
-            "id": "5bvdhCxnhMgsFeY9fTRAC3VmMt0Ld6DXzxEJJYy3xwA",
+            "id": "TpOlWms2DXJ1TSvsbpY1u5ajWxU_PGeGZC80083cevw",
             "realm": "other.example.com",
             "method": "tempo",
             "intent": "charge",
@@ -199,7 +199,7 @@
       "description": "Server verification rejects a credential whose echoed request does not match the route request.",
       "input": {
         "realm": "api.example.com",
-        "secretKey": "secret-key",
+        "secretKey": "server-verification-secret-32-bytes-minimum",
         "method": "tempo",
         "intent": "charge",
         "request": {
@@ -210,7 +210,7 @@
         "expires": "2099-01-01T00:00:00Z",
         "credential": {
           "challenge": {
-            "id": "7GP4Y_f3WLVmwN1x7chOMK1TfJrwoBRnmKm2k_YpuVM",
+            "id": "9vaSUcNdBBPv13pdWEyj4H14KOU8j0blCi-ao3hodao",
             "realm": "api.example.com",
             "method": "tempo",
             "intent": "charge",
@@ -237,7 +237,7 @@
       "description": "Server verification rejects a credential whose echoed method does not match the route method.",
       "input": {
         "realm": "api.example.com",
-        "secretKey": "secret-key",
+        "secretKey": "server-verification-secret-32-bytes-minimum",
         "method": "tempo",
         "intent": "charge",
         "request": {
@@ -248,7 +248,7 @@
         "expires": "2099-01-01T00:00:00Z",
         "credential": {
           "challenge": {
-            "id": "jaQHUf0f6kTVjuPg_oD_gSyOv-2krnql3h3Cpfc14xY",
+            "id": "r9Kc7S51YGo9rqqAgO45knW9WWN8wvDly8dqwmhGZck",
             "realm": "api.example.com",
             "method": "other",
             "intent": "charge",
@@ -275,7 +275,7 @@
       "description": "Server verification rejects a credential whose echoed intent does not match the route intent.",
       "input": {
         "realm": "api.example.com",
-        "secretKey": "secret-key",
+        "secretKey": "server-verification-secret-32-bytes-minimum",
         "method": "tempo",
         "intent": "charge",
         "request": {
@@ -286,7 +286,7 @@
         "expires": "2099-01-01T00:00:00Z",
         "credential": {
           "challenge": {
-            "id": "TfIuxbgpmyB4NtsN5A1RfTHjctirfo2oum8Q8gvca2A",
+            "id": "vcZF_ooc1ipq8xpqt-vU7EtidZn9GL9iBkntFH6aCaQ",
             "realm": "api.example.com",
             "method": "tempo",
             "intent": "refund",
@@ -313,7 +313,7 @@
       "description": "Server verification reports a method-level verification failure after challenge checks pass.",
       "input": {
         "realm": "api.example.com",
-        "secretKey": "secret-key",
+        "secretKey": "server-verification-secret-32-bytes-minimum",
         "method": "tempo",
         "intent": "charge",
         "request": {
@@ -325,7 +325,7 @@
         "verificationError": "intent rejected credential",
         "credential": {
           "challenge": {
-            "id": "Ip25HCkqcMaW6FT_ziOG9BT58-7_KEwkzhdUwX8tmI8",
+            "id": "xMxFn4gdQUiTjlszx7BRpIZ37dJiOsrVxNyiD9RxWb4",
             "realm": "api.example.com",
             "method": "tempo",
             "intent": "charge",
