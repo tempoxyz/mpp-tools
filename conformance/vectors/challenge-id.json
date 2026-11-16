@@ -528,6 +528,87 @@
         }
       },
       "expected": "oUJHedaukLx579-B6Apbsw_r17uJOqERHjQRjCVhP0M"
+    },
+    {
+      "name": "zones_list_binding",
+      "description": "methodDetails.zones is part of the canonical request, so the id binds the accepted Zones: the list keeps its order and integer IDs; the input lists [7, 3] out of ascending order so an SDK that sorts the list fails ([3, 7] gives O9tB4xEk5DH5YeDaJ-ou6t4Zs0jgca_b51Hmu5oUi5I, [3] gives FJtFTkXyO2imdJTNdXzOHLlcIN_QZfoBwrLqVKulPRI) (wevm/mppx#1216).",
+      "tags": [
+        "happy-path",
+        "tempo",
+        "zones",
+        "challenge-binding"
+      ],
+      "adapters": [
+        "typescript",
+        "rust",
+        "python",
+        "go"
+      ],
+      "sdkVersions": {
+        "typescript": ">0.17.3",
+        "rust": ">0.19.0",
+        "python": ">0.20.0",
+        "go": ">0.8.0"
+      },
+      "input": {
+        "secretKey": "test-vector-secret-minimum-32-byte-secret",
+        "realm": "api.example.com",
+        "method": "tempo",
+        "intent": "charge",
+        "expires": "2099-01-01T00:00:00Z",
+        "request": {
+          "amount": "1000",
+          "currency": "0x20c0000000000000000000000000000000000000",
+          "methodDetails": {
+            "chainId": 4217,
+            "zones": [
+              7,
+              3
+            ]
+          },
+          "recipient": "0x742d35Cc6634c0532925a3b844bC9e7595F8fE00"
+        }
+      },
+      "expected": "AOnoSs_J_H214VGdlU2IftFha1Xtl2ei94M0eaKuE0o"
+    },
+    {
+      "name": "zones_any_binding",
+      "description": "methodDetails.zones true (any Zone) canonicalizes as the JSON boolean true, so the id differs from any list of Zone IDs (wevm/mppx#1216).",
+      "tags": [
+        "happy-path",
+        "tempo",
+        "zones",
+        "challenge-binding"
+      ],
+      "adapters": [
+        "typescript",
+        "rust",
+        "python",
+        "go"
+      ],
+      "sdkVersions": {
+        "typescript": ">0.17.3",
+        "rust": ">0.19.0",
+        "python": ">0.20.0",
+        "go": ">0.8.0"
+      },
+      "input": {
+        "secretKey": "test-vector-secret-minimum-32-byte-secret",
+        "realm": "api.example.com",
+        "method": "tempo",
+        "intent": "charge",
+        "expires": "2099-01-01T00:00:00Z",
+        "request": {
+          "amount": "1000",
+          "currency": "0x20c0000000000000000000000000000000000000",
+          "methodDetails": {
+            "chainId": 4217,
+            "zones": true
+          },
+          "recipient": "0x742d35Cc6634c0532925a3b844bC9e7595F8fE00"
+        }
+      },
+      "expected": "OH4y0QMaSKPms5A0D38V5k5yVTcGCG0iezm4xTR1HnA"
     }
   ]
 }
