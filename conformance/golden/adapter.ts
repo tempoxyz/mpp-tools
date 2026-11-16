@@ -711,7 +711,8 @@ type HttpServerInput = {
 // Starts a payment-protected HTTP server for one http.server scenario. Every
 // offer uses a stand-in charge method whose payload is a fixed signature, so
 // the pair runner exercises mppx's challenge issuance, credential parsing and
-// binding checks without a chain. The method settles each challenge once,
+// binding checks without a chain. The method settles each challenge once
+// (a replayed challenge id gets invalid-challenge, as the core spec says),
 // declines the signature 0xdecline, and returns a fixed receipt.
 async function startHttpServer(input: HttpServerInput): Promise<AdapterResponse> {
 	const settled = new Set<string>()
@@ -736,7 +737,7 @@ async function startHttpServer(input: HttpServerInput): Promise<AdapterResponse>
 					const { signature } = credential.payload as { signature: string }
 					if (signature === '0xdecline') throw new Errors.VerificationFailedError({ reason: 'payment declined' })
 					if (settled.has(credential.challenge.id))
-						throw new Errors.VerificationFailedError({ reason: 'credential already used' })
+						throw new Errors.InvalidChallengeError({ id: credential.challenge.id, reason: 'credential already used' })
 					settled.add(credential.challenge.id)
 					return Receipt.from({
 						method: name,

@@ -103,9 +103,17 @@ def start_server(
     )
 
 
-def wait_for_server(base_url: str, timeout: int = 15) -> None:
+def wait_for_server(
+    base_url: str,
+    timeout: int = 60,
+    process: subprocess.Popen[str] | None = None,
+) -> None:
+    # npx tsx starts the compliance server cold; on a busy runner (the Java
+    # job builds with Gradle first) that has taken longer than 15 seconds.
     deadline = time.time() + timeout
     while time.time() < deadline:
+        if process is not None and process.poll() is not None:
+            raise RuntimeError(f"Server exited with status {process.returncode} before starting")
         try:
             with urllib.request.urlopen(f"{base_url}/free", timeout=2) as resp:
                 if resp.status == 200:
@@ -823,7 +831,7 @@ def main() -> int:
     )
     try:
         log("Waiting for flow server...", args.output)
-        wait_for_server(base_url)
+        wait_for_server(base_url, process=server)
         if args.update_golden:
             log("Updating TypeScript flow golden...", args.output)
             update_golden_results(adapters, base_url, args.verbose)

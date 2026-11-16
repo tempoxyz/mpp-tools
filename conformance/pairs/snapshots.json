@@ -415,6 +415,50 @@
         }
       }
     ],
+    "multiple_credentials": [
+      {
+        "name": "unpaid",
+        "status": 402,
+        "challenges": [
+          {
+            "id": "<masked>",
+            "realm": "pairs.conformance",
+            "method": "tempo",
+            "intent": "charge",
+            "request": {
+              "amount": "1000",
+              "currency": "USD",
+              "recipient": "merchant"
+            },
+            "expires": "2099-01-01T00:00:00Z"
+          }
+        ],
+        "cacheControl": "no-store",
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/payment-required",
+          "status": 402
+        }
+      },
+      {
+        "name": "both_fields",
+        "status": 400,
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/bad-request",
+          "status": 400
+        }
+      },
+      {
+        "name": "comma_joined",
+        "status": 400,
+        "contentType": "application/problem+json",
+        "body": {
+          "type": "https://paymentauth.org/problems/bad-request",
+          "status": 400
+        }
+      }
+    ],
     "no_payable_challenge": [
       {
         "name": "unpaid",
@@ -506,7 +550,7 @@
         "cacheControl": "no-store",
         "contentType": "application/problem+json",
         "body": {
-          "type": "https://paymentauth.org/problems/verification-failed",
+          "type": "https://paymentauth.org/problems/invalid-challenge",
           "status": 402
         }
       }

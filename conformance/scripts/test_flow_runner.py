@@ -15,6 +15,7 @@ from flow_runner import (
     main,
     perform_request,
     run_client_http_flow_case,
+    wait_for_server,
 )
 
 
@@ -184,6 +185,28 @@ class FlowRunnerOutputTests(unittest.TestCase):
         self.assertEqual(output["status"], "fail")
         self.assertEqual(output["failed"], 1)
         self.assertIn("duplicate path", output["errors"][0]["error"])
+
+
+class WaitForServerTests(unittest.TestCase):
+    def test_fails_fast_when_the_server_exits(self) -> None:
+        process = MagicMock()
+        process.poll.return_value = 1
+        process.returncode = 1
+
+        with patch("flow_runner.urllib.request.urlopen") as urlopen:
+            with self.assertRaisesRegex(RuntimeError, "exited with status 1"):
+                wait_for_server("http://127.0.0.1:1", timeout=5, process=process)
+
+        self.assertFalse(urlopen.called)
+
+    def test_returns_once_the_server_answers(self) -> None:
+        process = MagicMock()
+        process.poll.return_value = None
+        response = MagicMock()
+        response.__enter__.return_value.status = 200
+
+        with patch("flow_runner.urllib.request.urlopen", return_value=response):
+            wait_for_server("http://127.0.0.1:1", timeout=5, process=process)
 
 
 if __name__ == "__main__":

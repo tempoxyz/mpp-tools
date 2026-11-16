@@ -209,6 +209,41 @@ class CompareTest(unittest.TestCase):
         self.assertEqual(result.status, "fail")
 
 
+class KeepExpectedStepsTest(unittest.TestCase):
+    scenario = {
+        "name": "s",
+        "expectedFailures": [
+            {"client": "*", "server": "typescript", "steps": ["b"], "reason": "reference lags the spec"},
+            {"client": "*", "server": "python", "steps": ["c"], "reason": "python only"},
+        ],
+    }
+    stored = [{"name": "a", "status": 200}, {"name": "b", "status": 400}, {"name": "c", "status": 402}]
+
+    def test_keeps_steps_a_reference_expected_failure_covers(self) -> None:
+        recorded = [{"name": "a", "status": 201}, {"name": "b", "status": 200}, {"name": "c", "status": 403}]
+        kept = pair_runner.keep_expected_steps(self.scenario, recorded, self.stored)
+        self.assertEqual(kept, [{"name": "a", "status": 201}, {"name": "b", "status": 400}, {"name": "c", "status": 403}])
+
+    def test_records_everything_without_a_stored_snapshot(self) -> None:
+        recorded = [{"name": "a", "status": 201}, {"name": "b", "status": 200}]
+        self.assertEqual(pair_runner.keep_expected_steps(self.scenario, recorded, None), recorded)
+
+    def test_checked_in_reference_steps_survive_an_update(self) -> None:
+        snapshots = pair_runner.load_snapshots()
+        for scenario in pair_runner.load_scenarios():
+            stored = snapshots[scenario["name"]]
+            recorded = [{"name": step["name"]} for step in stored]
+            kept = pair_runner.keep_expected_steps(scenario, recorded, stored)
+            covered = {
+                step
+                for entry in pair_runner.expected_failures(scenario, "typescript", "typescript")
+                for step in entry["steps"]
+            }
+            for before, after in zip(stored, kept):
+                if before["name"] in covered:
+                    self.assertEqual(before, after)
+
+
 class SelectionTest(unittest.TestCase):
     adapters = {
         "typescript": adapter("typescript", [*pair_runner.CLIENT_CAPABILITIES, "http.server"]),

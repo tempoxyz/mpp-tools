@@ -5,7 +5,9 @@ Starts each server adapter's http.server for a scenario, drives it with a
 client adapter (its payment-aware HTTP client, plus its challenge.parse,
 challenge.id and credential.format for hand-built credentials), and compares
 normalized wire snapshots of every step with pairs/snapshots.json, which only
-the TypeScript client and server regenerate (--update).
+the TypeScript client and server regenerate (--update). Steps a TypeScript
+server expected failure covers are written by hand from the specification, and
+--update keeps them.
 """
 
 from __future__ import annotations
@@ -404,6 +406,24 @@ def expected_failures(scenario: dict[str, Any], client: str, server: str) -> lis
     ]
 
 
+def keep_expected_steps(
+    scenario: dict[str, Any],
+    recorded: list[dict[str, Any]],
+    stored: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    """Recorded snapshots, keeping the stored step for each step a reference expected failure covers.
+
+    Those steps are written by hand from the specification because the
+    reference SDK does not produce them yet, so --update must not replace them
+    with the reference SDK's current answer.
+    """
+    covered = {step for entry in expected_failures(scenario, REFERENCE, REFERENCE) for step in entry["steps"]}
+    if not covered or not stored:
+        return recorded
+    kept = {step["name"]: step for step in stored if step["name"] in covered}
+    return [kept.get(step["name"], step) for step in recorded]
+
+
 MISSING = object()
 
 
@@ -571,10 +591,12 @@ def main() -> int:
 
     if args.update:
         reference = AdapterClient(adapters[REFERENCE])
-        snapshots = load_snapshots() if args.scenario and SNAPSHOTS_PATH.exists() else {}
+        stored = load_snapshots() if SNAPSHOTS_PATH.exists() else {}
+        snapshots = dict(stored) if args.scenario else {}
         for scenario in scenarios:
             print(f"Recording {scenario['name']}...", flush=True)
-            snapshots[scenario["name"]] = run_scenario(reference, reference, scenario, ports.take())
+            recorded = run_scenario(reference, reference, scenario, ports.take())
+            snapshots[scenario["name"]] = keep_expected_steps(scenario, recorded, stored.get(scenario["name"]))
         write_snapshots({name: snapshots[name] for name in sorted(snapshots)})
         print(f"Updated {SNAPSHOTS_PATH}")
         return 0
