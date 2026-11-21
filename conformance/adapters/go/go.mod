@@ -1,29 +1,18 @@
 module mpp-conformance-adapter-go
 
-go 1.26.10
+go 1.26.11
 
 require (
 	github.com/ethereum/go-ethereum v1.17.5
-	github.com/tempoxyz/mpp-go v0.6.0
+	github.com/tempoxyz/mpp-go v0.9.1
 )
 
 require (
 	github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20251001021608-1fe7b43fc4d6 // indirect
-	github.com/bits-and-blooms/bitset v1.20.0 // indirect
-	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/consensys/gnark-crypto v0.18.1 // indirect
-	github.com/crate-crypto/go-eth-kzg v1.5.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
-	github.com/ethereum/c-kzg-4844/v2 v2.1.8 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/gowebpki/jcs v1.0.1 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect
-	github.com/klauspost/compress v1.18.7 // indirect
-	github.com/labstack/echo/v4 v4.16.3 // indirect
-	github.com/redis/go-redis/v9 v9.22.0 // indirect
-	github.com/supranational/blst v0.3.16 // indirect
-	github.com/tempoxyz/tempo-go v0.5.0 // indirect
-	go.uber.org/atomic v1.11.0 // indirect
-	golang.org/x/sync v0.23.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
+	github.com/tempoxyz/tempo-go v0.8.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
 )
