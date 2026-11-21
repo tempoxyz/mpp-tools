@@ -413,7 +413,12 @@ def _echo_reason(grammar: Grammar, challenge: Any) -> str | None:
     return None
 
 
-def credential_verdict(grammar: Grammar, header: str) -> Verdict:
+def credential_verdict(grammar: Grammar, header: str, *, with_request: bool = False) -> Verdict:
+    """Whether a Credential header is valid, and what it parses to.
+
+    with_request adds the decoded challenge.request to the expected values, for
+    checking a formatted Credential against the document it was formatted from.
+    """
     tree = grammar.parse("payment-credentials", header)
     if tree is None:
         return Verdict(False, "grammar rejects payment-credentials")
@@ -430,6 +435,8 @@ def credential_verdict(grammar: Grammar, header: str) -> Verdict:
         "challenge": {key: challenge[key] for key in ("id", "realm", "method", "intent")},
         "payload": document["payload"],
     }
+    if with_request:
+        expected["challenge"]["request"] = decode_json_object(challenge["request"])
     return Verdict(True, "accepted", expected)
 
 
@@ -722,7 +729,11 @@ class CaseFactory:
         document = self.credential_document()
         echo = document["challenge"]
         echo["request"] = json.loads(base64.urlsafe_b64decode(echo["request"] + "=" * (-len(echo["request"]) % 4)))
-        return Case("credential", "credential.format", "valid", document, Verdict(True, "accepted"))
+        expected = {
+            "challenge": {key: echo[key] for key in ("id", "realm", "method", "intent", "request")},
+            "payload": document["payload"],
+        }
+        return Case("credential", "credential.format", "valid", document, Verdict(True, "accepted", expected))
 
     # -- receipts ----------------------------------------------------------
 
@@ -751,7 +762,9 @@ class CaseFactory:
         return Case("receipt", "receipt.parse", mutation, {"header": token}, receipt_verdict(self.grammar, token))
 
     def receipt_format_case(self) -> Case:
-        return Case("receipt", "receipt.format", "valid", self.receipt_document(), Verdict(True, "accepted"))
+        document = self.receipt_document()
+        expected = {key: document[key] for key in ("status", "method", "reference")}
+        return Case("receipt", "receipt.format", "valid", document, Verdict(True, "accepted", expected))
 
     # -- Accept-Payment ----------------------------------------------------
 
@@ -815,6 +828,12 @@ FORMAT_OUTPUT_RULES = {
     "credential.format": "payment-credentials",
     "receipt.format": "Payment-Receipt",
 }
+# The full verdict a formatted header must pass, beyond matching its rule.
+FORMAT_OUTPUT_VERDICTS: dict[str, Callable[[Grammar, str], Verdict]] = {
+    "challenge.format": challenge_verdict,
+    "credential.format": lambda grammar, header: credential_verdict(grammar, header, with_request=True),
+    "receipt.format": receipt_verdict,
+}
 
 
 def mismatched_fields(expected: dict[str, Any], actual: Any, prefix: str = "") -> list[str]:
@@ -851,13 +870,15 @@ def grammar_disagreement(grammar: Grammar, case: Case, response: dict[str, Any])
         rule = FORMAT_OUTPUT_RULES[case.operation]
         if not isinstance(header, str) or not grammar.accepts(rule, header):
             return "invalid-output", [rule]
-        if case.operation == "challenge.format" and case.verdict.expected is not None:
-            parsed = challenge_verdict(grammar, header)
-            if parsed.expected is None:
-                return "invalid-output", [parsed.reason]
-            fields = mismatched_fields(case.verdict.expected, parsed.expected)
-            return ("value", fields) if fields else None
-        return None
+        # Matching the rule is not enough: the header must pass the same checks
+        # as a parsed one and decode to the values it was formatted from.
+        parsed = FORMAT_OUTPUT_VERDICTS[case.operation](grammar, header)
+        if parsed.expected is None:
+            return "invalid-output", [parsed.reason]
+        if case.verdict.expected is None:
+            return None
+        fields = mismatched_fields(case.verdict.expected, parsed.expected)
+        return ("value", fields) if fields else None
     if case.verdict.expected is not None:
         fields = mismatched_fields(case.verdict.expected, result["value"])
         if fields:

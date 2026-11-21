@@ -1,6 +1,8 @@
 # Allow the ABNF Differential Fuzzing workflow (schedule / workflow_dispatch on
 # main) to mint a short-lived token that opens, comments on, and closes its
-# abnf-fuzz-disagreement issue and creates that label.
+# abnf-fuzz-disagreement issue and creates that label. Only its report job uses
+# it; the job that installs and runs adapters is in abnf-fuzz-adapters.yml, whose
+# job_workflow_ref this pattern does not match.
 subject: repo:tempoxyz@211589300/mpp-tools@1255838786:ref:refs/heads/main
 claim_pattern:
   job_workflow_ref: tempoxyz/mpp-tools/\.github/workflows/abnf-fuzz\.yml@refs/heads/main

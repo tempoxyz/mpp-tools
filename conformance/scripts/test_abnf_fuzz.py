@@ -271,6 +271,50 @@ class ComparisonTests(unittest.TestCase):
             grammar_disagreement(GRAMMAR, case, ok({"header": good.replace('realm="r"', 'realm="s"')})), ("value", ["realm"]),
         )
 
+    def test_checks_formatted_credentials_with_the_full_verdict(self) -> None:
+        echo = {"id": "ch_1", "realm": "r", "method": "tempo", "intent": "charge", "request": {"amount": "1"}}
+        expected = {"challenge": echo, "payload": {"signature": "0xab"}}
+        case = Case("credential", "credential.format", "valid", expected, Verdict(True, "accepted", expected))
+
+        def header(**challenge: object) -> str:
+            document = {"challenge": {**echo, "request": REQUEST, **challenge}, "payload": {"signature": "0xab"}}
+            return "Payment " + b64url(json.dumps(document))
+
+        self.assertIsNone(grammar_disagreement(GRAMMAR, case, ok({"header": header()})))
+        # Matches payment-credentials, but is not a base64url JSON document.
+        self.assertEqual(
+            grammar_disagreement(GRAMMAR, case, ok({"header": "Payment a"})),
+            ("invalid-output", ["credential is not a base64url-nopad JSON object"]),
+        )
+        self.assertEqual(
+            grammar_disagreement(GRAMMAR, case, ok({"header": header(method="Tempo")})),
+            ("invalid-output", ["challenge.method does not match payment-method-id"]),
+        )
+        self.assertEqual(grammar_disagreement(GRAMMAR, case, ok({"header": header(realm="s")})), ("value", ["challenge.realm"]))
+        other_request = header(request=b64url('{"amount":"2"}'))
+        self.assertEqual(grammar_disagreement(GRAMMAR, case, ok({"header": other_request})), ("value", ["challenge.request"]))
+
+    def test_checks_formatted_receipts_with_the_full_verdict(self) -> None:
+        document = {"status": "success", "method": "tempo", "timestamp": "2026-01-29T12:00:30Z", "reference": "0xab"}
+        expected = {"status": "success", "method": "tempo", "reference": "0xab"}
+        case = Case("receipt", "receipt.format", "valid", document, Verdict(True, "accepted", expected))
+        self.assertIsNone(grammar_disagreement(GRAMMAR, case, ok({"header": receipt_token()})))
+        self.assertEqual(
+            grammar_disagreement(GRAMMAR, case, ok({"header": "a"})),
+            ("invalid-output", ["receipt is not a base64url-nopad JSON object"]),
+        )
+        self.assertEqual(
+            grammar_disagreement(GRAMMAR, case, ok({"header": receipt_token(timestamp="yesterday")})),
+            ("invalid-output", ["receipt timestamp is not an RFC 3339 date-time"]),
+        )
+        self.assertEqual(grammar_disagreement(GRAMMAR, case, ok({"header": receipt_token(reference="0xcd")})), ("value", ["reference"]))
+
+    def test_format_cases_carry_the_values_to_compare(self) -> None:
+        cases = generate_cases(GRAMMAR, seed=0, cases=40, kinds=["credential", "receipt"])
+        for case in cases:
+            if case.operation in ("credential.format", "receipt.format"):
+                self.assertIsNotNone(case.verdict.expected, case.operation)
+
     def test_reports_grammar_and_reference_disagreements(self) -> None:
         allowlist = parse_allowlist({"entries": [{
             "id": "known", "adapters": ["go"], "operations": ["challenge.parse"], "kinds": ["rejects"],
