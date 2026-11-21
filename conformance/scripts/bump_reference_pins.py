@@ -299,17 +299,28 @@ def golden_cases(path: str, document: Any) -> dict[str, Any]:
     return dict(document.get("scenarios", {}))
 
 
+_MISSING = object()
+
+
+def changed_paths(left: Any, right: Any, prefix: str = "", depth: int = 3) -> list[str]:
+    """Dotted paths where two JSON values differ, objects descended up to depth levels."""
+    if left == right:
+        return []
+    if depth == 0 or not isinstance(left, dict) or not isinstance(right, dict):
+        return [prefix.rstrip(".")] if prefix else []
+    paths = []
+    for key in sorted(set(left) | set(right), key=str):
+        paths += changed_paths(left.get(key, _MISSING), right.get(key, _MISSING), f"{prefix}{key}.", depth - 1)
+    return paths
+
+
 def diff_cases(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
-    """Name the added, removed and changed cases, with the top-level fields that changed."""
-    changed = {}
-    for name in sorted(set(before) & set(after)):
-        left, right = before[name], after[name]
-        if left == right:
-            continue
-        if isinstance(left, dict) and isinstance(right, dict):
-            changed[name] = sorted(key for key in set(left) | set(right) if left.get(key) != right.get(key))
-        else:
-            changed[name] = []
+    """Name the added, removed and changed cases, with the fields that changed in each."""
+    changed = {
+        name: changed_paths(before[name], after[name])
+        for name in sorted(set(before) & set(after))
+        if before[name] != after[name]
+    }
     return {"added": sorted(set(after) - set(before)), "removed": sorted(set(before) - set(after)), "changed": changed}
 
 

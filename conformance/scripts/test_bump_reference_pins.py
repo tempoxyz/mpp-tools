@@ -125,7 +125,16 @@ class SummaryTests(unittest.TestCase):
     def test_diff_cases_names_changed_fields(self) -> None:
         path = "flows/golden-results.json"
         diff = pins.diff_cases(pins.golden_cases(path, self.before), pins.golden_cases(path, self.after))
-        self.assertEqual(diff, {"added": ["new_case"], "removed": ["expired"], "changed": {"success_charge": ["receipt"]}})
+        self.assertEqual(diff, {"added": ["new_case"], "removed": ["expired"], "changed": {"success_charge": ["receipt.status"]}})
+
+    def test_changed_paths_name_nested_fields(self) -> None:
+        before = {"challenge": {"id": "a", "realm": "r"}, "problem_details": {"type": "x", "status": 402}}
+        after = {"challenge": {"id": "<nonce-bound>", "realm": "r"}, "problem_details": {"type": "y", "status": 500}, "new": 1}
+        self.assertEqual(
+            pins.changed_paths(before, after),
+            ["challenge.id", "new", "problem_details.status", "problem_details.type"],
+        )
+        self.assertEqual(pins.changed_paths({"a": {"b": {"c": {"d": 1}}}}, {"a": {"b": {"c": {"d": 2}}}}), ["a.b.c"])
 
     def test_pair_snapshots_index_by_scenario(self) -> None:
         cases = pins.golden_cases("pairs/snapshots.json", {"$schema": "x", "scenarios": {"happy_path": {"steps": []}}})
