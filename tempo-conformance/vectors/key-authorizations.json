@@ -708,11 +708,11 @@
       ],
       "sdkVersions": {
         "rust": ">1.11.0",
-        "typescript": ">0.14.59"
+        "typescript": ">0.14.67"
       },
       "skipReasons": {
         "rust": "tempo-primitives 1.11.0 encodes an admin key authorization carrying expiry, limits or call scopes; only the node's execution handler rejects it (tempo crates/evm/src/handler.rs:532-539), while tempo-go (key_authorization.go:103-105) and pytempo (keychain.py:562-566) refuse to build it. Not checked in tempo main's primitives either.",
-        "typescript": "ox KeyAuthorization signs an admin key authorization carrying expiry, limits or call scopes; the node rejects any transaction carrying one (tempo crates/evm/src/handler.rs:532-539), and tempo-go (key_authorization.go:103-105) and pytempo (keychain.py:562-566) refuse to build it. Not fixed in ox yet: re-check on the next ox bump."
+        "typescript": "ox KeyAuthorization signs an admin key authorization carrying expiry, limits or call scopes; the node rejects any transaction carrying one (tempo crates/evm/src/handler.rs:532-539), and tempo-go (key_authorization.go:103-105) and pytempo (keychain.py:562-566) refuse to build it. Not fixed in ox yet: re-check on the next ox bump. Still unfixed in ox 0.14.67."
       },
       "source": "tempo crates/evm/src/handler.rs admin key validation; tempo-go key_authorization.go Validate; pytempo keychain.py KeyAuthorization",
       "input": {

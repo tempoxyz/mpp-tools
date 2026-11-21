@@ -2806,12 +2806,12 @@
       "sdkVersions": {
         "go": ">0.8.0",
         "python": ">0.7.0",
-        "typescript": ">0.14.59"
+        "typescript": ">0.14.67"
       },
       "skipReasons": {
         "go": "tempo-go Tx.Validate (pkg/transaction/transaction.go:171) does not check CREATE placement (only the first call may be a CREATE, and only one), so tempo-go signs batches tempo-primitives refuses (tempo_transaction.rs validate_calls) and the node rejects. Not fixed on tempo-go main (542c18e) either: re-check on the next tempo-go bump. Still unfixed in tempo-go v0.7.0 or v0.8.0.",
         "python": "pytempo TempoTransaction.validate (pytempo/models.py:352 in 0.6.2, :367 on main) does not check CREATE placement, so pytempo signs batches tempo-primitives refuses and the node rejects. Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump. Still unfixed in pytempo 0.7.0.",
-        "typescript": "ox TxEnvelopeTempo.assert (ox/tempo/TxEnvelopeTempo.ts:177-226) does not check CREATE placement (only the first call may be a CREATE, and only one), so ox signs batches tempo-primitives refuses (tempo_transaction.rs validate_calls) and the node rejects. Not fixed in ox yet: re-check on the next ox bump."
+        "typescript": "ox TxEnvelopeTempo.assert (ox/tempo/TxEnvelopeTempo.ts:177-226) does not check CREATE placement (only the first call may be a CREATE, and only one), so ox signs batches tempo-primitives refuses (tempo_transaction.rs validate_calls) and the node rejects. Not fixed in ox yet: re-check on the next ox bump. Still unfixed in ox 0.14.67."
       },
       "source": "tempo-primitives tempo_transaction.rs validate_calls; test_validate_create_not_first_call_fails",
       "input": {
@@ -2858,12 +2858,12 @@
       "sdkVersions": {
         "go": ">0.8.0",
         "python": ">0.7.0",
-        "typescript": ">0.14.59"
+        "typescript": ">0.14.67"
       },
       "skipReasons": {
         "go": "tempo-go Tx.Validate (pkg/transaction/transaction.go:171) does not check CREATE placement (only the first call may be a CREATE, and only one), so tempo-go signs batches tempo-primitives refuses (tempo_transaction.rs validate_calls) and the node rejects. Not fixed on tempo-go main (542c18e) either: re-check on the next tempo-go bump. Still unfixed in tempo-go v0.7.0 or v0.8.0.",
         "python": "pytempo TempoTransaction.validate (pytempo/models.py:352 in 0.6.2, :367 on main) does not check CREATE placement, so pytempo signs batches tempo-primitives refuses and the node rejects. Not fixed on pytempo main (2a6a4c2) either: re-check on the next pytempo bump. Still unfixed in pytempo 0.7.0.",
-        "typescript": "ox TxEnvelopeTempo.assert (ox/tempo/TxEnvelopeTempo.ts:177-226) does not check CREATE placement (only the first call may be a CREATE, and only one), so ox signs batches tempo-primitives refuses (tempo_transaction.rs validate_calls) and the node rejects. Not fixed in ox yet: re-check on the next ox bump."
+        "typescript": "ox TxEnvelopeTempo.assert (ox/tempo/TxEnvelopeTempo.ts:177-226) does not check CREATE placement (only the first call may be a CREATE, and only one), so ox signs batches tempo-primitives refuses (tempo_transaction.rs validate_calls) and the node rejects. Not fixed in ox yet: re-check on the next ox bump. Still unfixed in ox 0.14.67."
       },
       "source": "tempo-primitives tempo_transaction.rs validate_calls; test_validate_multiple_creates_fails",
       "input": {
