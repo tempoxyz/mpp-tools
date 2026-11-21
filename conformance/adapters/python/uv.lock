@@ -774,7 +774,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pympp", extras = ["tempo"], git = "https://github.com/tempoxyz/pympp.git?rev=18390aed08d45dee178ad3875a272a669f34adf9" }]
+requires-dist = [{ name = "pympp", extras = ["tempo"], specifier = "==0.26.0" }]
 
 [[package]]
 name = "multidict"
@@ -1141,21 +1141,17 @@ wheels = [
 ]
 
 [[package]]
-name = "pyjwt"
-version = "2.15.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/02/a5/5197bfd06417837ac079921c66fa6393f1dea3557272a263cebfef69e432/pyjwt-2.15.0.tar.gz", hash = "sha256:b11c5f9791d7bf51c2b39a81ed669f6b2dbbd669df2942f6c60167e9e3d1abe4", size = 120513, upload-time = "2026-09-23T16:56:00.689Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e8/55/40e45bf052ee8ee12a4dfd785519660f8effa7b065442b91646ec6828619/pyjwt-2.15.0-py3-none-any.whl", hash = "sha256:7a3742debf6b879e912dbb9819ceec1594be812452b78c5f2e2dfc56564954f8", size = 33680, upload-time = "2026-09-23T16:55:59.241Z" },
-]
-
-[[package]]
 name = "pympp"
-version = "0.11.0"
-source = { git = "https://github.com/tempoxyz/pympp.git?rev=18390aed08d45dee178ad3875a272a669f34adf9#18390aed08d45dee178ad3875a272a669f34adf9" }
+version = "0.26.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
+    { name = "pydantic" },
     { name = "rfc8785" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/68/03/680f222e209cba8b165ca2b7f700993a443fa674c7a2c0c8c91c6cd47473/pympp-0.26.0.tar.gz", hash = "sha256:ecf23a24a0d11414cbb9c511f8c3cf516f718213ebb4aa5ee5a18f6de718fb15", size = 1053074, upload-time = "2026-11-19T02:08:07.261Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3b/c2/2791ab6e2e208d32b30ba16f47fb8b6bfdd66fad3c072ef8e5f8985c1447/pympp-0.26.0-py3-none-any.whl", hash = "sha256:fba6fea5501047f694dfa507201d4b3ae56ec42c5303a76253cdfe89a8c04221", size = 492329, upload-time = "2026-11-19T02:08:05.805Z" },
 ]
 
 [package.optional-dependencies]
@@ -1166,7 +1162,6 @@ tempo = [
     { name = "eth-hash", extra = ["pycryptodome"] },
     { name = "propcache" },
     { name = "pydantic" },
-    { name = "pyjwt" },
     { name = "pytempo" },
     { name = "rlp" },
     { name = "urllib3" },
@@ -1175,18 +1170,19 @@ tempo = [
 
 [[package]]
 name = "pytempo"
-version = "0.5.1"
+version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
     { name = "eth-account" },
     { name = "eth-utils" },
+    { name = "pycryptodome" },
     { name = "rlp" },
     { name = "web3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f3/5b/2a31105f61a75413a8a61274443d610a7813142c1638956c76d963228896/pytempo-0.5.1.tar.gz", hash = "sha256:3f70c0bb8b3111b7eb56a334e22df0eeb715b8f35d77fced11358e8d487a6bad", size = 267288, upload-time = "2026-05-02T19:36:30.815Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a6/f1/a9a9ea543ee8142726e87ab547dfb571d475e3598e3c0827d44a30de6114/pytempo-0.7.0.tar.gz", hash = "sha256:c8e4004a5ba6856ee60dc97b9ec4200c389d9fb8d26386ff369df1f21c51ae98", size = 284706, upload-time = "2026-10-31T22:00:34.566Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/eb/51/85d4f411c8768b3308b2ef40365f98b7d64ef33655b6bc67f612cdce9416/pytempo-0.5.1-py3-none-any.whl", hash = "sha256:3e912ad4e81455e54523d93dd27cf06921c624b56ec622a4d16e7726640cb04c", size = 38436, upload-time = "2026-05-02T19:36:29.667Z" },
+    { url = "https://files.pythonhosted.org/packages/a8/41/6687905f232d2974609b2f03b35d989428134959bc698f31514e3a9d2d20/pytempo-0.7.0-py3-none-any.whl", hash = "sha256:f67df3c7933dc7c6aeae30c01ab5f67b3de7dc2c0b4d2b2fd39cfbdd2f20d7c0", size = 68660, upload-time = "2026-10-31T22:00:33.381Z" },
 ]
 
 [[package]]

@@ -7,7 +7,7 @@
         "status": 200
       },
       "challenge": {
-        "id": "uE4umHRK4oV6cnekYoRR9PJRLUnJUc04jKD2CII_0Xs",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -41,7 +41,7 @@
         "content_type": "application/problem+json"
       },
       "challenge": {
-        "id": "eGZY3POQe1hbBXRxmUV7c2x3JJuYHHp1BaSYw_atRT4",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -59,10 +59,10 @@
         }
       },
       "problem_details": {
-        "type": "https://paymentauth.org/problems/verification-failed",
-        "title": "Verification Failed",
-        "status": 402,
-        "detail": "Payment verification failed."
+        "type": "https://paymentauth.org/problems/internal-payment-error",
+        "title": "Internal Payment Error",
+        "status": 500,
+        "detail": "An internal payment error occurred."
       }
     },
     {
@@ -74,7 +74,7 @@
         "content_type": "application/problem+json"
       },
       "challenge": {
-        "id": "JRG7b6DqKFQ7XUTC74TuEottJGR8iijrV0b6S0RUHF8",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -92,10 +92,10 @@
         }
       },
       "problem_details": {
-        "type": "https://paymentauth.org/problems/verification-failed",
-        "title": "Verification Failed",
-        "status": 402,
-        "detail": "Payment verification failed."
+        "type": "https://paymentauth.org/problems/internal-payment-error",
+        "title": "Internal Payment Error",
+        "status": 500,
+        "detail": "An internal payment error occurred."
       }
     },
     {
@@ -107,7 +107,7 @@
         "content_type": "application/problem+json"
       },
       "challenge": {
-        "id": "ALWnZbLQsNNdlMPbqwuaEeg924WTI9SFggx6CXr2ixE",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -140,7 +140,7 @@
         "content_type": "application/problem+json"
       },
       "challenge": {
-        "id": "CklBdrnjGRzvQAIgbMKN6zi9kk57J7fU4uC1naYyzJo",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -173,7 +173,7 @@
         "content_type": "application/problem+json"
       },
       "challenge": {
-        "id": "Zt5PbYI4wTvtzb_MJfz8JJoAzUqQouFEOhf3pBXgp_g",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -194,7 +194,7 @@
         "type": "https://paymentauth.org/problems/invalid-challenge",
         "title": "Invalid Challenge",
         "status": 402,
-        "detail": "Challenge \"Zt5PbYI4wTvtzb_MJfz8JJoAzUqQouFEOhf3pBXgp_g\" is invalid: challenge was not issued by this server."
+        "detail": "Challenge \"wJSB-0z-9D3tGGwB8UZb69YzkwpNpMMCHIH2w1hoXRg\" is invalid: challenge was not issued by this server."
       }
     },
     {
@@ -239,7 +239,7 @@
         "content_type": "application/problem+json"
       },
       "challenge": {
-        "id": "tOreB5Td6IUx1ov_WXUcuGFY_UNnqlLbnml1q-WiqZs",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -260,7 +260,7 @@
         "type": "https://paymentauth.org/problems/invalid-challenge",
         "title": "Invalid Challenge",
         "status": 402,
-        "detail": "Challenge \"tOreB5Td6IUx1ov_WXUcuGFY_UNnqlLbnml1q-WiqZs\" is invalid: challenge was not issued by this server."
+        "detail": "Challenge \"TtEmErR_u_I9NFyB2FwhrrbSdr_6aA35-ffvPi4F68Y\" is invalid: challenge was not issued by this server."
       }
     },
     {
@@ -270,7 +270,7 @@
         "status": 200
       },
       "challenge": {
-        "id": "uDo8Ui9-DlmesH8x7CgPDGOkToFdIhILnNlTnGvOgpY",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -329,7 +329,7 @@
         "content_type": "application/problem+json"
       },
       "challenge": {
-        "id": "ALWnZbLQsNNdlMPbqwuaEeg924WTI9SFggx6CXr2ixE",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -362,7 +362,7 @@
         "content_type": "application/problem+json"
       },
       "challenge": {
-        "id": "eGZY3POQe1hbBXRxmUV7c2x3JJuYHHp1BaSYw_atRT4",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -395,7 +395,7 @@
         "content_type": "application/problem+json"
       },
       "challenge": {
-        "id": "CklBdrnjGRzvQAIgbMKN6zi9kk57J7fU4uC1naYyzJo",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -426,7 +426,7 @@
         "status": 200
       },
       "challenge": {
-        "id": "mkH7xRUXiBE0R572FplaYFV3LdKeQKdrgeQpJilqp-Y",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -458,7 +458,7 @@
         "status": 200
       },
       "challenge": {
-        "id": "NuN6U8XwZzBd8au42wQ_Xuc8mkKm9Q-g-PYP_nnE56U",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -491,7 +491,7 @@
         "status": 200
       },
       "challenge": {
-        "id": "MXBqbOag0__hjgdQK-abiAEUo3D33FWSCw6VRk98_-M",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -524,7 +524,7 @@
         "error_type": "payment_required"
       },
       "challenge": {
-        "id": "A8e_Yh8xE7GN6jPKRuiynuJKOGmkA_qpaUv7xz3jhGI",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -550,7 +550,7 @@
         "status": 200
       },
       "challenge": {
-        "id": "iik1fN83zWYZk83T5qtKlXJpaCcm5HfxagbGUCiA2aM",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -586,7 +586,7 @@
         "content_type": "application/problem+json"
       },
       "challenge": {
-        "id": "hL1lyyE8z9vnq-fFqNWC1FnMKM4IJZBYfiTb3RAg1QI",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -621,7 +621,7 @@
         "status": 200
       },
       "challenge": {
-        "id": "hIQoiyJor26FxaSmfr8BIpfyzZIPsKjwQ2w43GsEXRg",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -689,7 +689,7 @@
         "status": 200
       },
       "challenge": {
-        "id": "W-oqGgKN_iqbUbPsNS0FUDUWUlbsKA-rw51Y45VVffE",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -723,7 +723,7 @@
         "status": 200
       },
       "challenge": {
-        "id": "xHyapBoFzA8a4ihIWvF1gCUapM-iB66TCDHjjBtGDbQ",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -758,7 +758,7 @@
         "content_type": "application/problem+json"
       },
       "challenge": {
-        "id": "xHyapBoFzA8a4ihIWvF1gCUapM-iB66TCDHjjBtGDbQ",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -780,7 +780,7 @@
         "type": "https://paymentauth.org/problems/invalid-challenge",
         "title": "Invalid Challenge",
         "status": 402,
-        "detail": "Challenge \"xHyapBoFzA8a4ihIWvF1gCUapM-iB66TCDHjjBtGDbQ\" is invalid: credential amount does not match this route's requirements."
+        "detail": "Challenge \"47NACcXdaGHYrj4rGnHmmKeSZNo9lp_cRx_rhN4DfwU\" is invalid: credential amount does not match this route's requirements."
       }
     },
     {
@@ -790,7 +790,7 @@
         "status": 200
       },
       "challenge": {
-        "id": "gbpojPz7Upkd_szke1qqGtAT3T2VGdKWBO027UagW2Q",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -824,7 +824,7 @@
         "error_type": "payment_required"
       },
       "challenge": {
-        "id": "yxk-yW17UA9UAMMHfHtkv5hSB105hn2xvYYkZsPllBA",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
@@ -851,7 +851,7 @@
         "status": 200
       },
       "challenge": {
-        "id": "tuB4PLgSqEh7F_aG-bI7YPU9ZBnsB9O7DHMCgUjovy8",
+        "id": "<nonce-bound>",
         "method": "tempo",
         "intent": "charge",
         "realm": "conformance",
