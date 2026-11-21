@@ -2209,10 +2209,10 @@
         "node-reject"
       ],
       "sdkVersions": {
-        "typescript": ">0.14.59"
+        "typescript": ">0.14.67"
       },
       "skipReasons": {
-        "typescript": "ox TxEnvelopeTempo.deserialize ignores bytes after the RLP list; the node rejects them. Not fixed in ox yet: re-check on the next ox bump."
+        "typescript": "ox TxEnvelopeTempo.deserialize ignores bytes after the RLP list; the node rejects them. Not fixed in ox yet: re-check on the next ox bump. Still unfixed in ox 0.14.67."
       },
       "source": "new",
       "input": {
@@ -2240,10 +2240,10 @@
         "node-reject"
       ],
       "sdkVersions": {
-        "typescript": ">0.14.59"
+        "typescript": ">0.14.67"
       },
       "skipReasons": {
-        "typescript": "ox TxEnvelopeTempo.deserialize does not check the 0x76 type byte; the node rejects other types. Not fixed in ox yet: re-check on the next ox bump."
+        "typescript": "ox TxEnvelopeTempo.deserialize does not check the 0x76 type byte; the node rejects other types. Not fixed in ox yet: re-check on the next ox bump. Still unfixed in ox 0.14.67."
       },
       "source": "new",
       "input": {
@@ -2296,10 +2296,10 @@
         "node-reject"
       ],
       "sdkVersions": {
-        "typescript": ">0.14.59"
+        "typescript": ">0.14.67"
       },
       "skipReasons": {
-        "typescript": "ox TxEnvelopeTempo.deserialize and Secp256k1.recoverAddress accept a high-s (malleable) sender signature; the node rejects it. Not fixed in ox yet: re-check on the next ox bump."
+        "typescript": "ox TxEnvelopeTempo.deserialize and Secp256k1.recoverAddress accept a high-s (malleable) sender signature; the node rejects it. Not fixed in ox yet: re-check on the next ox bump. Still unfixed in ox 0.14.67."
       },
       "source": "new",
       "input": {
@@ -2352,10 +2352,10 @@
         "node-reject"
       ],
       "sdkVersions": {
-        "typescript": ">0.14.59"
+        "typescript": ">0.14.67"
       },
       "skipReasons": {
-        "typescript": "ox TxEnvelopeTempo.deserialize accepts the legacy tempo.ts fee payer trailer; the node rejects it. Not fixed in ox yet: re-check on the next ox bump."
+        "typescript": "ox TxEnvelopeTempo.deserialize accepts the legacy tempo.ts fee payer trailer; the node rejects it. Not fixed in ox yet: re-check on the next ox bump. Still unfixed in ox 0.14.67."
       },
       "source": "tempo-go pkg/transaction/golden_test.go TestTempoGoldenFormat",
       "input": {
@@ -2442,11 +2442,11 @@
       ],
       "sdkVersions": {
         "go": ">0.8.0",
-        "typescript": ">0.14.59"
+        "typescript": ">0.14.67"
       },
       "skipReasons": {
         "go": "tempo-go Deserialize (pkg/transaction/deserialize.go:44) does not check CREATE placement, so it decodes a transaction the node rejects. Not fixed on tempo-go main (542c18e) either: re-check on the next tempo-go bump. Still unfixed in tempo-go v0.7.0 or v0.8.0.",
-        "typescript": "ox TxEnvelopeTempo.deserialize does not check CREATE placement (TxEnvelopeTempo.assert, ox/tempo/TxEnvelopeTempo.ts:177-226), so it decodes a transaction the node rejects. Not fixed in ox yet: re-check on the next ox bump."
+        "typescript": "ox TxEnvelopeTempo.deserialize does not check CREATE placement (TxEnvelopeTempo.assert, ox/tempo/TxEnvelopeTempo.ts:177-226), so it decodes a transaction the node rejects. Not fixed in ox yet: re-check on the next ox bump. Still unfixed in ox 0.14.67."
       },
       "source": "tempo-primitives tempo_transaction.rs validate_calls (AASigned decode validates)",
       "input": {
@@ -2474,10 +2474,10 @@
         "node-reject"
       ],
       "sdkVersions": {
-        "typescript": ">0.14.59"
+        "typescript": ">0.14.67"
       },
       "skipReasons": {
-        "typescript": "ox KeyAuthorization.fromTuple treats an explicit 0x80 as an absent field (isAbsent, ox/tempo/KeyAuthorization.ts:1204-1206; token limit period ox/tempo/KeyAuthorization.ts:694-699), so it accepts the non-canonical trailing 0x80 that tempo-primitives (#[rlp(trailing(canonical))], key_authorization.rs) and the node reject. Not fixed in ox yet: re-check on the next ox bump."
+        "typescript": "ox KeyAuthorization.fromTuple treats an explicit 0x80 as an absent field (isAbsent, ox/tempo/KeyAuthorization.ts:1204-1206; token limit period ox/tempo/KeyAuthorization.ts:694-699), so it accepts the non-canonical trailing 0x80 that tempo-primitives (#[rlp(trailing(canonical))], key_authorization.rs) and the node reject. Not fixed in ox yet: re-check on the next ox bump. Still unfixed in ox 0.14.67."
       },
       "source": "tempo-primitives key_authorization.rs KeyAuthorizationWire #[rlp(trailing(canonical))]; test_decode_rejects_explicit_absent_witness_field",
       "input": {
@@ -2505,10 +2505,10 @@
         "node-reject"
       ],
       "sdkVersions": {
-        "typescript": ">0.14.59"
+        "typescript": ">0.14.67"
       },
       "skipReasons": {
-        "typescript": "ox KeyAuthorization.fromTuple treats an explicit 0x80 as an absent field (isAbsent, ox/tempo/KeyAuthorization.ts:1204-1206; token limit period ox/tempo/KeyAuthorization.ts:694-699), so it accepts the non-canonical trailing 0x80 that tempo-primitives (#[rlp(trailing(canonical))], key_authorization.rs) and the node reject. Not fixed in ox yet: re-check on the next ox bump."
+        "typescript": "ox KeyAuthorization.fromTuple treats an explicit 0x80 as an absent field (isAbsent, ox/tempo/KeyAuthorization.ts:1204-1206; token limit period ox/tempo/KeyAuthorization.ts:694-699), so it accepts the non-canonical trailing 0x80 that tempo-primitives (#[rlp(trailing(canonical))], key_authorization.rs) and the node reject. Not fixed in ox yet: re-check on the next ox bump. Still unfixed in ox 0.14.67."
       },
       "source": "tempo-primitives key_authorization.rs TokenLimitWire #[rlp(trailing(canonical))]",
       "input": {

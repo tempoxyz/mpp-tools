@@ -60,6 +60,8 @@ KINDS = ("accepts", "rejects", "value", "crash", "reference_crash")
 CATEGORIES = ("harmless", "sdk-bug", "adapter-bug")
 # Values compared whole: a difference inside them is one field, not one per key.
 OPAQUE_FIELDS = {"request", "payload", "extra", "source"}
+# Fields are named this many objects deep; deeper differences name their parent.
+MAX_FIELD_DEPTH = 8
 VECTOR_FILES = {
     "challenge.parse": "www-authenticate.json",
     "challenge.format": "www-authenticate.json",
@@ -111,17 +113,37 @@ def _drop_empty(value: Any, required: set[str]) -> Any:
     }
 
 
-def _numbers(value: Any) -> Any:
-    """Compare integers beyond 2**53 as the doubles JavaScript reads them as."""
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, int) and abs(value) > 2**53:
+def _number(value: Any) -> Any:
+    if isinstance(value, int) and not isinstance(value, bool) and abs(value) > 2**53:
         return float(value)
-    if isinstance(value, dict):
-        return {key: _numbers(item) for key, item in value.items()}
-    if isinstance(value, list):
-        return [_numbers(item) for item in value]
     return value
+
+
+def _numbers(value: Any) -> Any:
+    """Compare integers beyond 2**53 as the doubles JavaScript reads them as.
+
+    Walks with an explicit stack: an adapter can return a value nested
+    thousands of levels deep (a huge_json request), past the recursion limit.
+    """
+    if not isinstance(value, (dict, list)):
+        return _number(value)
+    root: dict[Any, Any] | list[Any] = {} if isinstance(value, dict) else []
+    stack: list[tuple[Any, Any]] = [(value, root)]
+    while stack:
+        source, target = stack.pop()
+        items = source.items() if isinstance(source, dict) else enumerate(source)
+        for key, item in items:
+            if isinstance(item, (dict, list)):
+                copy: dict[Any, Any] | list[Any] = {} if isinstance(item, dict) else []
+                stack.append((item, copy))
+                item = copy
+            else:
+                item = _number(item)
+            if isinstance(target, dict):
+                target[key] = item
+            else:
+                target.append(item)
+    return root
 
 
 def _decode_request(challenge: Any) -> Any:
@@ -173,9 +195,13 @@ def outcome(operation: str, response: dict[str, Any]) -> dict[str, Any]:
 _MISSING = object()
 
 
-def diff_fields(expected: Any, actual: Any, prefix: str = "") -> tuple[str, ...]:
-    """Name the fields where two normalized values differ."""
-    if not isinstance(expected, dict) or not isinstance(actual, dict):
+def diff_fields(expected: Any, actual: Any, prefix: str = "", depth: int = 0) -> tuple[str, ...]:
+    """Name the fields where two normalized values differ.
+
+    Objects nested MAX_FIELD_DEPTH deep compare whole, so a deeply nested
+    value cannot exhaust the recursion limit.
+    """
+    if not isinstance(expected, dict) or not isinstance(actual, dict) or depth >= MAX_FIELD_DEPTH:
         return () if expected == actual else (prefix.rstrip(".") or "value",)
     fields: list[str] = []
     for key in sorted(set(expected) | set(actual), key=str):
@@ -185,7 +211,7 @@ def diff_fields(expected: Any, actual: Any, prefix: str = "") -> tuple[str, ...]
         if left is _MISSING or right is _MISSING or key in OPAQUE_FIELDS:
             fields.append(f"{prefix}{key}")
         else:
-            fields.extend(diff_fields(left, right, f"{prefix}{key}."))
+            fields.extend(diff_fields(left, right, f"{prefix}{key}.", depth + 1))
     return tuple(fields)
 
 

@@ -150,10 +150,10 @@
         "client-data-json"
       ],
       "sdkVersions": {
-        "typescript": ">0.14.59"
+        "typescript": ">0.14.67"
       },
       "skipReasons": {
-        "typescript": "ox rejects this clientDataJSON, but tempo-primitives (the node) accepts it: ox requires the canonical serialization the node does not. Not fixed in ox yet: re-check on the next ox bump."
+        "typescript": "ox rejects this clientDataJSON, but tempo-primitives (the node) accepts it: ox requires the canonical serialization the node does not. Not fixed in ox yet: re-check on the next ox bump. Still unfixed in ox 0.14.67."
       },
       "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
       "input": {
@@ -235,10 +235,10 @@
         "client-data-json"
       ],
       "sdkVersions": {
-        "typescript": ">0.14.59"
+        "typescript": ">0.14.67"
       },
       "skipReasons": {
-        "typescript": "ox WebAuthnP256.verify accepts this clientDataJSON, but tempo-primitives (the node) rejects it: ox only string-matches type/challenge, while the node parses the JSON strictly. Not fixed in ox yet: re-check on the next ox bump."
+        "typescript": "ox WebAuthnP256.verify accepts this clientDataJSON, but tempo-primitives (the node) rejects it: ox only string-matches type/challenge, while the node parses the JSON strictly. Not fixed in ox yet: re-check on the next ox bump. Still unfixed in ox 0.14.67."
       },
       "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
       "input": {
@@ -261,10 +261,10 @@
         "client-data-json"
       ],
       "sdkVersions": {
-        "typescript": ">0.14.59"
+        "typescript": ">0.14.67"
       },
       "skipReasons": {
-        "typescript": "ox WebAuthnP256.verify accepts this clientDataJSON, but tempo-primitives (the node) rejects it: ox only string-matches type/challenge, while the node parses the JSON strictly. Not fixed in ox yet: re-check on the next ox bump."
+        "typescript": "ox WebAuthnP256.verify accepts this clientDataJSON, but tempo-primitives (the node) rejects it: ox only string-matches type/challenge, while the node parses the JSON strictly. Not fixed in ox yet: re-check on the next ox bump. Still unfixed in ox 0.14.67."
       },
       "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
       "input": {
@@ -287,10 +287,10 @@
         "client-data-json"
       ],
       "sdkVersions": {
-        "typescript": ">0.14.59"
+        "typescript": ">0.14.67"
       },
       "skipReasons": {
-        "typescript": "ox WebAuthnP256.verify accepts this clientDataJSON, but tempo-primitives (the node) rejects it: ox only string-matches type/challenge, while the node parses the JSON strictly. Not fixed in ox yet: re-check on the next ox bump."
+        "typescript": "ox WebAuthnP256.verify accepts this clientDataJSON, but tempo-primitives (the node) rejects it: ox only string-matches type/challenge, while the node parses the JSON strictly. Not fixed in ox yet: re-check on the next ox bump. Still unfixed in ox 0.14.67."
       },
       "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
       "input": {
@@ -313,10 +313,10 @@
         "client-data-json"
       ],
       "sdkVersions": {
-        "typescript": ">0.14.59"
+        "typescript": ">0.14.67"
       },
       "skipReasons": {
-        "typescript": "ox WebAuthnP256.verify accepts this clientDataJSON, but tempo-primitives (the node) rejects it: ox only string-matches type/challenge, while the node parses the JSON strictly. Not fixed in ox yet: re-check on the next ox bump."
+        "typescript": "ox WebAuthnP256.verify accepts this clientDataJSON, but tempo-primitives (the node) rejects it: ox only string-matches type/challenge, while the node parses the JSON strictly. Not fixed in ox yet: re-check on the next ox bump. Still unfixed in ox 0.14.67."
       },
       "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
       "input": {
@@ -398,10 +398,10 @@
         "client-data-json"
       ],
       "sdkVersions": {
-        "typescript": ">0.14.59"
+        "typescript": ">0.14.67"
       },
       "skipReasons": {
-        "typescript": "ox rejects this clientDataJSON, but tempo-primitives (the node) accepts it: ox requires the canonical serialization the node does not. Not fixed in ox yet: re-check on the next ox bump."
+        "typescript": "ox rejects this clientDataJSON, but tempo-primitives (the node) accepts it: ox requires the canonical serialization the node does not. Not fixed in ox yet: re-check on the next ox bump. Still unfixed in ox 0.14.67."
       },
       "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
       "input": {
@@ -483,10 +483,10 @@
         "client-data-json"
       ],
       "sdkVersions": {
-        "typescript": ">0.14.59"
+        "typescript": ">0.14.67"
       },
       "skipReasons": {
-        "typescript": "ox rejects this clientDataJSON, but tempo-primitives (the node) accepts it: ox requires the canonical serialization the node does not. Not fixed in ox yet: re-check on the next ox bump."
+        "typescript": "ox rejects this clientDataJSON, but tempo-primitives (the node) accepts it: ox requires the canonical serialization the node does not. Not fixed in ox yet: re-check on the next ox bump. Still unfixed in ox 0.14.67."
       },
       "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
       "input": {
@@ -705,10 +705,10 @@
         "client-data-json"
       ],
       "sdkVersions": {
-        "typescript": ">0.14.59"
+        "typescript": ">0.14.67"
       },
       "skipReasons": {
-        "typescript": "ox WebAuthnP256.verify accepts this clientDataJSON, but tempo-primitives (the node) rejects it: ox only string-matches type/challenge, while the node parses the JSON strictly. Not fixed in ox yet: re-check on the next ox bump."
+        "typescript": "ox WebAuthnP256.verify accepts this clientDataJSON, but tempo-primitives (the node) rejects it: ox only string-matches type/challenge, while the node parses the JSON strictly. Not fixed in ox yet: re-check on the next ox bump. Still unfixed in ox 0.14.67."
       },
       "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
       "input": {
@@ -731,10 +731,10 @@
         "client-data-json"
       ],
       "sdkVersions": {
-        "typescript": ">0.14.59"
+        "typescript": ">0.14.67"
       },
       "skipReasons": {
-        "typescript": "ox WebAuthnP256.verify accepts this clientDataJSON, but tempo-primitives (the node) rejects it: ox only string-matches type/challenge, while the node parses the JSON strictly. Not fixed in ox yet: re-check on the next ox bump."
+        "typescript": "ox WebAuthnP256.verify accepts this clientDataJSON, but tempo-primitives (the node) rejects it: ox only string-matches type/challenge, while the node parses the JSON strictly. Not fixed in ox yet: re-check on the next ox bump. Still unfixed in ox 0.14.67."
       },
       "source": "tempo-go/pytempo testdata/viem/webauthn_client_data.json; verdict from tempo-primitives 1.11.0 recover_signer",
       "input": {
