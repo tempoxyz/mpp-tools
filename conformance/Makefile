@@ -1,11 +1,12 @@
 # Conformance Testing Makefile
 # Cross-SDK protocol compatibility testing for MPP implementations
 
-.PHONY: all update-locks update-java install install-runner install-java use-local-sdk test test-all test-sdk test-typescript test-rust test-python test-go test-ruby test-java test-json flow flow-sdk flow-typescript flow-rust flow-python flow-go flow-ruby flow-java server-verify server-verify-sdk server-verify-go pair pair-sdk update-pair-snapshots update-flow-golden gap-report clean help
+.PHONY: all update-locks update-java install install-runner install-java use-local-sdk test test-all test-sdk test-typescript test-rust test-python test-go test-ruby test-java test-json flow flow-sdk flow-typescript flow-rust flow-python flow-go flow-ruby flow-java server-verify server-verify-sdk server-verify-go pair pair-sdk update-pair-snapshots update-flow-golden gap-report abnf-fuzz clean help
 
 RUBY ?= ruby
 BUNDLE ?= bundle
 ADAPTER ?=
+ABNF_FUZZ_ARGS ?=
 SDK_PATH ?=
 SPECS_PATH ?=
 RUNNER_PYTHON ?= uv run --locked python
@@ -193,6 +194,10 @@ gap-report:
 	@echo "→ Writing the requirement gap report..."
 	$(RUNNER_PYTHON) scripts/gap_report.py $(if $(SPECS_PATH),--specs "$(SPECS_PATH)")
 
+abnf-fuzz:
+	@echo "→ Fuzzing adapters with cases generated from the specification's ABNF..."
+	$(RUNNER_PYTHON) scripts/abnf_fuzz.py $(if $(SPECS_PATH),--specs "$(SPECS_PATH)") $(ABNF_FUZZ_ARGS)
+
 #------------------------------------------------------------------------------
 # Individual adapter CLI tests (for debugging)
 #------------------------------------------------------------------------------
@@ -253,6 +258,7 @@ help:
 	@echo "  update-pair-snapshots  Regenerate pair snapshots from the TypeScript pair"
 	@echo "  update-flow-golden  Regenerate flow golden results"
 	@echo "  gap-report       Report spec requirements vectors and flows cover (SPECS_PATH=../mpp-specs)"
+	@echo "  abnf-fuzz        Fuzz adapters with cases from the spec ABNF (SPECS_PATH=../mpp-specs, ABNF_FUZZ_ARGS='--seed 0 --cases 200')"
 	@echo "  test-typescript  Test TypeScript adapter only"
 	@echo "  test-rust        Test Rust adapter only"
 	@echo "  test-python      Test Python adapter only"
