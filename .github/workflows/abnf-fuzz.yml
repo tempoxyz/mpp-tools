@@ -1,0 +1,109 @@
+name: ABNF Differential Fuzzing
+
+# Generates WWW-Authenticate, Authorization, Payment-Receipt and Accept-Payment
+# values from the ABNF in tempoxyz/mpp-specs (scripts/abnf_fuzz.py), sends them
+# to the pinned adapters, and reports adapters that disagree with the grammar or
+# with mppx. Pull requests run a small report-only pass.
+#
+# The nightly run keeps one open issue (label abnf-fuzz-disagreement): its body
+# lists the current findings, it gets a comment when findings appear or go
+# away, and it closes once adapters agree. The run fails only on findings the
+# issue did not list. A manual dispatch touches the issue only with the nightly
+# inputs (400 cases, seed 0); other dispatches report in the step summary.
+#
+# Adapters install and run in abnf-fuzz-adapters.yml, a reusable workflow whose
+# job_workflow_ref the abnf-fuzz STS policy does not match. The report job here
+# mints the issue token and runs only scripts/report_abnf_fuzz.py over the
+# uploaded report.
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+    paths:
+      - .github/actions/setup-conformance/**
+      - .github/workflows/abnf-fuzz.yml
+      - .github/workflows/abnf-fuzz-adapters.yml
+      - conformance/adapters/**
+      - conformance/fuzz/**
+      - conformance/golden/**
+      - conformance/package-lock.json
+      - conformance/pyproject.toml
+      - conformance/scripts/abnf_fuzz.py
+      - conformance/scripts/diff_fuzz.py
+      - conformance/scripts/harness.py
+      - conformance/scripts/report_abnf_fuzz.py
+      - conformance/uv.lock
+  schedule:
+    - cron: "30 5 * * *"
+  workflow_dispatch:
+    inputs:
+      cases:
+        description: Cases per header kind.
+        required: false
+        default: "400"
+      seed:
+        description: Seed for case generation.
+        required: false
+        default: "0"
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fuzz:
+    uses: ./.github/workflows/abnf-fuzz-adapters.yml # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      cases: ${{ github.event_name == 'pull_request' && 60 || fromJSON(inputs.cases || '400') }}
+      # Pull requests have no inputs, so they use seed 0.
+      seed: ${{ fromJSON(inputs.seed || '0') }}
+      report-only: ${{ github.event_name == 'pull_request' }}
+      # The nightly configuration leaves failing to the report job.
+      fail-on-disagreement: ${{ !(github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.cases == '400' && inputs.seed == '0'))) }}
+
+  report:
+    name: Update the disagreement issue
+    needs: fuzz
+    # Only the nightly configuration on main opens, updates or closes the issue.
+    if: always() && needs.fuzz.result != 'cancelled' && github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.cases == '400' && inputs.seed == '0'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download report
+        # The report is data from the fuzz job; nothing in it runs here.
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        continue-on-error: true
+        with:
+          name: abnf-fuzz-report
+          path: ${{ runner.temp }}/abnf-fuzz-report
+      - name: Mint issue token
+        id: sts
+        uses: tempoxyz/gh-actions/actions/github-sts@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+        with:
+          policy: abnf-fuzz
+      - name: Open, update, or close the disagreement issue
+        env:
+          GH_TOKEN: ${{ steps.sts.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          REPORT: ${{ runner.temp }}/abnf-fuzz-report/abnf-fuzz-report.json
+          STATUS: ${{ needs.fuzz.outputs.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python3 conformance/scripts/report_abnf_fuzz.py

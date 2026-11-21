@@ -1,0 +1,114 @@
+name: ABNF Differential Fuzzing (adapters)
+
+# Installs the pinned adapters and runs scripts/abnf_fuzz.py, then uploads its
+# report as the abnf-fuzz-report artifact. abnf-fuzz.yml calls it. This job
+# runs third-party SDK code, so it lives in its own workflow: its
+# job_workflow_ref does not match the abnf-fuzz STS policy, and it gets no write
+# token. id-token: write is only for the secure runner.
+
+on:
+  workflow_call:
+    inputs:
+      cases:
+        description: Cases per header kind.
+        required: true
+        type: number
+      seed:
+        description: Seed for case generation.
+        required: false
+        type: number
+        default: 0
+      report-only:
+        description: Pass --report-only, so disagreements do not set a non-zero status.
+        required: false
+        type: boolean
+        default: false
+      fail-on-disagreement:
+        description: Fail the job when abnf_fuzz.py exits non-zero. The nightly caller leaves that to its report job.
+        required: false
+        type: boolean
+        default: true
+    outputs:
+      status:
+        description: abnf_fuzz.py's exit status.
+        value: ${{ jobs.fuzz.outputs.status }}
+
+permissions: {}
+
+jobs:
+  fuzz:
+    name: ABNF differential fuzzing
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      status: ${{ steps.fuzz.outputs.status }}
+    defaults:
+      run:
+        working-directory: conformance
+    steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Checkout mpp-specs
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tempoxyz/mpp-specs
+          path: mpp-specs
+          persist-credentials: false
+
+      - name: Setup Rust and Node.js
+        uses: ./.github/actions/setup-conformance # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
+        with:
+          adapter: rust
+          setup-node: "true"
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-conformance # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
+        with:
+          adapter: go
+
+      - name: Install adapters
+        run: make install-runner install-python install-go install-rust
+
+      - name: Run ABNF differential fuzzing
+        id: fuzz
+        env:
+          CASES: ${{ inputs.cases }}
+          SEED: ${{ inputs.seed }}
+          REPORT_ONLY: ${{ inputs.report-only }}
+        run: |
+          set -- --cases "$CASES" --seed "$SEED"
+          if [ "$REPORT_ONLY" = true ]; then
+            set -- "$@" --report-only
+          fi
+          status=0
+          uv run --locked python scripts/abnf_fuzz.py --specs ../mpp-specs --adapters python,go,rust "$@" \
+            --report abnf-fuzz-report.json --summary abnf-fuzz-summary.md || status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          if [ -f abnf-fuzz-summary.md ]; then
+            cat abnf-fuzz-summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: abnf-fuzz-report
+          path: |
+            conformance/abnf-fuzz-report.json
+            conformance/abnf-fuzz-summary.md
+          if-no-files-found: warn
+
+      - name: Fail on disagreement
+        if: inputs.fail-on-disagreement && steps.fuzz.outputs.status != '0'
+        env:
+          STATUS: ${{ steps.fuzz.outputs.status }}
+        run: |
+          echo "abnf_fuzz.py exited with $STATUS; see the summary." >&2
+          exit 1
