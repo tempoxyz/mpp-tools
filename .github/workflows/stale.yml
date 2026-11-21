@@ -29,6 +29,8 @@ jobs:
           close-pr-message: "Closed due to inactivity. Reopen if still needed."
           stale-pr-label: stale
           exempt-draft-pr: false
+          # Leave the weekly reference SDK pin bump open until someone reviews it.
+          exempt-pr-labels: reference-pins
           operations-per-run: 300
           days-before-issue-stale: -1
           days-before-issue-close: -1

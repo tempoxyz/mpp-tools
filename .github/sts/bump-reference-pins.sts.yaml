@@ -1,0 +1,12 @@
+# Allow the Bump reference SDK pins workflow (schedule / workflow_dispatch on
+# main) to mint a short-lived token that commits to its
+# automation/bump-reference-pins branch, opens or updates that pull request,
+# and creates and applies the reference-pins label. Replaces the built-in
+# GITHUB_TOKEN, so the pull request runs CI like any other.
+subject: repo:tempoxyz@211589300/mpp-tools@1255838786:ref:refs/heads/main
+claim_pattern:
+  job_workflow_ref: tempoxyz/mpp-tools/\.github/workflows/bump-reference-pins\.yml@refs/heads/main
+permissions:
+  contents: write
+  issues: write
+  pull_requests: write

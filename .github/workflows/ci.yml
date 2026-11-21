@@ -42,6 +42,31 @@ jobs:
       - name: Lint workflows
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
 
+  golden-drift:
+    name: Golden drift
+    # flows/golden-results.json and pairs/snapshots.json record mppx's wire
+    # behavior: they change only with the mppx pin or the fixtures behind them.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check flow goldens and pair snapshots
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 conformance/scripts/check_golden_drift.py --base "$BASE_SHA" --head "$HEAD_SHA"
+
   script-tests:
     name: Python script tests
     runs-on: ubuntu-latest

@@ -28,6 +28,7 @@ Prerequisites for the conformance suite are in [conformance/README.md](./conform
 - Keep changes focused and follow existing patterns.
 - Protocol behavior changes add or update vectors in `conformance/vectors/`; run the affected adapters, then the full suite.
 - The pinned mppx release is the reference: it produces canonical flow results where the specification is ambiguous.
+- Reference SDK pins move through the Bump reference SDK pins workflow (`scripts/bump_reference_pins.py`), which regenerates `flows/golden-results.json` and `pairs/snapshots.json`. Change those files only with the mppx pin or the fixtures behind them; the Golden drift check fails otherwise.
 - Changes to `agents/shared.md` render into this file in the same pull request (`python3 agents/sync.py render AGENTS.md`); every other repository picks them up through its Sync AGENTS.md workflow.
 
 <!-- BEGIN MPP SHARED: synced from tempoxyz/mpp-tools agents/shared.md. Edit it there; changes here are overwritten. -->
