@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -65,7 +66,10 @@ class BumpTests(unittest.TestCase):
             locked.append(version)
             state["current"] = version
 
-        sdk = pins.Sdk("typescript", "mppx", "npm", lambda: latest, lambda: state["current"], lambda version: edited, lock)
+        published = datetime(2026, 11, 1, tzinfo=timezone.utc)
+        sdk = pins.Sdk(
+            "typescript", "mppx", "npm", lambda: [(latest, published)], lambda: state["current"], lambda version: edited, lock,
+        )
         return sdk, locked
 
     def test_bumps_and_locks_a_newer_release(self) -> None:
@@ -92,6 +96,14 @@ class BumpTests(unittest.TestCase):
         self.assertEqual(locked, ["0.21.1"])
         self.assertTrue(record["changed"])
 
+    def test_pins_never_move_back(self) -> None:
+        sdk, locked = self.sdk("0.22.0", "0.21.1")
+        with mock.patch.dict(pins.SDKS, {"typescript": sdk}), mock.patch("sys.stderr"):
+            [record] = pins.bump(["typescript"])
+        self.assertEqual(locked, [])
+        self.assertEqual(record["to"], "0.22.0")
+        self.assertFalse(record["changed"])
+
     def test_errors_are_recorded_per_sdk(self) -> None:
         sdk, _ = self.sdk("0.11.0", "0.21.1", error=RuntimeError("npm is not installed"))
         with mock.patch.dict(pins.SDKS, {"typescript": sdk}), mock.patch("sys.stderr"):
@@ -100,6 +112,24 @@ class BumpTests(unittest.TestCase):
 
 
 class VersionTests(unittest.TestCase):
+    def test_pick_release_skips_prereleases_and_too_new_releases(self) -> None:
+        now = datetime(2026, 11, 21, tzinfo=timezone.utc)
+        releases = [
+            ("0.20.1", now - timedelta(days=5)),
+            ("0.21.0", now - timedelta(days=3)),
+            ("0.9.0", now - timedelta(days=30)),
+            ("0.22.0-beta.1", now - timedelta(days=4)),
+            ("0.21.1", now - timedelta(hours=10)),
+        ]
+        self.assertEqual(pins.pick_release(releases, now - timedelta(days=2)), ("0.21.0", "0.21.1"))
+        self.assertEqual(pins.pick_release(releases, now), ("0.21.1", "0.21.1"))
+        with self.assertRaises(RuntimeError):
+            pins.pick_release(releases, now - timedelta(days=60))
+
+    def test_go_style_versions_compare_numerically(self) -> None:
+        now = datetime(2026, 11, 21, tzinfo=timezone.utc)
+        self.assertEqual(pins.pick_release([("v0.10.0", now), ("v0.9.1", now)], now), ("v0.10.0", "v0.10.0"))
+
     def test_satisfies_minimum(self) -> None:
         self.assertTrue(pins.satisfies_minimum("2.58.4", ">=2.57.19"))
         self.assertFalse(pins.satisfies_minimum("2.57.1", ">=2.57.19"))
@@ -143,7 +173,10 @@ class SummaryTests(unittest.TestCase):
     def test_render_summary(self) -> None:
         changes = [
             {"adapter": "typescript", "package": "mppx", "registry": "npm", "from": "0.11.0", "to": "0.21.1", "changed": True},
-            {"adapter": "java", "package": "com.stripe:mpp-java", "registry": "Maven Central", "from": "0.1.6", "to": "0.1.6", "changed": False},
+            {
+                "adapter": "java", "package": "com.stripe:mpp-java", "registry": "Maven Central",
+                "from": "0.1.6", "to": "0.1.6", "changed": False,
+            },
             {"adapter": "ruby", "package": "mpp-rb", "registry": "RubyGems", "from": "0.1.6", "error": "bundle is not installed"},
         ]
         diffs = {

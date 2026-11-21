@@ -29,6 +29,8 @@ import sys
 import urllib.request
 import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any, Callable
 
@@ -41,6 +43,11 @@ GOLDEN_PATHS = {
 USER_AGENT = "tempoxyz/mpp-tools bump-reference-pins"
 # GitHub rejects pull request bodies over 65,536 characters.
 MAX_BODY = 60_000
+# The secure runner's registry proxy refuses packages published in about the
+# last day ("recentlyPublished"), so a release that new could not install in CI.
+DEFAULT_MIN_AGE_DAYS = 1
+# Releases published after this are skipped; bump() sets it.
+cutoff = datetime.now(timezone.utc) - timedelta(days=DEFAULT_MIN_AGE_DAYS)
 
 
 # ---------------------------------------------------------------------------
@@ -58,36 +65,79 @@ def fetch_json(url: str) -> Any:
     return json.loads(fetch(url))
 
 
-def npm_latest(package: str) -> str:
-    return fetch_json(f"https://registry.npmjs.org/{package}")["dist-tags"]["latest"]
+Release = tuple[str, datetime]
 
 
-def pypi_latest(package: str) -> str:
-    return fetch_json(f"https://pypi.org/pypi/{package}/json")["info"]["version"]
+def _parse_time(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
-def crates_latest(package: str) -> str:
-    version = fetch_json(f"https://crates.io/api/v1/crates/{package}")["crate"].get("max_stable_version")
-    if not version:
-        raise RuntimeError(f"crates.io lists no stable release of {package}")
-    return version
+def _is_stable(version: str) -> bool:
+    return re.fullmatch(r"v?\d+(\.\d+)*", version) is not None
 
 
-def go_latest(module: str) -> str:
-    return fetch_json(f"https://proxy.golang.org/{module.lower()}/@latest")["Version"]
+def pick_release(releases: list[Release], cutoff: datetime) -> tuple[str, str]:
+    """Return (chosen, newest): the newest stable release published before cutoff, and the newest overall."""
+    stable = sorted((r for r in releases if _is_stable(r[0])), key=lambda r: _version_tuple(r[0]))
+    if not stable:
+        raise RuntimeError("no stable release")
+    old_enough = [version for version, published in stable if published <= cutoff]
+    if not old_enough:
+        raise RuntimeError(f"no stable release published before {cutoff:%Y-%m-%d %H:%M} UTC")
+    return old_enough[-1], stable[-1][0]
 
 
-def rubygems_latest(gem: str) -> str:
-    return fetch_json(f"https://rubygems.org/api/v1/gems/{gem}.json")["version"]
+def npm_releases(package: str) -> list[Release]:
+    document = fetch_json(f"https://registry.npmjs.org/{package}")
+    latest = _version_tuple(document["dist-tags"]["latest"])
+    times = document.get("time", {})
+    # Never above the latest dist-tag, which npm install would pick.
+    return [
+        (version, _parse_time(times[version]))
+        for version in document.get("versions", {})
+        if version in times and _version_tuple(version) <= latest
+    ]
 
 
-def maven_latest(group: str, artifact: str) -> str:
-    path = group.replace(".", "/")
-    root = ElementTree.fromstring(fetch(f"https://repo1.maven.org/maven2/{path}/{artifact}/maven-metadata.xml"))
-    release = root.findtext("versioning/release")
-    if not release:
-        raise RuntimeError(f"Maven Central lists no release of {group}:{artifact}")
-    return release
+def pypi_releases(package: str) -> list[Release]:
+    releases = fetch_json(f"https://pypi.org/pypi/{package}/json")["releases"]
+    return [
+        (version, min(_parse_time(item["upload_time_iso_8601"]) for item in files))
+        for version, files in releases.items()
+        if files and not all(item.get("yanked") for item in files)
+    ]
+
+
+def crates_releases(package: str) -> list[Release]:
+    versions = fetch_json(f"https://crates.io/api/v1/crates/{package}/versions")["versions"]
+    return [(item["num"], _parse_time(item["created_at"])) for item in versions if not item.get("yanked")]
+
+
+def go_releases(module: str, newest: int = 5) -> list[Release]:
+    base = f"https://proxy.golang.org/{module.lower()}/@v"
+    versions = [line for line in fetch(f"{base}/list").decode().split() if _is_stable(line)]
+    versions = sorted(versions, key=_version_tuple)[-newest:]
+    return [(version, _parse_time(fetch_json(f"{base}/{version}.info")["Time"])) for version in versions]
+
+
+def rubygems_releases(gem: str) -> list[Release]:
+    versions = fetch_json(f"https://rubygems.org/api/v1/versions/{gem}.json")
+    return [(item["number"], _parse_time(item["created_at"])) for item in versions if not item.get("prerelease")]
+
+
+def maven_releases(group: str, artifact: str, newest: int = 5) -> list[Release]:
+    base = f"https://repo1.maven.org/maven2/{group.replace('.', '/')}/{artifact}"
+    root = ElementTree.fromstring(fetch(f"{base}/maven-metadata.xml"))
+    versions = sorted(
+        (item.text or "" for item in root.iterfind("versioning/versions/version") if _is_stable(item.text or "")),
+        key=_version_tuple,
+    )[-newest:]
+    releases = []
+    for version in versions:
+        request = urllib.request.Request(f"{base}/{version}/{artifact}-{version}.pom", method="HEAD", headers={"User-Agent": USER_AGENT})
+        with urllib.request.urlopen(request, timeout=30) as response:
+            releases.append((version, parsedate_to_datetime(response.headers["Last-Modified"])))
+    return releases
 
 
 # ---------------------------------------------------------------------------
@@ -150,7 +200,7 @@ class Sdk:
     adapter: str
     package: str
     registry: str
-    latest: Callable[[], str]
+    releases: Callable[[], list[Release]]
     current: Callable[[], str | None]
     # Rewrites the manifest's pin; returns whether it changed.
     pin: Callable[[str], bool]
@@ -174,7 +224,7 @@ def _typescript_lock(version: str) -> None:
     # mppx declares viem as a peer: keep the exact viem pin inside its range.
     viem_range = fetch_json(f"https://registry.npmjs.org/mppx/{version}").get("peerDependencies", {}).get("viem")
     if viem_range and not satisfies_minimum(dependencies.get("viem", "0"), viem_range):
-        packages.append(f"viem@{npm_latest('viem')}")
+        packages.append(f"viem@{pick_release(npm_releases('viem'), cutoff)[0]}")
     run(["npm", "install", "--save-exact", "--no-audit", "--no-fund", *packages], CONFORMANCE_DIR)
 
 
@@ -213,7 +263,8 @@ def _ruby_pin(version: str) -> bool:
 
 
 def _ruby_lock(version: str) -> None:
-    run(["bundle", "lock", "--update", "mpp-rb"], ADAPTERS_DIR / "ruby")
+    # Conservative: move mpp-rb only, not its dependencies.
+    run(["bundle", "lock", "--update", "mpp-rb", "--conservative"], ADAPTERS_DIR / "ruby")
 
 
 def _java_pin(version: str) -> bool:
@@ -231,26 +282,26 @@ def _java_lock(version: str) -> None:
 SDKS: dict[str, Sdk] = {
     sdk.adapter: sdk
     for sdk in (
-        Sdk("typescript", "mppx", "npm", lambda: npm_latest("mppx"), _typescript_current, _no_manifest_edit, _typescript_lock),
+        Sdk("typescript", "mppx", "npm", lambda: npm_releases("mppx"), _typescript_current, _no_manifest_edit, _typescript_lock),
         Sdk(
-            "python", "pympp", "PyPI", lambda: pypi_latest("pympp"),
+            "python", "pympp", "PyPI", lambda: pypi_releases("pympp"),
             lambda: toml_package_version(ADAPTERS_DIR / "python" / "uv.lock", "pympp"), _python_pin, _python_lock,
         ),
         Sdk(
-            "rust", "mpp", "crates.io", lambda: crates_latest("mpp"),
+            "rust", "mpp", "crates.io", lambda: crates_releases("mpp"),
             lambda: toml_package_version(ADAPTERS_DIR / "rust" / "Cargo.lock", "mpp"), _rust_pin, _rust_lock,
         ),
         Sdk(
-            "go", "github.com/tempoxyz/mpp-go", "Go module proxy", lambda: go_latest("github.com/tempoxyz/mpp-go"),
+            "go", "github.com/tempoxyz/mpp-go", "Go module proxy", lambda: go_releases("github.com/tempoxyz/mpp-go"),
             lambda: lock_version(ADAPTERS_DIR / "go" / "go.mod", r"^\s*github\.com/tempoxyz/mpp-go\s+(\S+)"),
             _no_manifest_edit, _go_lock,
         ),
         Sdk(
-            "ruby", "mpp-rb", "RubyGems", lambda: rubygems_latest("mpp-rb"),
+            "ruby", "mpp-rb", "RubyGems", lambda: rubygems_releases("mpp-rb"),
             lambda: lock_version(ADAPTERS_DIR / "ruby" / "Gemfile.lock", r"^    mpp-rb \(([^)]+)\)"), _ruby_pin, _ruby_lock,
         ),
         Sdk(
-            "java", "com.stripe:mpp-java", "Maven Central", lambda: maven_latest("com.stripe", "mpp-java"),
+            "java", "com.stripe:mpp-java", "Maven Central", lambda: maven_releases("com.stripe", "mpp-java"),
             lambda: lock_version(ADAPTERS_DIR / "java" / "gradle.lockfile", r"^com\.stripe:mpp-java:([^=]+)="),
             _java_pin, _java_lock,
         ),
@@ -258,15 +309,22 @@ SDKS: dict[str, Sdk] = {
 }
 
 
-def bump(adapters: list[str]) -> list[dict[str, Any]]:
-    """Pin each adapter's SDK to its latest release; return one record per adapter."""
+def bump(adapters: list[str], min_age_days: float = DEFAULT_MIN_AGE_DAYS, now: datetime | None = None) -> list[dict[str, Any]]:
+    """Pin each adapter's SDK to its newest release at least min_age_days old; return one record per adapter."""
+    global cutoff
+    cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=min_age_days)
     records = []
     for name in adapters:
         sdk = SDKS[name]
         record: dict[str, Any] = {"adapter": name, "package": sdk.package, "registry": sdk.registry}
         try:
             record["from"] = sdk.current()
-            record["to"] = sdk.latest()
+            record["to"], newest = pick_release(sdk.releases(), cutoff)
+            # Never move a pin back, as when it already holds a release newer than the cutoff.
+            if record["from"] and _is_stable(record["from"]) and _version_tuple(record["from"]) > _version_tuple(record["to"]):
+                record["to"] = record["from"]
+            if newest != record["to"]:
+                record["newest"] = newest
             print(f"→ {name}: {sdk.package} {record['from']} -> {record['to']}", file=sys.stderr, flush=True)
             edited = sdk.pin(record["to"])
             # Lock whenever the lockfile is behind, so a rerun finishes a failed lock.
@@ -371,6 +429,8 @@ def render_summary(
             to = f"not bumped: {record['error'].splitlines()[0][:200]}"
         else:
             to = record["to"] if record.get("changed") else f"{record['to']} (unchanged)"
+            if record.get("newest"):
+                to += f" ({record['newest']} is too new for the CI registry proxy)"
         package = f"`{record['package']}` ({record['registry']})"
         lines.append(f"| {record['adapter']} | {package} | {record.get('from') or '?'} | {to} |")
     lines += ["", "### Golden and snapshot changes", ""]
@@ -426,6 +486,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     bump_parser = commands.add_parser("bump", help="Pin every adapter's SDK to its latest release")
     bump_parser.add_argument("--adapters", default=",".join(SDKS), help="Comma-separated adapters (default: all)")
     bump_parser.add_argument("--changes", type=Path, required=True, help="Write the version changes here (JSON)")
+    bump_parser.add_argument(
+        "--min-age-days", type=float, default=DEFAULT_MIN_AGE_DAYS,
+        help=f"Skip releases newer than this; CI's registry proxy refuses them (default: {DEFAULT_MIN_AGE_DAYS})",
+    )
     summary_parser = commands.add_parser("summary", help="Write the pull request body")
     summary_parser.add_argument("--changes", type=Path, required=True, help="The bump step's JSON")
     summary_parser.add_argument("--base", default="HEAD", help="Commit to diff the goldens against (default: HEAD)")
@@ -442,7 +506,7 @@ def main(argv: list[str] | None = None) -> int:
         if unknown:
             print(f"Unknown adapters: {', '.join(unknown)}", file=sys.stderr)
             return 2
-        records = bump(adapters)
+        records = bump(adapters, args.min_age_days)
         args.changes.write_text(json.dumps(records, indent=2) + "\n", encoding="utf-8")
         return 1 if any("error" in record for record in records) else 0
     changes = json.loads(args.changes.read_text(encoding="utf-8"))
