@@ -6,8 +6,11 @@ import unittest
 from harness import validate_value, validate_vector_scenarios
 from diff_fuzz import (
     ALLOWLIST_PATH,
+    MAX_FIELD_DEPTH,
     Divergence,
     VECTOR_FILES,
+    _numbers,
+    b64url,
     classify,
     diff_fields,
     find_allowlisted,
@@ -80,6 +83,28 @@ class NormalizeTests(unittest.TestCase):
             normalize_value("credential.parse", decoded),
         )
 
+    def test_deeply_nested_values_normalize_without_recursion(self) -> None:
+        # The huge_json request strategies decode to 2000 and 5000 levels.
+        for raw in ('{"a":' * 2000 + "1" + "}" * 2000, "[" * 5000 + "]" * 5000):
+            request = b64url(raw)
+            challenge = {"id": "a", "realm": "r", "method": "m", "intent": "i", "request": request}
+            normalized = normalize_value("challenge.parse", challenge)
+            self.assertEqual(normalized["request"], json.loads(raw))
+            credential = normalize_value("credential.parse", {"challenge": challenge, "payload": json.loads(raw)})
+            self.assertEqual(credential["payload"], json.loads(raw))
+            response = {"ok": True, "value": {**challenge, "request": json.loads(raw)}}
+            self.assertEqual(outcome("challenge.parse", response), {"class": "ok", "value": normalized})
+
+    def test_large_integers_deep_inside_values_compare_as_doubles(self) -> None:
+        value: object = 2**60
+        for depth in range(3000):
+            value = [value] if depth % 2 else {"k": value}
+        normalized = _numbers(value)
+        for depth in reversed(range(3000)):
+            normalized = normalized[0] if depth % 2 else normalized["k"]
+        self.assertEqual(normalized, float(2**60))
+        self.assertIsInstance(normalized, float)
+
     def test_outcome_classes(self) -> None:
         self.assertEqual(outcome("receipt.parse", {"ok": True, "value": {"status": "success", "method": None}}),
                          {"class": "ok", "value": {"status": "success"}})
@@ -128,6 +153,17 @@ class ClassifyTests(unittest.TestCase):
         expected = {"challenge": {"id": "a", "request": {"a": 1, "b": 2}}, "payload": {"x": 1}}
         actual = {"challenge": {"id": "b", "request": {"a": 1, "b": 3}}, "payload": {"x": 2}}
         self.assertEqual(diff_fields(expected, actual), ("challenge.id", "challenge.request", "payload"))
+
+
+    def test_diff_fields_stops_naming_fields_in_deeply_nested_values(self) -> None:
+        expected: dict = {"a": 1}
+        actual: dict = {"a": 2}
+        for _ in range(3000):
+            expected, actual = {"a": expected}, {"a": actual}
+        fields = diff_fields({"id": "x", "extra-field": expected}, {"id": "x", "extra-field": actual})
+        self.assertEqual(fields, ("extra-field" + ".a" * (MAX_FIELD_DEPTH - 1),))
+        self.assertEqual(classify({"class": "ok", "value": expected}, {"class": "ok", "value": actual}),
+                         ("value", (".".join(["a"] * MAX_FIELD_DEPTH),)))
 
 
 class AllowlistTests(unittest.TestCase):
