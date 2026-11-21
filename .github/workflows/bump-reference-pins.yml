@@ -1,0 +1,154 @@
+name: Bump reference SDK pins
+
+# Once a week, and on demand, pins every conformance adapter to its SDK's
+# latest release (scripts/bump_reference_pins.py), regenerates the flow
+# goldens and pair snapshots from the new mppx, runs the vector, flow and pair
+# suites, and opens or updates one pull request. Its body lists each version
+# change, every golden or snapshot case that changed (a change in mppx's wire
+# behavior to review) and the suite results; it is opened even when a suite
+# fails, so the failures are reviewable. The reference-pins label keeps the
+# stale workflow away from it. .github/sts/bump-reference-pins.sts.yaml lets
+# this workflow, on main only, mint the token for that pull request.
+
+on:
+  schedule:
+    - cron: "0 15 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    name: Bump reference SDK pins
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: conformance
+    steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup adapters
+        uses: ./.github/actions/setup-conformance # zizmor: ignore[self-repository] actionlint does not support $/ references yet.
+        with:
+          adapter: all
+          # The Gemfile changes below; install from it after the bump.
+          ruby-bundler-cache: "false"
+          rust-cache-save: "false"
+
+      - name: Install the runner
+        run: make install-scripts install-ts
+
+      - name: Bump pins to the latest releases
+        id: bump
+        run: |
+          status=0
+          uv run --locked python scripts/bump_reference_pins.py bump --changes "$RUNNER_TEMP/pins.json" || status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      # A failed install or regeneration still opens the pull request, with the
+      # suites showing what broke; the last step then fails the run.
+      - name: Install adapters
+        id: install
+        continue-on-error: true
+        run: make install
+
+      - name: Regenerate flow goldens and pair snapshots
+        id: regenerate
+        continue-on-error: true
+        run: make update-flow-golden update-pair-snapshots
+
+      - name: Run vector, flow and pair suites
+        id: suites
+        run: |
+          for suite in test flow pair; do
+            status=0
+            make "$suite" > "$RUNNER_TEMP/$suite.log" 2>&1 || status=$?
+            cat "$RUNNER_TEMP/$suite.log"
+            echo "$suite=$status" >> "$GITHUB_OUTPUT"
+          done
+
+      - name: Write the pull request body
+        id: body
+        env:
+          VECTORS: ${{ steps.suites.outputs.test }}
+          FLOW: ${{ steps.suites.outputs.flow }}
+          PAIR: ${{ steps.suites.outputs.pair }}
+        run: |
+          uv run --locked python scripts/bump_reference_pins.py summary \
+            --changes "$RUNNER_TEMP/pins.json" --base HEAD \
+            --suite "vectors=$VECTORS:$RUNNER_TEMP/test.log" \
+            --suite "flow=$FLOW:$RUNNER_TEMP/flow.log" \
+            --suite "pair=$PAIR:$RUNNER_TEMP/pair.log" \
+            --output "$RUNNER_TEMP/body.md"
+          cat "$RUNNER_TEMP/body.md" >> "$GITHUB_STEP_SUMMARY"
+          delimiter="EOF_$(openssl rand -hex 16)"
+          {
+            echo "body<<$delimiter"
+            cat "$RUNNER_TEMP/body.md"
+            echo "$delimiter"
+          } >> "$GITHUB_OUTPUT"
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch GitHub token via STS
+        if: steps.body.outputs.changed == 'true'
+        id: sts
+        uses: tempoxyz/gh-actions/actions/github-sts@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+        with:
+          policy: bump-reference-pins
+          ttl: 15m
+
+      - name: Create the reference-pins label
+        if: steps.body.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.sts.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh label create reference-pins --color 0e8a16 --description "Reference SDK pin bumps; exempt from the stale workflow" --force
+
+      - name: Open or update the pull request
+        if: steps.body.outputs.changed == 'true'
+        uses: tempoxyz/gh-actions/actions/create-pull-request@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+        with:
+          token: ${{ steps.sts.outputs.token }}
+          branch: automation/bump-reference-pins
+          commit-message: "chore(conformance): bump reference SDK pins"
+          title: "chore(conformance): bump reference SDK pins"
+          body: ${{ steps.body.outputs.body }}
+          labels: reference-pins
+          add-paths: |
+            conformance/package.json
+            conformance/package-lock.json
+            conformance/adapters/python/pyproject.toml
+            conformance/adapters/python/uv.lock
+            conformance/adapters/rust/Cargo.toml
+            conformance/adapters/rust/Cargo.lock
+            conformance/adapters/go/go.mod
+            conformance/adapters/go/go.sum
+            conformance/adapters/ruby/Gemfile
+            conformance/adapters/ruby/Gemfile.lock
+            conformance/adapters/java/build.gradle
+            conformance/adapters/java/gradle.lockfile
+            conformance/flows/golden-results.json
+            conformance/pairs/snapshots.json
+
+      - name: Fail when a pin, install or regeneration failed
+        if: steps.bump.outputs.status != '0' || steps.install.outcome == 'failure' || steps.regenerate.outcome == 'failure'
+        run: |
+          echo "::error::A pin could not be bumped, an adapter did not install, or the goldens did not regenerate; see the steps above."
+          exit 1

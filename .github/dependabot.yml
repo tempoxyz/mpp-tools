@@ -23,6 +23,9 @@ updates:
     cooldown:
       default-days: 7
     patterns: ["*"]
+    # Bump reference SDK pins (bump-reference-pins.yml) owns this pin.
+    ignore:
+      - dependency-name: "mppx"
     multi-ecosystem-group: "weekly-dependencies"
 
   - package-ecosystem: "cargo"
@@ -30,6 +33,9 @@ updates:
     cooldown:
       default-days: 7
     patterns: ["*"]
+    # Bump reference SDK pins (bump-reference-pins.yml) owns this pin.
+    ignore:
+      - dependency-name: "mpp"
     multi-ecosystem-group: "weekly-dependencies"
 
   - package-ecosystem: "uv"
@@ -37,6 +43,9 @@ updates:
     cooldown:
       default-days: 7
     patterns: ["*"]
+    # Bump reference SDK pins (bump-reference-pins.yml) owns this pin.
+    ignore:
+      - dependency-name: "pympp"
     multi-ecosystem-group: "weekly-dependencies"
 
   - package-ecosystem: "gomod"
@@ -44,6 +53,9 @@ updates:
     cooldown:
       default-days: 7
     patterns: ["*"]
+    # Bump reference SDK pins (bump-reference-pins.yml) owns this pin.
+    ignore:
+      - dependency-name: "github.com/tempoxyz/mpp-go"
     multi-ecosystem-group: "weekly-dependencies"
 
   - package-ecosystem: "bundler"
@@ -51,6 +63,9 @@ updates:
     cooldown:
       default-days: 7
     patterns: ["*"]
+    # Bump reference SDK pins (bump-reference-pins.yml) owns this pin.
+    ignore:
+      - dependency-name: "mpp-rb"
     multi-ecosystem-group: "weekly-dependencies"
 
   - package-ecosystem: "gradle"
@@ -58,6 +73,9 @@ updates:
     cooldown:
       default-days: 7
     patterns: ["*"]
+    # Bump reference SDK pins (bump-reference-pins.yml) owns this pin.
+    ignore:
+      - dependency-name: "com.stripe:mpp-java"
     multi-ecosystem-group: "weekly-dependencies"
 
   - package-ecosystem: "npm"
