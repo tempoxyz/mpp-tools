@@ -340,7 +340,8 @@ def failure_lines(log: Path, limit: int = 40) -> list[str]:
     lines = [
         line.strip()
         for line in log.read_text(encoding="utf-8", errors="replace").splitlines()
-        if re.search(r"\bFAIL|✗|\bfailed\b", line) and not re.search(r"\b0 failed\b", line)
+        # Numbered failure entries name their adapter; totals and failed pairings follow them.
+        if re.search(r"^\s*\d+\) \S|^\s*FAILED:|: failed\s*$|✗", line)
     ]
     return lines[:limit] + ([f"… {len(lines) - limit} more"] if len(lines) > limit else [])
 

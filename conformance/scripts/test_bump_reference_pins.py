@@ -152,7 +152,13 @@ class SummaryTests(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as tmp:
             log = Path(tmp) / "vectors.log"
-            log.write_text("python: 10 passed, 0 failed\n  FAIL unicode_escape_in_realm_is_quoted_pair\n", encoding="utf-8")
+            log.write_text(
+                "  www-authenticate::TestType.PARSE::unicode_escape_in_realm_is_quoted_pair ... FAIL\n"
+                "PASSED: 10 passed, 0 failed\n"
+                "FAILED: 9 passed, 1 failed, 10 total\n"
+                "  1) python::www-authenticate::TestType.PARSE::unicode_escape_in_realm_is_quoted_pair\n",
+                encoding="utf-8",
+            )
             body = pins.render_summary(changes, diffs, [("vectors", 1, log), ("flow", 0, None), ("pair", None, None)])
         self.assertIn("| typescript | `mppx` (npm) | 0.11.0 | 0.21.1 |", body)
         self.assertIn("| java | `com.stripe:mpp-java` (Maven Central) | 0.1.6 | 0.1.6 (unchanged) |", body)
@@ -161,8 +167,10 @@ class SummaryTests(unittest.TestCase):
         self.assertIn("- `pairs/snapshots.json`: no changes.", body)
         self.assertIn("| vectors | failed |", body)
         self.assertIn("| pair | not run |", body)
-        self.assertIn("FAIL unicode_escape_in_realm_is_quoted_pair", body)
-        self.assertNotIn("0 failed", body)
+        self.assertIn("1) python::www-authenticate::TestType.PARSE::unicode_escape_in_realm_is_quoted_pair", body)
+        self.assertIn("FAILED: 9 passed, 1 failed, 10 total", body)
+        self.assertNotIn("... FAIL", body)
+        self.assertNotIn("PASSED", body)
 
     def test_parse_suite(self) -> None:
         self.assertEqual(pins.parse_suite("vectors=1:logs/vectors.log"), ("vectors", 1, Path("logs/vectors.log")))
