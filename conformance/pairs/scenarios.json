@@ -991,7 +991,10 @@
           "steps": [
             "pay_unpayable"
           ],
-          "reason": "mpp-go v0.6.0's client returns the first 402 unchanged when no challenge matches its methods; mppx fails with 'No method found for challenges: ... Available: ...' and returns a 402 only after a paid retry."
+          "sdkVersions": {
+            "go": "<0.8.0"
+          },
+          "reason": "mpp-go before 0.8.0 returns the first 402 unchanged when no challenge matches its methods; mppx (and mpp-go 0.8.0, tempoxyz/mpp-go#280) fails with 'No method found for challenges: ... Available: ...' and returns a 402 only after a paid retry."
         },
         {
           "client": "python",
@@ -999,6 +1002,9 @@
           "steps": [
             "pay_unpayable"
           ],
+          "sdkVersions": {
+            "python": "<0.19.0"
+          },
           "reason": "pympp before 0.19 returns the first 402 unchanged when no challenge matches its methods; mppx (and pympp 0.19, tempoxyz/pympp#368) fails with 'No method found for challenges: ... Available: ...' and returns a 402 only after a paid retry."
         },
         {

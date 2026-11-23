@@ -71,6 +71,13 @@ class LoadScenariosTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unknown steps: missing"):
             self.load(document)
 
+    def test_expected_failure_sdk_versions_of_an_unknown_adapter_is_rejected(self) -> None:
+        document = copy.deepcopy(self.document)
+        scenario = next(entry for entry in document["scenarios"] if entry.get("expectedFailures"))
+        scenario["expectedFailures"][0]["sdkVersions"] = {"golang": "<1.0.0"}
+        with self.assertRaisesRegex(ValueError, "unknown adapters: golang"):
+            self.load(document)
+
     def test_pay_step_cannot_carry_a_credential(self) -> None:
         document = copy.deepcopy(self.document)
         document["scenarios"][0]["steps"].append(
@@ -143,6 +150,18 @@ class CompareTest(unittest.TestCase):
         xpass = pair_runner.compare(self.scenario, self.expected, same, "ruby", "python")
         self.assertEqual(xpass.status, "xpass")
         self.assertTrue(xpass.failed)
+
+    def test_expected_failure_applies_only_to_matching_sdk_versions(self) -> None:
+        scenario = {
+            "name": "s",
+            "expectedFailures": [
+                {"client": "go", "server": "*", "steps": ["b"], "sdkVersions": {"go": "<0.8.0"}, "reason": "old go"},
+            ],
+        }
+        old = pair_runner.expected_failures(scenario, "go", "typescript", version=lambda _: "0.6.0")
+        new = pair_runner.expected_failures(scenario, "go", "typescript", version=lambda _: "0.9.1")
+        self.assertEqual([entry["reason"] for entry in old], ["old go"])
+        self.assertEqual(new, [])
 
     def test_expected_failure_covers_only_its_steps(self) -> None:
         result = pair_runner.compare(self.scenario, self.expected, self.run_with(a=500, b=403), "ruby", "python")

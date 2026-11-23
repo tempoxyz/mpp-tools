@@ -267,6 +267,15 @@
           },
           "description": "Dotted fields of the step snapshots the reason covers, such as body or receipt.timestamp; the rest of those steps is compared strictly. Without fields the whole step is covered."
         },
+        "sdkVersions": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "SemVer constraints keyed by adapter name (as in vectors); the entry applies only while every named adapter's installed SDK matches its constraint."
+        },
         "reason": {
           "type": "string",
           "minLength": 1
