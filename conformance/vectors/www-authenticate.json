@@ -772,6 +772,48 @@
         "format": true,
         "roundtrip": true
       }
+    },
+    {
+      "name": "error_auth_params_without_commas",
+      "description": "Rejects auth-params separated only by whitespace (auth-params = auth-param *( OWS \",\" OWS auth-param ))",
+      "tags": ["error", "fuzz", "auth-param-list"],
+      "adapters": ["typescript", "python", "go", "rust"],
+      "sdkVersions": { "typescript": ">0.21.1", "python": ">0.26.0", "rust": ">0.22.0" },
+      "wire": "Payment id=\"ch_no_commas\" realm=\"api.example.com\" method=\"tempo\" intent=\"charge\" request=\"e30\"",
+      "tests": {
+        "parse": {
+          "success": false,
+          "error_type": "parse_error"
+        }
+      }
+    },
+    {
+      "name": "error_text_after_closing_quote",
+      "description": "Rejects a quoted-string followed by more text before the next comma or the end",
+      "tags": ["error", "fuzz", "quoted-string"],
+      "adapters": ["typescript", "python", "go", "rust"],
+      "sdkVersions": { "typescript": ">0.21.1", "python": ">0.26.0", "rust": ">0.22.0" },
+      "wire": "Payment id=\"ch_after_quote\", method=\"tempo\", intent=\"charge\", request=\"e30\", realm=\"api\"x.example.com\"",
+      "tests": {
+        "parse": {
+          "success": false,
+          "error_type": "parse_error"
+        }
+      }
+    },
+    {
+      "name": "error_request_with_stray_character",
+      "description": "Rejects a request whose base64url holds a character outside the alphabet, even when dropping it would decode",
+      "tags": ["error", "fuzz", "invalid-encoding"],
+      "adapters": ["typescript", "python", "go", "rust"],
+      "sdkVersions": { "python": ">0.26.0" },
+      "wire": "Payment id=\"ch_request_dot\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e3.0\"",
+      "tests": {
+        "parse": {
+          "success": false,
+          "error_type": "parse_error"
+        }
+      }
     }
   ]
 }
