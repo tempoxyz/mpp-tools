@@ -816,6 +816,38 @@
       "inputPattern": "\\\\[\\x00-\\x08\\x0a-\\x1f\\x7f]",
       "category": "sdk-bug",
       "reason": "A quoted-pair may escape only HTAB, SP, VCHAR or obs-text (RFC 9110), so a backslash before LF or another CTL is invalid. mppx unescapes it, and the SDKs read it differently (pympp before 0.26 keeps the backslash and the quote). Whether parsers must reject CTLs in quoted-strings is an open spec question; quoted-pair handling is changing in tempoxyz/pympp#449, tempoxyz/mpp-go#331 and tempoxyz/mpp-rs#738."
+    },
+    {
+      "id": "python-text-after-closing-quote",
+      "adapters": [
+        "python"
+      ],
+      "operations": [
+        "challenge.parse"
+      ],
+      "kinds": [
+        "accepts",
+        "crash",
+        "value"
+      ],
+      "inputPattern": "=\\s*\"(?:[^\"\\\\]|\\\\.)*\"[^\\s,]",
+      "category": "sdk-bug",
+      "reason": "pympp reads a quoted-string followed directly by more text (expires=\"\"2000-..., id=\"a\"b\") instead of rejecting it, so it keeps a truncated value or reads the rest as another parameter. mppx rejects it. Fix: tempoxyz/pympp#455; remove once pinned."
+    },
+    {
+      "id": "go-stringifies-echo-fields",
+      "adapters": [
+        "go"
+      ],
+      "operations": [
+        "credential.parse"
+      ],
+      "kinds": [
+        "accepts"
+      ],
+      "decodedPattern": "(?m)^challenge: .*\"(?:id|realm|method|intent|expires|digest|description|opaque)\":(?:true|false|-?\\d|\\[|\\{)",
+      "category": "sdk-bug",
+      "reason": "mpp-go converts a non-string field in a credential's challenge echo to text (\"id\": [] parses as \"[]\"); mppx rejects it. Not fixed in mpp-go yet."
     }
   ]
 }
