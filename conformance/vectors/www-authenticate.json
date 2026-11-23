@@ -208,7 +208,7 @@
       "description": "A valid uXXXX escape in the binding-sensitive realm follows quoted-pair semantics: the backslash is dropped and the escape is not decoded",
       "tags": ["happy-path", "quoted-string", "unicode", "challenge-binding"],
       "adapters": ["typescript", "rust", "python", "go"],
-      "sdkVersions": { "typescript": ">0.18.0", "rust": ">0.20.0", "python": ">0.22.0", "go": ">0.9.0" },
+      "sdkVersions": { "typescript": ">0.21.1", "rust": ">0.21.0", "python": ">0.26.0", "go": ">0.9.1" },
       "object": {
         "id": "ch_unicode_realm",
         "intent": "charge",
@@ -271,7 +271,7 @@
       "name": "error_extended_method_identifier",
       "description": "Rejects parsing a challenge whose method identifier has digits, ':', '_' or '-' (the method grammar is 1*LOWERALPHA)",
       "tags": ["error", "method-grammar"],
-      "sdkVersions": { "typescript": ">0.18.0", "rust": ">0.20.0" },
+      "sdkVersions": { "typescript": ">0.21.1", "rust": ">0.21.0", "python": ">0.26.0" },
       "wire": "Payment id=\"ch_method_extension\", realm=\"api.example.com\", method=\"a1:b_2-c\", intent=\"charge\", request=\"e30\"",
       "tests": {
         "parse": {"success": false, "error_type": "parse_error"}
@@ -281,7 +281,7 @@
       "name": "error_extended_method_identifier_format",
       "description": "Rejects formatting a challenge whose method identifier has digits, ':', '_' or '-' (the method grammar is 1*LOWERALPHA)",
       "tags": ["error", "method-grammar"],
-      "sdkVersions": { "typescript": ">0.18.0", "rust": ">0.20.0", "python": ">0.22.0", "java": ">0.1.6", "ruby": ">0.1.10" },
+      "sdkVersions": { "typescript": ">0.21.1", "rust": ">0.21.0", "python": ">0.26.0", "java": ">0.1.6", "ruby": ">0.1.10" },
       "object": {
         "id": "ch_method_extension",
         "intent": "charge",
@@ -306,7 +306,7 @@
       "name": "error_uppercase_method_identifier_format",
       "description": "Rejects formatting a challenge whose method identifier has uppercase letters (the method grammar is 1*LOWERALPHA)",
       "tags": ["error", "method-grammar"],
-      "sdkVersions": { "typescript": ">0.18.0", "python": ">0.22.0", "java": ">0.1.6", "ruby": ">0.1.10" },
+      "sdkVersions": { "typescript": ">0.21.1", "python": ">0.26.0", "java": ">0.1.6", "ruby": ">0.1.10" },
       "object": {
         "id": "ch_method_uppercase",
         "intent": "charge",
@@ -322,7 +322,7 @@
       "name": "error_method_identifier_with_digits",
       "description": "Rejects parsing a challenge whose method identifier has digits (the method grammar is 1*LOWERALPHA)",
       "tags": ["error", "method-grammar"],
-      "sdkVersions": { "typescript": ">0.18.0", "rust": ">0.20.0" },
+      "sdkVersions": { "typescript": ">0.21.1", "rust": ">0.21.0", "python": ">0.26.0" },
       "wire": "Payment id=\"ch_method_digits\", realm=\"api.example.com\", method=\"tempo2\", intent=\"charge\", request=\"e30\"",
       "tests": {
         "parse": {"success": false, "error_type": "parse_error"}
@@ -332,7 +332,7 @@
       "name": "error_method_identifier_with_digits_format",
       "description": "Rejects formatting a challenge whose method identifier has digits (the method grammar is 1*LOWERALPHA)",
       "tags": ["error", "method-grammar"],
-      "sdkVersions": { "typescript": ">0.18.0", "rust": ">0.20.0", "python": ">0.22.0", "java": ">0.1.6", "ruby": ">0.1.10" },
+      "sdkVersions": { "typescript": ">0.21.1", "rust": ">0.21.0", "python": ">0.26.0", "java": ">0.1.6", "ruby": ">0.1.10" },
       "object": {
         "id": "ch_method_digits",
         "intent": "charge",
