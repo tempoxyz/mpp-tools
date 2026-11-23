@@ -24,7 +24,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from deepdiff import DeepDiff
 
@@ -37,6 +37,8 @@ from harness import (
     stop_adapter_process,
     validate_value,
 )
+from sdk_version import installed_version
+from version_constraints import matches_constraint
 
 
 SCRIPT_DIR = Path(__file__).parent
@@ -114,6 +116,9 @@ def load_scenarios(path: Path = SCENARIOS_PATH) -> list[dict[str, Any]]:
             unknown = sorted(set(entry["steps"]) - set(seen))
             if unknown:
                 raise ValueError(f"{path} scenario {name} expected failure names unknown steps: {', '.join(unknown)}")
+            unknown = sorted(set(entry.get("sdkVersions", {})) - set(discover_adapters()))
+            if unknown:
+                raise ValueError(f"{path} scenario {name} expected failure sdkVersions names unknown adapters: {', '.join(unknown)}")
     return document["scenarios"]
 
 
@@ -398,11 +403,28 @@ def run_scenario(
         stop_adapter_process(process)
 
 
-def expected_failures(scenario: dict[str, Any], client: str, server: str) -> list[dict[str, Any]]:
+_sdk_versions: dict[str, str] = {}
+
+
+def sdk_version(adapter: str) -> str:
+    """The installed SDK version of an adapter, read once per run."""
+    if adapter not in _sdk_versions:
+        _sdk_versions[adapter] = installed_version(adapter)
+    return _sdk_versions[adapter]
+
+
+def expected_failures(
+    scenario: dict[str, Any], client: str, server: str, version: Callable[[str], str] = sdk_version
+) -> list[dict[str, Any]]:
+    # An entry with sdkVersions covers only the SDK releases its constraints
+    # match, so a known difference stays expected on the old pin and is compared
+    # strictly once a release fixes it.
     return [
         entry
         for entry in scenario.get("expectedFailures", [])
-        if entry["client"] in {"*", client} and entry["server"] in {"*", server}
+        if entry["client"] in {"*", client}
+        and entry["server"] in {"*", server}
+        and all(matches_constraint(version(name), expression) for name, expression in entry.get("sdkVersions", {}).items())
     ]
 
 
