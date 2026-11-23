@@ -662,7 +662,7 @@
       "kinds": [
         "accepts"
       ],
-      "decodedPattern": "\"(expires|digest|description|opaque)\"\\s*:\\s*null",
+      "decodedPattern": "(?m)^challenge: .*\"(expires|digest|description|opaque)\":null",
       "category": "harmless",
       "reason": "pympp and mpp-go read a null optional field in a credential's challenge echo (\"expires\": null) as absent; mppx rejects it. Same reading as reference-receipt-null-optional."
     },
@@ -677,9 +677,9 @@
       "kinds": [
         "accepts"
       ],
-      "decodedPattern": "\"(id|realm|method|intent|request)\"\\s*:\\s*(null|true|false|-?\\d|\\[|\\{)",
+      "decodedPattern": "(?m)^challenge: .*\"(?:(?:id|realm|method|intent|request|expires|digest|description|opaque)\":(?:true|false|-?\\d|\\[|\\{)|(?:id|realm|method|intent|request)\":null)",
       "category": "sdk-bug",
-      "reason": "pympp stringifies a non-string required field in a credential's challenge echo (\"id\": null parses as \"None\"); mppx rejects it. Fix: tempoxyz/pympp#456; remove once pinned."
+      "reason": "pympp stringifies or drops a non-string field in a credential's challenge echo (\"id\": null parses as \"None\", \"description\": [] is dropped); mppx rejects it. Fix: tempoxyz/pympp#456 for the required fields; optional fields are not fixed yet. Remove once pinned."
     },
     {
       "id": "reference-drops-proto-key",
@@ -697,7 +697,7 @@
         "challenge.request",
         "request"
       ],
-      "decodedPattern": "\"__proto__\"",
+      "decodedPattern": "(?m)^request: .*\"__proto__\"",
       "category": "harmless",
       "reason": "mppx drops a \"__proto__\" key from a request when it copies the decoded JSON into a plain object, so its request lacks a key the other SDKs keep. No payment method defines such a key."
     },
@@ -763,9 +763,59 @@
         "accepts",
         "value"
       ],
-      "inputPattern": "^\\S+\\s+.*?(?:[^,\\s]\\s+[A-Za-z0-9!#$%&'*+.^_`|~-]+\\s*=|=\\s*[^\"\\s,A-Za-z0-9!#$%&'*+.^_`|~-]|[,\\s][A-Za-z0-9!#$%&'*+.^_`|~-]*\"[A-Za-z0-9!#$%&'*+.^_`|~-]*=)",
+      "inputPattern": "(?:^\\S+\\s+|,\\s*)[A-Za-z0-9!#$%&'*+.^_`|~-]+\\s*=\\s*(?:\"(?:[^\"\\\\]|\\\\.)*\"|[A-Za-z0-9!#$%&'*+.^_`|~-]+)\\s+[A-Za-z0-9!#$%&'*+.^_`|~-]+\\s*=|(?:^\\S+\\s+|,\\s*)[A-Za-z0-9!#$%&'*+.^_`|~-]+\\s*=\\s*(?!\")[^\\s,A-Za-z0-9!#$%&'*+.^_`|~-]|,\\s*[A-Za-z0-9!#$%&'*+.^_`|~-]*\"[A-Za-z0-9!#$%&'*+.^_`|~-]*\\s*=",
       "category": "sdk-bug",
       "reason": "mpp-rs reads auth-params the grammar rejects: no comma between them (id=\"a\" realm=\"b\"), a value starting with a character outside tchar (id=\\,) and a name containing a quote (d\"escription=). mppx rejects these. Fix: tempoxyz/mpp-rs#752; remove once pinned."
+    },
+    {
+      "id": "python-case-sensitive-param-names",
+      "adapters": [
+        "python"
+      ],
+      "operations": [
+        "challenge.parse"
+      ],
+      "kinds": [
+        "accepts",
+        "rejects"
+      ],
+      "inputPattern": "(?:^\\S+\\s+|,\\s*)[a-z]*[A-Z][A-Za-z0-9!#$%&'*+.^_`|~-]*\\s*=",
+      "category": "sdk-bug",
+      "reason": "pympp before 0.26 compares auth-param names case-sensitively, so 'ID=\"\"' beside 'id' is not a duplicate and 'ID' alone is not read as id. Fixed in pympp 0.26.0 (pinned by tempoxyz/mpp-tools#374); remove once that pin lands."
+    },
+    {
+      "id": "rust-accepts-non-object-payload",
+      "adapters": [
+        "rust"
+      ],
+      "operations": [
+        "credential.parse"
+      ],
+      "kinds": [
+        "crash"
+      ],
+      "messagePattern": "at payload: .* is not of type 'object'",
+      "category": "sdk-bug",
+      "reason": "mpp-rs accepts a credential whose payload is a JSON array or scalar, so the adapter's value fails the Credential schema. The draft types payload as an object; mppx rejects it once wevm/mppx#1350 lands. Not fixed in mpp-rs yet."
+    },
+    {
+      "id": "quoted-pair-of-ctl",
+      "adapters": [
+        "python",
+        "go",
+        "rust"
+      ],
+      "operations": [
+        "challenge.parse"
+      ],
+      "kinds": [
+        "accepts",
+        "rejects",
+        "value"
+      ],
+      "inputPattern": "\\\\[\\x00-\\x08\\x0a-\\x1f\\x7f]",
+      "category": "sdk-bug",
+      "reason": "A quoted-pair may escape only HTAB, SP, VCHAR or obs-text (RFC 9110), so a backslash before LF or another CTL is invalid. mppx unescapes it, and the SDKs read it differently (pympp before 0.26 keeps the backslash and the quote). Whether parsers must reject CTLs in quoted-strings is an open spec question; quoted-pair handling is changing in tempoxyz/pympp#449, tempoxyz/mpp-go#331 and tempoxyz/mpp-rs#738."
     }
   ]
 }

@@ -268,39 +268,53 @@ def input_text(operation: str, input_value: Any) -> str:
 
 
 def decoded_text(operation: str, input_value: Any) -> str | None:
-    """The base64url JSON inside a credential or receipt header, decoded leniently.
+    """The base64url JSON documents inside a header, decoded leniently, one per line.
 
     An allowlist decodedPattern is matched against it, so an entry can name what
-    the encoded document holds (such as a null field) rather than its encoding.
-    For a credential, the decoded challenge request follows on its own line.
+    an encoded document holds (such as a null field) rather than its encoding.
+    Each line names its document: "challenge: " and "request: " for a
+    credential's challenge echo and its decoded request, "request: " for a
+    challenge's request auth-param, and "receipt: " for a receipt. Documents are
+    re-serialized compactly ({"expires":null}), so patterns need not allow for
+    whitespace. Anchor a pattern to its line with (?m)^challenge: and the like.
     """
-    if operation not in ("credential.parse", "receipt.parse") or not isinstance(input_value, dict):
+    if not isinstance(input_value, dict) or not isinstance(input_value.get("header"), str):
         return None
-    header = input_value.get("header")
-    if not isinstance(header, str):
-        return None
-    token = header.strip()
+    header = input_value["header"].strip()
+    if operation == "receipt.parse":
+        receipt = _decoded_json(header)
+        return None if receipt is None else f"receipt: {_compact(receipt)}"
+    if operation == "challenge.parse":
+        match = re.search(r'(?i)(?:^|[\s,])request\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([^\s,"]+))', header)
+        if not match:
+            return None
+        raw = match.group(1) if match.group(1) is not None else match.group(2)
+        request = _decoded_json(re.sub(r"\\(.)", r"\1", raw))
+        return None if request is None else f"request: {_compact(request)}"
     if operation == "credential.parse":
-        token = token.split(None, 1)[1] if len(token.split(None, 1)) == 2 else ""
-    text = _lenient_b64url_text(token)
-    if text is None or operation != "credential.parse":
-        return text
-    # A credential echoes the challenge request base64url-encoded again; append
-    # it decoded, so a pattern can name what the request holds.
-    try:
-        request = json.loads(text)["challenge"]["request"]
-    except (ValueError, TypeError, KeyError):
-        return text
-    nested = _lenient_b64url_text(request) if isinstance(request, str) else None
-    return text if nested is None else f"{text}\n{nested}"
+        parts = header.split(None, 1)
+        credential = _decoded_json(parts[1]) if len(parts) == 2 else None
+        if not isinstance(credential, dict) or not isinstance(credential.get("challenge"), dict):
+            return None
+        challenge = credential["challenge"]
+        lines = [f"challenge: {_compact(challenge)}"]
+        request = _decoded_json(challenge["request"]) if isinstance(challenge.get("request"), str) else None
+        if request is not None:
+            lines.append(f"request: {_compact(request)}")
+        return "\n".join(lines)
+    return None
 
 
-def _lenient_b64url_text(token: str) -> str | None:
+def _decoded_json(token: str) -> Any:
     token = re.sub(r"[^A-Za-z0-9_-]", "", token.replace("+", "-").replace("/", "_"))
     try:
-        return base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)).decode("utf-8", "replace")
+        return json.loads(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)).decode("utf-8", "replace"))
     except (ValueError, binascii.Error):
         return None
+
+
+def _compact(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
 @dataclass(frozen=True)
