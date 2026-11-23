@@ -763,9 +763,9 @@
         "accepts",
         "value"
       ],
-      "inputPattern": "(?:^\\S+\\s+|,\\s*)[A-Za-z0-9!#$%&'*+.^_`|~-]+\\s*=\\s*(?:\"(?:[^\"\\\\]|\\\\.)*\"|[A-Za-z0-9!#$%&'*+.^_`|~-]+)\\s+[A-Za-z0-9!#$%&'*+.^_`|~-]+\\s*=|(?:^\\S+\\s+|,\\s*)[A-Za-z0-9!#$%&'*+.^_`|~-]+\\s*=\\s*(?!\")[^\\s,A-Za-z0-9!#$%&'*+.^_`|~-]|,\\s*[A-Za-z0-9!#$%&'*+.^_`|~-]*\"[A-Za-z0-9!#$%&'*+.^_`|~-]*\\s*=",
+      "inputPattern": "(?:^\\S+\\s+|,\\s*)[A-Za-z0-9!#$%&'*+.^_`|~-]+\\s*=\\s*(?:\"(?:[^\"\\\\]|\\\\.)*\"|[A-Za-z0-9!#$%&'*+.^_`|~-]+)\\s+[A-Za-z0-9!#$%&'*+.^_`|~-]+\\s*=|(?:^\\S+\\s+|,\\s*)[A-Za-z0-9!#$%&'*+.^_`|~-]+\\s*=\\s*(?!\")[^\\s,A-Za-z0-9!#$%&'*+.^_`|~-]|,\\s*[A-Za-z0-9!#$%&'*+.^_`|~-]*\"[A-Za-z0-9!#$%&'*+.^_`|~-]*\\s*=|=\\s*\"(?:[^\"\\\\]|\\\\.)*\"[^\\s,]",
       "category": "sdk-bug",
-      "reason": "mpp-rs reads auth-params the grammar rejects: no comma between them (id=\"a\" realm=\"b\"), a value starting with a character outside tchar (id=\\,) and a name containing a quote (d\"escription=). mppx rejects these. Fix: tempoxyz/mpp-rs#752; remove once pinned."
+      "reason": "mpp-rs reads auth-params the grammar rejects: no comma between them (id=\"a\" realm=\"b\"), a value starting with a character outside tchar (id=\\,) and a name containing a quote (d\"escription=), and text right after a closing quote (intent=\"a\"b\"). mppx rejects these. Fix: tempoxyz/mpp-rs#752; remove once pinned."
     },
     {
       "id": "python-case-sensitive-param-names",
