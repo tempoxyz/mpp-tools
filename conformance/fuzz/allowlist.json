@@ -279,7 +279,7 @@
       ],
       "inputPattern": "^\\S+\\s+[A-Za-z0-9_=+/-]+\\s*,",
       "category": "sdk-bug",
-      "reason": "mpp-go and mpp-rs accept an Authorization value with text after the base64url credential (such as ', Basic realm=\"x\"'); mppx rejects it. Fix: tempoxyz/mpp-go#334 and an mpp-rs PR; remove each SDK once its fix is pinned."
+      "reason": "mpp-go and mpp-rs accept an Authorization value with text after the base64url credential (such as ', Basic realm=\"x\"'); mppx rejects it. Fix: tempoxyz/mpp-go#334 and tempoxyz/mpp-rs#752; remove each SDK once its fix is pinned."
     },
     {
       "id": "python-base64-ignores-invalid-chars",
@@ -648,7 +648,7 @@
       ],
       "inputPattern": "^\\s*,",
       "category": "sdk-bug",
-      "reason": "mpp-go and mpp-rs accept an Authorization value that starts with a comma (\",Payment <token>\"); mppx rejects it as missing the Payment scheme. Fix: tempoxyz/mpp-go#334 and an mpp-rs PR; remove each SDK once its fix is pinned."
+      "reason": "mpp-go and mpp-rs accept an Authorization value that starts with a comma (\",Payment <token>\"); mppx rejects it as missing the Payment scheme. Fix: tempoxyz/mpp-go#334 and tempoxyz/mpp-rs#752; remove each SDK once its fix is pinned."
     },
     {
       "id": "echo-null-optional",
@@ -749,7 +749,7 @@
       ],
       "inputPattern": "=[A-Za-z0-9_+/-]",
       "category": "sdk-bug",
-      "reason": "mpp-rs accepts '=' before other base64 characters (\"=eyJ...\", \"Payment =eyJ...\"), decoding them as if it were absent; mppx's decode then yields invalid JSON. Fix: mpp-rs PR pending ('=' only as trailing padding); remove once pinned."
+      "reason": "mpp-rs accepts '=' before other base64 characters (\"=eyJ...\", \"Payment =eyJ...\"), decoding them as if it were absent; mppx's decode then yields invalid JSON. Fix: tempoxyz/mpp-rs#751; remove once pinned."
     },
     {
       "id": "rust-lenient-auth-param-tokens",
@@ -765,7 +765,7 @@
       ],
       "inputPattern": "^\\S+\\s+.*?(?:[^,\\s]\\s+[A-Za-z0-9!#$%&'*+.^_`|~-]+\\s*=|=\\s*[^\"\\s,A-Za-z0-9!#$%&'*+.^_`|~-]|[,\\s][A-Za-z0-9!#$%&'*+.^_`|~-]*\"[A-Za-z0-9!#$%&'*+.^_`|~-]*=)",
       "category": "sdk-bug",
-      "reason": "mpp-rs reads auth-params the grammar rejects: no comma between them (id=\"a\" realm=\"b\"), a value starting with a character outside tchar (id=\\,) and a name containing a quote (d\"escription=). mppx rejects these. Fix: mpp-rs PR pending (auth-param tokenizer); remove once pinned."
+      "reason": "mpp-rs reads auth-params the grammar rejects: no comma between them (id=\"a\" realm=\"b\"), a value starting with a character outside tchar (id=\\,) and a name containing a quote (d\"escription=). mppx rejects these. Fix: tempoxyz/mpp-rs#752; remove once pinned."
     }
   ]
 }
