@@ -1,7 +1,7 @@
 import http from 'node:http'
 import { createHash } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
-import { Challenge, Credential, Method, Receipt, z } from 'mppx'
+import { Challenge, Credential, Errors, Method, Receipt, z } from 'mppx'
 import * as Server from 'mppx/server'
 
 type ProblemDetails = {
@@ -112,16 +112,19 @@ const method = Method.toServer(baseMethod, {
     const path = envelope?.capturedRequest.url.pathname
     const flowCase = path ? caseByPath.get(path) : undefined
     if (!flowCase) throw new Error('Unknown flow case')
-    if (flowCase.fail_verification) throw new Error('verification failed')
+    // A declined payment is a PaymentError: mppx answers any other error thrown
+    // from verify with 500 internal-payment-error. No reason, so the problem
+    // detail stays the generic "Payment verification failed.".
+    if (flowCase.fail_verification) throw new Errors.VerificationFailedError()
     if (flowCase.check_expires && flowCase.request?.expires) {
       if (new Date(flowCase.request.expires) < new Date())
-        throw new Error('request expired')
+        throw new Errors.VerificationFailedError()
     }
 
     const payload = credential.payload as { type: string; signature?: string }
     const signature = payload.signature ?? ''
     if (flowCase.expected_signature && signature !== flowCase.expected_signature)
-      throw new Error(`signature mismatch: ${signature}`)
+      throw new Errors.VerificationFailedError()
 
     const receiptConfig = flowCase.receipt ?? { status: 'success', reference: 'ref-default' }
     return Receipt.from({
