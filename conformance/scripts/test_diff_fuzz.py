@@ -206,6 +206,28 @@ class AllowlistTests(unittest.TestCase):
         self.assertIsNotNone(find_allowlisted(entries, rejected))
         self.assertIsNone(find_allowlisted(entries, divergence()))
 
+    def test_decoded_pattern_matches_credential_and_receipt_json(self) -> None:
+        entries = parse_allowlist({"entries": [entry(
+            operations=["credential.parse", "receipt.parse"], kinds=["accepts"], decodedPattern='"expires":null',
+        )]})
+        token = b64url('{"challenge":{"id":"0","expires":null},"payload":{}}')
+        credential = divergence(operation="credential.parse", kind="accepts", input={"header": f"Payment {token}"})
+        self.assertIsNotNone(find_allowlisted(entries, credential))
+        receipt = divergence(operation="receipt.parse", kind="accepts", input={"header": b64url('{"expires":null}')})
+        self.assertIsNotNone(find_allowlisted(entries, receipt))
+        other = divergence(operation="credential.parse", kind="accepts", input={"header": f"Payment {b64url('{}')}"})
+        self.assertIsNone(find_allowlisted(entries, other))
+        self.assertIsNone(find_allowlisted(entries, divergence(kind="accepts")))
+
+    def test_decoded_pattern_sees_the_credential_request(self) -> None:
+        entries = parse_allowlist({"entries": [entry(
+            operations=["credential.parse"], kinds=["value"], decodedPattern='"__proto__"',
+        )]})
+        request = b64url('{"__proto__":null}')
+        token = b64url(json.dumps({"challenge": {"id": "0", "request": request}, "payload": {}}))
+        found = divergence(operation="credential.parse", kind="value", input={"header": f"Payment {token}"})
+        self.assertIsNotNone(find_allowlisted(entries, found))
+
     def test_rejects_invalid_entries(self) -> None:
         cases = [
             ({"entries": [entry(reason="")]}, "reason"),
@@ -213,6 +235,7 @@ class AllowlistTests(unittest.TestCase):
             ({"entries": [entry(operations=["http.payment_request"])]}, "unknown operations"),
             ({"entries": [entry(category="maybe")]}, "category"),
             ({"entries": [entry(inputPattern="(")]}, "inputPattern"),
+            ({"entries": [entry(decodedPattern="(")]}, "decodedPattern"),
             ({"entries": [entry(), entry()]}, "duplicates id"),
             ({"entries": [entry(extra=True)]}, "unknown keys"),
             ({"entries": [entry(adapters=[])]}, "adapters"),
