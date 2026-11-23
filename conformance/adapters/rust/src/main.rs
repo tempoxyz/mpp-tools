@@ -84,26 +84,19 @@ fn opt_base64url_json_field(value: &Value, key: &str) -> Result<Option<Base64Url
 
     let opaque = match raw {
         Value::Null => return Ok(None),
-        Value::String(text) => Base64UrlJson::from_value(&json!({ "_raw": text })),
-        Value::Object(_) => Base64UrlJson::from_value(raw),
+        // The canonical value is the wire form (base64url JSON); keep it as is
+        // so the header and the challenge id bind the same bytes.
+        Value::String(text) => Base64UrlJson::from_raw(text.clone()),
+        Value::Object(_) => Base64UrlJson::from_value(raw).map_err(|e| e.to_string())?,
         _ => return Err(format!("{} must be a string or object", key)),
-    }
-    .map_err(|e| e.to_string())?;
+    };
 
     Ok(Some(opaque))
 }
 
-fn opaque_to_json(opaque: &Base64UrlJson) -> Result<Value, String> {
-    let decoded = opaque.decode_value().map_err(|e| e.to_string())?;
-    match decoded {
-        Value::Object(map) if map.len() == 1 => {
-            if let Some(Value::String(raw)) = map.get("_raw") {
-                return Ok(Value::String(raw.clone()));
-            }
-            Ok(Value::Object(map))
-        }
-        other => Ok(other),
-    }
+// The conformance ABI carries opaque in its wire form, as the header has it.
+fn opaque_to_json(opaque: &Base64UrlJson) -> Value {
+    Value::String(opaque.raw().to_string())
 }
 
 // SDK checkout CI can add optional fields before the pinned release has them.
@@ -160,8 +153,7 @@ fn challenge_to_json(challenge: &PaymentChallenge) -> Result<Value, String> {
         obj["digest"] = json!(digest);
     }
     if let Some(ref opaque) = challenge.opaque {
-        obj["opaque"] =
-            opaque_to_json(opaque).map_err(|e| format!("Invalid JSON in opaque: {}", e))?;
+        obj["opaque"] = opaque_to_json(opaque);
     }
 
     copy_header(challenge, &mut obj)?;
@@ -194,7 +186,7 @@ fn credential_to_json(credential: &PaymentCredential) -> Result<Value, String> {
         challenge_obj["digest"] = json!(digest);
     }
     if let Some(ref opaque) = credential.challenge.opaque {
-        challenge_obj["opaque"] = opaque_to_json(opaque)?;
+        challenge_obj["opaque"] = opaque_to_json(opaque);
     }
     copy_header(&credential.challenge, &mut challenge_obj)?;
 

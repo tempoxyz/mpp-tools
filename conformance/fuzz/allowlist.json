@@ -28,8 +28,7 @@
       "id": "adapter-returns-decoded-opaque",
       "adapters": [
         "python",
-        "go",
-        "rust"
+        "go"
       ],
       "operations": [
         "challenge.parse",
@@ -95,25 +94,6 @@
       "messagePattern": "invalid (control|CRLF) characters",
       "category": "harmless",
       "reason": "pympp 0.16 applies its header-safety check (no control characters or CR/LF) to every string in a credential's challenge echo, including description, and rejects the credential. mppx accepts them. The pinned pympp 0.11 does not check, so this only shows against pympp main."
-    },
-    {
-      "id": "rust-adapter-formats-raw-opaque",
-      "adapters": [
-        "rust"
-      ],
-      "operations": [
-        "challenge.format",
-        "credential.format"
-      ],
-      "kinds": [
-        "value"
-      ],
-      "fields": [
-        "opaque",
-        "challenge.opaque"
-      ],
-      "category": "adapter-bug",
-      "reason": "The Rust adapter wraps a wire opaque string as {\"_raw\": ...} before formatting, so the header carries a different opaque."
     },
     {
       "id": "method-id-grammar",

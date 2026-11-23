@@ -116,14 +116,6 @@
           "reason": "pympp answers a replayed credential with 403 verification-failed and no challenge (CredentialReplayedError); the core spec answers 402 invalid-challenge with a fresh challenge."
         },
         {
-          "client": "rust",
-          "server": "python",
-          "steps": [
-            "paid"
-          ],
-          "reason": "The rust adapter's challenge.parse returns opaque as a decoded object instead of its wire string, so it cannot echo a challenge that carries opaque (route meta, or pympp's per-challenge nonce)."
-        },
-        {
           "client": "*",
           "server": "go",
           "steps": [
@@ -534,14 +526,6 @@
       ],
       "expectedFailures": [
         {
-          "client": "rust",
-          "server": "python",
-          "steps": [
-            "credential_in_authorization"
-          ],
-          "reason": "The rust adapter's challenge.parse returns opaque as a decoded object instead of its wire string, so it cannot echo a challenge that carries opaque (route meta, or pympp's per-challenge nonce)."
-        },
-        {
           "client": "*",
           "server": "go",
           "steps": [
@@ -632,14 +616,6 @@
         }
       ],
       "expectedFailures": [
-        {
-          "client": "rust",
-          "server": "*",
-          "steps": [
-            "bob_with_alice_credential"
-          ],
-          "reason": "The rust adapter's challenge.parse returns opaque as a decoded object instead of its wire string, so it cannot echo a challenge that carries opaque (route meta, or pympp's per-challenge nonce)."
-        },
         {
           "client": "*",
           "server": "python",
