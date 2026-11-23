@@ -411,7 +411,7 @@
         }
       },
       "sdkVersions": {
-        "ruby": ">0.1.6"
+        "ruby": ">0.1.10"
       }
     },
     {
@@ -509,7 +509,7 @@
         }
       },
       "sdkVersions": {
-        "ruby": ">0.1.6"
+        "ruby": ">0.1.10"
       }
     },
     {
@@ -609,7 +609,7 @@
       },
       "sdkVersions": {
         "go": ">=0.5.2-0",
-        "ruby": ">0.1.6",
+        "ruby": ">0.1.10",
         "typescript": ">0.11.0"
       }
     },
@@ -676,7 +676,7 @@
         }
       },
       "sdkVersions": {
-        "ruby": ">0.1.6"
+        "ruby": ">0.1.10"
       }
     },
     {
@@ -934,7 +934,7 @@
         }
       },
       "sdkVersions": {
-        "ruby": ">0.1.6"
+        "ruby": ">0.1.10"
       }
     },
     {
@@ -1128,7 +1128,7 @@
       "sdkVersions": {
         "go": ">0.6.0",
         "python": ">=0.19.0",
-        "ruby": ">0.1.6"
+        "ruby": ">0.1.10"
       },
       "description": "A zero-amount challenge is paid only with a proof credential: a hash credential is rejected even when its receipt carries a zero-value Transfer and TransferWithMemo bound to the challenge.",
       "tags": [
@@ -1265,7 +1265,7 @@
       "name": "supported_modes_pull_only_rejects_hash",
       "sdkVersions": {
         "python": ">=0.19.0",
-        "ruby": ">0.1.6",
+        "ruby": ">0.1.10",
         "rust": ">0.12.0"
       },
       "description": "A challenge whose methodDetails.supportedModes is [\"pull\"] rejects a hash (push) credential, even with a matching receipt.",
@@ -1350,9 +1350,9 @@
       ],
       "sdkVersions": {
         "typescript": ">0.17.3",
-        "rust": ">0.19.0",
+        "rust": ">=0.22.0",
         "python": ">0.20.0",
-        "go": ">0.8.0"
+        "go": ">=0.10.0"
       },
       "input": {
         "credential": {
@@ -1415,9 +1415,9 @@
       ],
       "sdkVersions": {
         "typescript": ">0.17.3",
-        "rust": ">0.19.0",
+        "rust": ">=0.22.0",
         "python": ">0.20.0",
-        "go": ">0.8.0"
+        "go": ">=0.10.0"
       },
       "input": {
         "credential": {
@@ -1485,9 +1485,9 @@
       ],
       "sdkVersions": {
         "typescript": ">0.17.3",
-        "rust": ">0.19.0",
+        "rust": ">=0.22.0",
         "python": ">0.20.0",
-        "go": ">0.8.0"
+        "go": ">=0.10.0"
       },
       "input": {
         "credential": {
@@ -1552,9 +1552,9 @@
       ],
       "sdkVersions": {
         "typescript": ">0.17.3",
-        "rust": ">0.19.0",
+        "rust": ">=0.22.0",
         "python": ">0.20.0",
-        "go": ">0.8.0"
+        "go": ">=0.10.0"
       },
       "input": {
         "credential": {
@@ -1628,9 +1628,9 @@
       ],
       "sdkVersions": {
         "typescript": ">0.17.3",
-        "rust": ">0.19.0",
+        "rust": ">=0.22.0",
         "python": ">0.20.0",
-        "go": ">0.8.0"
+        "go": ">=0.10.0"
       },
       "input": {
         "credential": {
@@ -1705,9 +1705,9 @@
       ],
       "sdkVersions": {
         "typescript": ">0.17.3",
-        "rust": ">0.19.0",
+        "rust": ">=0.22.0",
         "python": ">0.20.0",
-        "go": ">0.8.0"
+        "go": ">=0.10.0"
       },
       "input": {
         "credential": {
@@ -1779,9 +1779,9 @@
       ],
       "sdkVersions": {
         "typescript": ">0.17.3",
-        "rust": ">0.19.0",
+        "rust": ">=0.22.0",
         "python": ">0.20.0",
-        "go": ">0.8.0"
+        "go": ">=0.10.0"
       },
       "input": {
         "credential": {
@@ -1849,9 +1849,9 @@
       ],
       "sdkVersions": {
         "typescript": ">0.17.3",
-        "rust": ">0.19.0",
+        "rust": ">=0.22.0",
         "python": ">0.20.0",
-        "go": ">0.8.0"
+        "go": ">=0.10.0"
       },
       "input": {
         "credential": {
@@ -1909,9 +1909,9 @@
       ],
       "sdkVersions": {
         "typescript": ">0.17.3",
-        "rust": ">0.19.0",
+        "rust": ">=0.22.0",
         "python": ">0.20.0",
-        "go": ">0.8.0"
+        "go": ">=0.10.0"
       },
       "input": {
         "credential": {
@@ -1977,9 +1977,9 @@
       ],
       "sdkVersions": {
         "typescript": ">0.17.3",
-        "rust": ">0.19.0",
+        "rust": ">=0.22.0",
         "python": ">0.20.0",
-        "go": ">0.8.0"
+        "go": ">=0.10.0"
       },
       "input": {
         "credential": {
