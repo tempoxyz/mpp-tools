@@ -381,9 +381,13 @@ const accountKeychainAbi = parseAbi([
 	'function getKey(address account, address keyId) view returns ((uint8 signatureType, address keyId, uint64 expiry, bool enforceLimits, bool isRevoked))',
 ])
 const accountKeychainAddress = '0xaaaaaaaa00000000000000000000000000000000'
+const configurableAccountAbi = parseAbi(['function getConfigCommitment(address account) view returns (bytes32)'])
+const configurableAccountAddress = '0xaacc000000000000000000000000000000000000'
 
 // Verifies a zero-amount proof credential. The fake node holds accounts
-// without code and the vector's AccountKeychain entries: it answers
+// without code or a configurable-account config (newer mppx reads the
+// commitment, which is zero for such an account) and the vector's
+// AccountKeychain entries: it answers
 // AccountKeychain.getKey from them (an unknown key reads as the zero key), and
 // runs the ERC-6492 universal signature validator the way a node does for an
 // account without code, by recovering a 65-byte secp256k1 signature.
@@ -395,6 +399,11 @@ async function verifyTempoProof(input: TempoProofVerifyInput): Promise<AdapterRe
 		if (call.method !== 'eth_call' || !Array.isArray(call.params)) return undefined
 		const { to, data } = (call.params[0] ?? {}) as { to?: string; data?: Hex }
 		if (typeof data !== 'string') return undefined
+		if (to?.toLowerCase() === configurableAccountAddress) {
+			const { functionName } = decodeFunctionData({ abi: configurableAccountAbi, data })
+			if (functionName !== 'getConfigCommitment') return undefined
+			return { result: `0x${'0'.repeat(64)}` }
+		}
 		if (to?.toLowerCase() === accountKeychainAddress) {
 			const { functionName, args } = decodeFunctionData({ abi: accountKeychainAbi, data })
 			if (functionName !== 'getKey') return undefined
