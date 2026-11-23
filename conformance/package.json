@@ -18,10 +18,10 @@
   },
   "dependencies": {
     "mppx": "0.11.0",
-    "viem": "2.57.1"
+    "viem": "2.57.20"
   },
   "devDependencies": {
-    "@types/node": "^26.6.3",
+    "@types/node": "^26.6.6",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   },
