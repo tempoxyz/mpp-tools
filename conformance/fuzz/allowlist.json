@@ -442,6 +442,21 @@
       "reason": "pympp and mpp-go refuse to bind a credential header that is not an HTTP field name (an RFC 9110 token), such as one with quotes or ':'. mppx binds any string. A challenge cannot name such a header, so rejecting it is stricter, not wrong."
     },
     {
+      "id": "python-payment-authorization-header-only",
+      "adapters": [
+        "python"
+      ],
+      "operations": [
+        "challenge.id"
+      ],
+      "kinds": [
+        "rejects"
+      ],
+      "messagePattern": "Unsupported credential header",
+      "category": "harmless",
+      "reason": "pympp 0.26 binds only Payment-Authorization (any case) as a challenge's explicit credential header and refuses any other name. mppx 0.21 accepts only Payment-Authorization in a challenge too, but its id computation binds any string. A challenge cannot select another header, so rejecting it is stricter, not wrong."
+    },
+    {
       "id": "mppx-credential-without-payload",
       "adapters": [
         "*"
