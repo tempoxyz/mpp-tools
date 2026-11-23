@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import binascii
 import hashlib
 import json
 import re
@@ -266,6 +267,56 @@ def input_text(operation: str, input_value: Any) -> str:
     return json.dumps(input_value, ensure_ascii=False, sort_keys=True)
 
 
+def decoded_text(operation: str, input_value: Any) -> str | None:
+    """The base64url JSON documents inside a header, decoded leniently, one per line.
+
+    An allowlist decodedPattern is matched against it, so an entry can name what
+    an encoded document holds (such as a null field) rather than its encoding.
+    Each line names its document: "challenge: " and "request: " for a
+    credential's challenge echo and its decoded request, "request: " for a
+    challenge's request auth-param, and "receipt: " for a receipt. Documents are
+    re-serialized compactly ({"expires":null}), so patterns need not allow for
+    whitespace. Anchor a pattern to its line with (?m)^challenge: and the like.
+    """
+    if not isinstance(input_value, dict) or not isinstance(input_value.get("header"), str):
+        return None
+    header = input_value["header"].strip()
+    if operation == "receipt.parse":
+        receipt = _decoded_json(header)
+        return None if receipt is None else f"receipt: {_compact(receipt)}"
+    if operation == "challenge.parse":
+        match = re.search(r'(?i)(?:^|[\s,])request\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([^\s,"]+))', header)
+        if not match:
+            return None
+        raw = match.group(1) if match.group(1) is not None else match.group(2)
+        request = _decoded_json(re.sub(r"\\(.)", r"\1", raw))
+        return None if request is None else f"request: {_compact(request)}"
+    if operation == "credential.parse":
+        parts = header.split(None, 1)
+        credential = _decoded_json(parts[1]) if len(parts) == 2 else None
+        if not isinstance(credential, dict) or not isinstance(credential.get("challenge"), dict):
+            return None
+        challenge = credential["challenge"]
+        lines = [f"challenge: {_compact(challenge)}"]
+        request = _decoded_json(challenge["request"]) if isinstance(challenge.get("request"), str) else None
+        if request is not None:
+            lines.append(f"request: {_compact(request)}")
+        return "\n".join(lines)
+    return None
+
+
+def _decoded_json(token: str) -> Any:
+    token = re.sub(r"[^A-Za-z0-9_-]", "", token.replace("+", "-").replace("/", "_"))
+    try:
+        return json.loads(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)).decode("utf-8", "replace"))
+    except (ValueError, binascii.Error):
+        return None
+
+
+def _compact(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
 @dataclass(frozen=True)
 class Divergence:
     operation: str
@@ -307,6 +358,7 @@ class AllowlistEntry:
     input_pattern: re.Pattern[str] | None = None
     message_pattern: re.Pattern[str] | None = None
     fields: tuple[str, ...] | None = None
+    decoded_pattern: re.Pattern[str] | None = None
 
     def matches(self, divergence: Divergence) -> bool:
         if "*" not in self.adapters and divergence.adapter not in self.adapters:
@@ -317,6 +369,10 @@ class AllowlistEntry:
             return False
         if self.message_pattern is not None and not self.message_pattern.search(divergence.message):
             return False
+        if self.decoded_pattern is not None:
+            decoded = decoded_text(divergence.operation, divergence.input)
+            if decoded is None or not self.decoded_pattern.search(decoded):
+                return False
         if self.input_pattern is not None:
             return bool(self.input_pattern.search(input_text(divergence.operation, divergence.input)))
         return True
@@ -333,6 +389,7 @@ def parse_allowlist(document: Any, label: str = "allowlist") -> list[AllowlistEn
             raise ValueError(f"{where} must be an object")
         allowed = {
             "id", "adapters", "operations", "kinds", "category", "reason", "inputPattern", "messagePattern", "fields",
+            "decodedPattern",
         }
         unknown = set(raw) - allowed
         if unknown:
@@ -355,7 +412,7 @@ def parse_allowlist(document: Any, label: str = "allowlist") -> list[AllowlistEn
                 raise ValueError(f"{where} has unknown {key}: {bad}")
             lists[key] = tuple(values)
         patterns: dict[str, re.Pattern[str] | None] = {}
-        for key in ("inputPattern", "messagePattern"):
+        for key in ("inputPattern", "messagePattern", "decodedPattern"):
             patterns[key] = None
             if key in raw:
                 try:
@@ -375,6 +432,7 @@ def parse_allowlist(document: Any, label: str = "allowlist") -> list[AllowlistEn
             input_pattern=patterns["inputPattern"],
             message_pattern=patterns["messagePattern"],
             fields=tuple(fields) if fields is not None else None,
+            decoded_pattern=patterns["decodedPattern"],
         ))
     return entries
 

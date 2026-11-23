@@ -1,5 +1,5 @@
 {
-  "$comment": "Known differences from the TypeScript (mppx) reference adapter that scripts/diff_fuzz.py accepts. category: harmless (allowed by the protocol), sdk-bug (an SDK is wrong; remove the entry when it is fixed) or adapter-bug (a conformance adapter is wrong). An entry matches a divergence when its adapters (or *), operations and kinds match, every differing field is listed in fields, messagePattern matches the failing side's error message, and inputPattern matches the header, text or JSON input.",
+  "$comment": "Known differences from the TypeScript (mppx) reference adapter that scripts/diff_fuzz.py accepts. category: harmless (allowed by the protocol), sdk-bug (an SDK is wrong; remove the entry when it is fixed) or adapter-bug (a conformance adapter is wrong). An entry matches a divergence when its adapters (or *), operations and kinds match, every differing field is listed in fields, messagePattern matches the failing side's error message, inputPattern matches the header, text or JSON input, and decodedPattern matches the base64url JSON inside a credential or receipt header (a credential's challenge request follows, decoded, on its own line).",
   "entries": [
     {
       "id": "adapter-trims-input",
@@ -99,7 +99,8 @@
       "id": "method-id-grammar",
       "adapters": [
         "python",
-        "go"
+        "go",
+        "rust"
       ],
       "operations": [
         "challenge.parse",
@@ -114,7 +115,7 @@
       ],
       "messagePattern": "(?i)method",
       "category": "harmless",
-      "reason": "pympp and mpp-go follow the method grammar (1*LOWERALPHA) and reject digits, ':', '_' or '-', which the pinned mppx and mpp-rs still accept. Remove once the pinned mppx rejects them too (vectors/www-authenticate.json error_extended_method_identifier)."
+      "reason": "pympp, mpp-go and mpp-rs follow the method grammar (1*LOWERALPHA) and reject digits, ':', '_', '-' or uppercase letters in places the pinned mppx still accepts them (mppx 0.21 also formats any method). Fix: wevm/mppx#1341 (and tempoxyz/mpp-rs#737, tempoxyz/pympp#449 for their remaining cases); remove once the pinned mppx rejects them too (vectors/www-authenticate.json error_extended_method_identifier)."
     },
     {
       "id": "empty-realm-rejected",
@@ -212,7 +213,7 @@
       ],
       "inputPattern": "\"\\s+[A-Za-z0-9!#$%&'*+.^_\\x60|~-]+\\s*=",
       "category": "sdk-bug",
-      "reason": "pympp accepts auth-params separated only by whitespace (id=\"a\" realm=\"b\"); RFC 9110 requires commas and mppx rejects them."
+      "reason": "pympp accepts auth-params separated only by whitespace (id=\"a\" realm=\"b\"); the grammar requires OWS \",\" OWS. mppx also accepts them after a quoted-string, so this shows only where mppx rejects. Fix: tempoxyz/pympp#455 and wevm/mppx#1349; remove once released and pinned."
     },
     {
       "id": "rust-accepts-non-object-request",
@@ -240,9 +241,9 @@
       "kinds": [
         "crash"
       ],
-      "messagePattern": "at challenge\\.(expires|digest|description|opaque):",
+      "messagePattern": "at challenge\\.(id|realm|method|intent|request|expires|digest|description|opaque):",
       "category": "sdk-bug",
-      "reason": "pympp does not type-check a credential's optional challenge fields: \"expires\": true parses and is stringified to \"True\". mppx rejects it."
+      "reason": "pympp does not type-check a credential's challenge echo: \"expires\": true parses and is stringified to \"True\", and a missing intent parses as \"\". mppx rejects both. Fix: tempoxyz/pympp#456; remove once pinned."
     },
     {
       "id": "credential-trailing-text",
@@ -258,7 +259,7 @@
       ],
       "inputPattern": "^\\S+\\s+[A-Za-z0-9_=+/-]+\\s*,",
       "category": "sdk-bug",
-      "reason": "mpp-go and mpp-rs accept an Authorization value with text after the base64url credential (such as ', Basic realm=\"x\"'); mppx rejects it."
+      "reason": "mpp-go and mpp-rs accept an Authorization value with text after the base64url credential (such as ', Basic realm=\"x\"'); mppx rejects it. Fix: tempoxyz/mpp-go#334 and tempoxyz/mpp-rs#752; remove each SDK once its fix is pinned."
     },
     {
       "id": "python-base64-ignores-invalid-chars",
@@ -271,9 +272,9 @@
       "kinds": [
         "accepts"
       ],
-      "inputPattern": "^\\S+\\s+[A-Za-z0-9_=-]*(?:[^A-Za-z0-9_=\\s-]|\\s+\\S)",
+      "inputPattern": "^\\S+\\s+[A-Za-z0-9_=-]*(?:[^A-Za-z0-9_=\\s-]|\\s+\\S|=[A-Za-z0-9_-])",
       "category": "sdk-bug",
-      "reason": "pympp decodes credentials with base64.urlsafe_b64decode, which discards characters outside the alphabet, so a credential token with quotes, commas, '+', '/' or trailing text decodes where mppx rejects it."
+      "reason": "pympp decodes credentials with base64.urlsafe_b64decode, which discards characters outside the alphabet, so a credential token with quotes, commas, '+', '/' or trailing text decodes where mppx rejects it. Fix: tempoxyz/pympp#456; remove once the pinned pympp includes it."
     },
     {
       "id": "python-receipt-base64-ignores-invalid-chars",
@@ -286,9 +287,9 @@
       "kinds": [
         "accepts"
       ],
-      "inputPattern": "^\\s*[A-Za-z0-9_=-]*(?:[^A-Za-z0-9_=\\s-]|\\s+\\S)",
+      "inputPattern": "^\\s*[A-Za-z0-9_=-]*(?:[^A-Za-z0-9_=\\s-]|\\s+\\S|=[A-Za-z0-9_-])",
       "category": "sdk-bug",
-      "reason": "pympp decodes receipts with base64.urlsafe_b64decode, which discards characters outside the alphabet, so a receipt with quotes, commas, '+', '/' or inner spaces decodes where mppx rejects it."
+      "reason": "pympp decodes receipts with base64.urlsafe_b64decode, which discards characters outside the alphabet, so a receipt with quotes, commas, '+', '/' or inner spaces decodes where mppx rejects it. Fix: tempoxyz/pympp#456; remove once the pinned pympp includes it."
     },
     {
       "id": "source-is-a-string",
@@ -507,6 +508,7 @@
       ],
       "operations": [
         "base64url.decode",
+        "challenge.parse",
         "credential.parse",
         "receipt.parse"
       ],
@@ -515,7 +517,332 @@
       ],
       "messagePattern": "(?i)base64",
       "category": "harmless",
-      "reason": "mppx decodes non-canonical base64url (padding, a lone trailing character, non-zero trailing bits) that the other SDKs reject. Rejecting them is stricter, not wrong."
+      "reason": "mppx decodes non-canonical base64url (padding, a lone trailing character, non-zero trailing bits) in credentials, receipts and the challenge request that the other SDKs reject. Rejecting them is stricter, not wrong; whether parsers must reject padding (the draft only forbids senders from padding) is an open spec question."
+    },
+    {
+      "id": "mppx-empty-method-crash",
+      "adapters": [
+        "*"
+      ],
+      "operations": [
+        "challenge.parse"
+      ],
+      "kinds": [
+        "reference_crash"
+      ],
+      "messagePattern": "at method: '' should be non-empty",
+      "category": "sdk-bug",
+      "reason": "mppx's Challenge.deserialize checks the method only when it is non-empty, so method=\"\" passes and the value fails the Challenge schema. The other SDKs reject it. Fix: wevm/mppx#1341 (method grammar); remove once the pinned mppx includes it."
+    },
+    {
+      "id": "mppx-lenient-auth-param-syntax",
+      "adapters": [
+        "go",
+        "python",
+        "rust"
+      ],
+      "operations": [
+        "challenge.parse"
+      ],
+      "kinds": [
+        "rejects"
+      ],
+      "messagePattern": "(?i)malformed auth-param|auth-param separator|expected ',' after|missing comma",
+      "category": "sdk-bug",
+      "reason": "mppx reads auth-params that the grammar rejects: no comma between them, text right after a closing quote, CR/LF before a comma, or a name with characters outside tchar (it stops parsing there and ignores the rest). SDKs that follow the grammar reject them. Fix: wevm/mppx#1349 covers separators, text after a quote and token values; names outside tchar are not fixed yet. Narrow this entry once the pinned mppx includes #1349."
+    },
+    {
+      "id": "python-request-ignores-invalid-chars",
+      "adapters": [
+        "python"
+      ],
+      "operations": [
+        "challenge.parse"
+      ],
+      "kinds": [
+        "accepts"
+      ],
+      "messagePattern": "in JSON at position|is not valid JSON|Unexpected token|Unexpected end of JSON",
+      "category": "sdk-bug",
+      "reason": "pympp decodes the challenge request with base64.urlsafe_b64decode, which discards characters outside the alphabet, so a request with '.', '\"' or other stray characters decodes to JSON where mppx's decode yields invalid JSON. Fix: tempoxyz/pympp#456; remove once pinned."
+    },
+    {
+      "id": "mppx-credential-field-types",
+      "adapters": [
+        "*"
+      ],
+      "operations": [
+        "credential.parse"
+      ],
+      "kinds": [
+        "reference_crash"
+      ],
+      "messagePattern": "at (payload|source):",
+      "category": "sdk-bug",
+      "reason": "mppx's Credential.deserialize keeps any JSON payload and source, so an array or number payload, or a non-string source, fails the Credential schema. The draft types payload as an object and source as a string. Fix: wevm/mppx#1350; remove once the pinned mppx includes it."
+    },
+    {
+      "id": "reference-receipt-non-object-extra",
+      "adapters": [
+        "*"
+      ],
+      "operations": [
+        "receipt.parse"
+      ],
+      "kinds": [
+        "reference_crash"
+      ],
+      "messagePattern": "at extra:",
+      "category": "adapter-bug",
+      "reason": "mppx keeps a receipt's unknown fields, so a receipt with \"extra\": null or false passes through the TypeScript adapter and fails the conformance Receipt schema, which types extra as an object. extra is not a field the draft defines; the other SDKs drop it."
+    },
+    {
+      "id": "go-base64-skips-newlines",
+      "adapters": [
+        "go"
+      ],
+      "operations": [
+        "base64url.decode",
+        "credential.parse",
+        "receipt.parse"
+      ],
+      "kinds": [
+        "accepts"
+      ],
+      "inputPattern": "\\S[\\r\\n]+\\S",
+      "category": "sdk-bug",
+      "reason": "mpp-go decodes base64url with encoding/base64, which skips CR and LF, so a value with a line break inside decodes where mppx rejects it. Fix: tempoxyz/mpp-go#333; remove once pinned."
+    },
+    {
+      "id": "go-accepts-non-object-request",
+      "adapters": [
+        "go"
+      ],
+      "operations": [
+        "challenge.parse",
+        "credential.parse"
+      ],
+      "kinds": [
+        "crash"
+      ],
+      "messagePattern": "at request: .* is not of type 'object'|'challenge' is a required property",
+      "category": "sdk-bug",
+      "reason": "mpp-go accepts a challenge request that decodes to JSON null (or, in a credential echo, a request that is a JSON object instead of a base64url string), so the adapter's value fails the schema. mppx rejects both. Fix: tempoxyz/mpp-go#333; remove once pinned."
+    },
+    {
+      "id": "credential-leading-comma",
+      "adapters": [
+        "go",
+        "rust"
+      ],
+      "operations": [
+        "credential.parse"
+      ],
+      "kinds": [
+        "accepts"
+      ],
+      "inputPattern": "^\\s*,",
+      "category": "sdk-bug",
+      "reason": "mpp-go and mpp-rs accept an Authorization value that starts with a comma (\",Payment <token>\"); mppx rejects it as missing the Payment scheme. Fix: tempoxyz/mpp-go#334 and tempoxyz/mpp-rs#752; remove each SDK once its fix is pinned."
+    },
+    {
+      "id": "echo-null-optional",
+      "adapters": [
+        "python",
+        "go"
+      ],
+      "operations": [
+        "credential.parse"
+      ],
+      "kinds": [
+        "accepts"
+      ],
+      "decodedPattern": "(?m)^challenge: .*\"(expires|digest|description|opaque)\":null",
+      "category": "harmless",
+      "reason": "pympp and mpp-go read a null optional field in a credential's challenge echo (\"expires\": null) as absent; mppx rejects it. Same reading as reference-receipt-null-optional."
+    },
+    {
+      "id": "python-echo-required-field-types",
+      "adapters": [
+        "python"
+      ],
+      "operations": [
+        "credential.parse"
+      ],
+      "kinds": [
+        "accepts"
+      ],
+      "decodedPattern": "(?m)^challenge: .*\"(?:(?:id|realm|method|intent|request|expires|digest|description|opaque)\":(?:true|false|-?\\d|\\[|\\{)|(?:id|realm|method|intent|request)\":null)",
+      "category": "sdk-bug",
+      "reason": "pympp stringifies or drops a non-string field in a credential's challenge echo (\"id\": null parses as \"None\", \"description\": [] is dropped); mppx rejects it. Fix: tempoxyz/pympp#456 for the required fields; optional fields are not fixed yet. Remove once pinned."
+    },
+    {
+      "id": "reference-drops-proto-key",
+      "adapters": [
+        "*"
+      ],
+      "operations": [
+        "credential.parse",
+        "challenge.parse"
+      ],
+      "kinds": [
+        "value"
+      ],
+      "fields": [
+        "challenge.request",
+        "request"
+      ],
+      "decodedPattern": "(?m)^request: .*\"__proto__\"",
+      "category": "harmless",
+      "reason": "mppx drops a \"__proto__\" key from a request when it copies the decoded JSON into a plain object, so its request lacks a key the other SDKs keep. No payment method defines such a key."
+    },
+    {
+      "id": "golden-adapter-strips-bom",
+      "adapters": [
+        "*"
+      ],
+      "operations": [
+        "base64url.decode"
+      ],
+      "kinds": [
+        "value"
+      ],
+      "fields": [
+        "text"
+      ],
+      "inputPattern": "^77u[_/]",
+      "category": "adapter-bug",
+      "reason": "The TypeScript adapter's base64url-decode uses TextDecoder without ignoreBOM, which drops a leading U+FEFF; the other adapters keep it. Fix: pass ignoreBOM: true in golden/adapter.ts base64UrlDecode."
+    },
+    {
+      "id": "base64-standard-alphabet",
+      "adapters": [
+        "rust"
+      ],
+      "operations": [
+        "base64url.decode"
+      ],
+      "kinds": [
+        "accepts"
+      ],
+      "inputPattern": "[+/]",
+      "category": "harmless",
+      "reason": "mpp-rs decodes the standard base64 alphabet ('+', '/') as well as base64url, on purpose since mpp-rs#149 (a server sent the request in standard base64). mppx's Credential and Receipt decoding (ox) does too; only the TypeScript adapter's base64url-decode command rejects it. Whether parsers must reject it is an open spec question."
+    },
+    {
+      "id": "rust-base64-inner-padding",
+      "adapters": [
+        "rust"
+      ],
+      "operations": [
+        "base64url.decode",
+        "credential.parse",
+        "receipt.parse"
+      ],
+      "kinds": [
+        "accepts"
+      ],
+      "inputPattern": "=[A-Za-z0-9_+/-]",
+      "category": "sdk-bug",
+      "reason": "mpp-rs accepts '=' before other base64 characters (\"=eyJ...\", \"Payment =eyJ...\"), decoding them as if it were absent; mppx's decode then yields invalid JSON. Fix: tempoxyz/mpp-rs#751; remove once pinned."
+    },
+    {
+      "id": "rust-lenient-auth-param-tokens",
+      "adapters": [
+        "rust"
+      ],
+      "operations": [
+        "challenge.parse"
+      ],
+      "kinds": [
+        "accepts",
+        "value"
+      ],
+      "inputPattern": "(?:^\\S+\\s+|,\\s*)[A-Za-z0-9!#$%&'*+.^_`|~-]+\\s*=\\s*(?:\"(?:[^\"\\\\]|\\\\.)*\"|[A-Za-z0-9!#$%&'*+.^_`|~-]+)\\s+[A-Za-z0-9!#$%&'*+.^_`|~-]+\\s*=|(?:^\\S+\\s+|,\\s*)[A-Za-z0-9!#$%&'*+.^_`|~-]+\\s*=\\s*(?!\")[^\\s,A-Za-z0-9!#$%&'*+.^_`|~-]|,\\s*[A-Za-z0-9!#$%&'*+.^_`|~-]*\"[A-Za-z0-9!#$%&'*+.^_`|~-]*\\s*=|=\\s*\"(?:[^\"\\\\]|\\\\.)*\"[^\\s,]",
+      "category": "sdk-bug",
+      "reason": "mpp-rs reads auth-params the grammar rejects: no comma between them (id=\"a\" realm=\"b\"), a value starting with a character outside tchar (id=\\,) and a name containing a quote (d\"escription=), and text right after a closing quote (intent=\"a\"b\"). mppx rejects these. Fix: tempoxyz/mpp-rs#752; remove once pinned."
+    },
+    {
+      "id": "python-case-sensitive-param-names",
+      "adapters": [
+        "python"
+      ],
+      "operations": [
+        "challenge.parse"
+      ],
+      "kinds": [
+        "accepts",
+        "rejects"
+      ],
+      "inputPattern": "(?:^\\S+\\s+|,\\s*)[a-z]*[A-Z][A-Za-z0-9!#$%&'*+.^_`|~-]*\\s*=",
+      "category": "sdk-bug",
+      "reason": "pympp before 0.26 compares auth-param names case-sensitively, so 'ID=\"\"' beside 'id' is not a duplicate and 'ID' alone is not read as id. Fixed in pympp 0.26.0 (pinned by tempoxyz/mpp-tools#374); remove once that pin lands."
+    },
+    {
+      "id": "rust-accepts-non-object-payload",
+      "adapters": [
+        "rust"
+      ],
+      "operations": [
+        "credential.parse"
+      ],
+      "kinds": [
+        "crash"
+      ],
+      "messagePattern": "at payload: .* is not of type 'object'",
+      "category": "sdk-bug",
+      "reason": "mpp-rs accepts a credential whose payload is a JSON array or scalar, so the adapter's value fails the Credential schema. The draft types payload as an object; mppx rejects it once wevm/mppx#1350 lands. Not fixed in mpp-rs yet."
+    },
+    {
+      "id": "quoted-pair-of-ctl",
+      "adapters": [
+        "python",
+        "go",
+        "rust"
+      ],
+      "operations": [
+        "challenge.parse"
+      ],
+      "kinds": [
+        "accepts",
+        "rejects",
+        "value"
+      ],
+      "inputPattern": "\\\\[\\x00-\\x08\\x0a-\\x1f\\x7f]",
+      "category": "sdk-bug",
+      "reason": "A quoted-pair may escape only HTAB, SP, VCHAR or obs-text (RFC 9110), so a backslash before LF or another CTL is invalid. mppx unescapes it, and the SDKs read it differently (pympp before 0.26 keeps the backslash and the quote). Whether parsers must reject CTLs in quoted-strings is an open spec question; quoted-pair handling is changing in tempoxyz/pympp#449, tempoxyz/mpp-go#331 and tempoxyz/mpp-rs#738."
+    },
+    {
+      "id": "python-text-after-closing-quote",
+      "adapters": [
+        "python"
+      ],
+      "operations": [
+        "challenge.parse"
+      ],
+      "kinds": [
+        "accepts",
+        "crash",
+        "value"
+      ],
+      "inputPattern": "=\\s*\"(?:[^\"\\\\]|\\\\.)*\"[^\\s,]",
+      "category": "sdk-bug",
+      "reason": "pympp reads a quoted-string followed directly by more text (expires=\"\"2000-..., id=\"a\"b\") instead of rejecting it, so it keeps a truncated value or reads the rest as another parameter. mppx rejects it. Fix: tempoxyz/pympp#455; remove once pinned."
+    },
+    {
+      "id": "go-stringifies-echo-fields",
+      "adapters": [
+        "go"
+      ],
+      "operations": [
+        "credential.parse"
+      ],
+      "kinds": [
+        "accepts"
+      ],
+      "decodedPattern": "(?m)^challenge: .*\"(?:id|realm|method|intent|expires|digest|description|opaque)\":(?:true|false|-?\\d|\\[|\\{)",
+      "category": "sdk-bug",
+      "reason": "mpp-go converts a non-string field in a credential's challenge echo to text (\"id\": [] parses as \"[]\"); mppx rejects it. Not fixed in mpp-go yet."
     }
   ]
 }

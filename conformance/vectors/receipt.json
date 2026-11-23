@@ -128,6 +128,20 @@
           "error_type": "parse_error"
         }
       }
+    },
+    {
+      "name": "error_receipt_with_stray_character",
+      "description": "Rejects a receipt whose base64url holds a character outside the alphabet, even when dropping it would decode",
+      "tags": ["error", "fuzz", "invalid-encoding"],
+      "adapters": ["typescript", "python", "go", "rust"],
+      "sdkVersions": { "python": ">0.26.0" },
+      "wire": "eyJtZXRob2Qi.OiJ0ZW1wbyIsInJlZmVyZW5jZSI6IjB4YWJjIiwic3RhdHVzIjoic3VjY2VzcyIsInRpbWVzdGFtcCI6IjIwMjYtMDEtMjlUMTI6MDA6MDBaIn0",
+      "tests": {
+        "parse": {
+          "success": false,
+          "error_type": "parse_error"
+        }
+      }
     }
   ]
 }

@@ -226,6 +226,34 @@
         "format": true,
         "roundtrip": true
       }
+    },
+    {
+      "name": "error_challenge_id_not_a_string",
+      "description": "Rejects a credential whose echoed challenge id is null instead of a string",
+      "tags": ["error", "fuzz", "invalid-value"],
+      "adapters": ["typescript", "python", "go", "rust"],
+      "sdkVersions": { "python": ">0.26.0", "rust": ">0.22.0" },
+      "wire": "Payment eyJjaGFsbGVuZ2UiOnsiaWQiOm51bGwsInJlYWxtIjoiYXBpLmV4YW1wbGUuY29tIiwibWV0aG9kIjoidGVtcG8iLCJpbnRlbnQiOiJjaGFyZ2UiLCJyZXF1ZXN0IjoiZTMwIn0sInBheWxvYWQiOnt9fQ",
+      "tests": {
+        "parse": {
+          "success": false,
+          "error_type": "parse_error"
+        }
+      }
+    },
+    {
+      "name": "error_quoted_credential_token",
+      "description": "Rejects a credential token wrapped in quotes (credentials = \"Payment\" 1*SP base64url-nopad)",
+      "tags": ["error", "fuzz", "invalid-encoding"],
+      "adapters": ["typescript", "python", "go", "rust"],
+      "sdkVersions": { "python": ">0.26.0" },
+      "wire": "Payment \"eyJjaGFsbGVuZ2UiOnsiaWQiOiJjaF9xdW90ZWQiLCJyZWFsbSI6ImFwaS5leGFtcGxlLmNvbSIsIm1ldGhvZCI6InRlbXBvIiwiaW50ZW50IjoiY2hhcmdlIiwicmVxdWVzdCI6ImUzMCJ9LCJwYXlsb2FkIjp7fX0\"",
+      "tests": {
+        "parse": {
+          "success": false,
+          "error_type": "parse_error"
+        }
+      }
     }
   ]
 }
