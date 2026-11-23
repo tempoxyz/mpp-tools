@@ -157,9 +157,8 @@ public final class Adapter {
         putIfNotNull(result, "expires", challenge.expires());
         putIfNotNull(result, "description", challenge.description());
         putIfNotNull(result, "digest", challenge.digest());
-        if (challenge.opaque() != null) {
-            result.put("opaque", stableJson(challenge.opaque(), "parse_error"));
-        }
+        // The conformance ABI carries opaque in its wire form, as the header has it.
+        putIfNotNull(result, "opaque", challenge.opaqueRaw());
         return result;
     }
 
@@ -232,7 +231,12 @@ public final class Adapter {
         Map<String, Object> challenge = requireMap(data.get("challenge"), "challenge", "format_error");
         Map<String, Object> payload = requireMap(data.get("payload"), "payload", "format_error");
         String requestB64 = encodeJsonBase64Url(requireMap(challenge.get("request"), "request", "format_error"), "format_error");
-        optionalString(challenge, "opaque", "format_error");
+        String opaque = optionalString(challenge, "opaque", "format_error");
+        // mpp-java re-encodes the decoded map in compact form, which keeps the
+        // canonical (JCS) wire value the challenge id binds.
+        Map<String, Object> opaqueMap = opaque == null
+            ? null
+            : decodeJsonObjectBase64Url(opaque, "opaque", "format_error");
 
         ChallengeEcho echo = new ChallengeEcho(
             requiredString(challenge, "id", "format_error", false),
@@ -242,7 +246,7 @@ public final class Adapter {
             requestB64,
             optionalString(challenge, "expires", "format_error"),
             optionalString(challenge, "digest", "format_error"),
-            null
+            opaqueMap
         );
         Object source = data.get("source");
         if (source != null && !(source instanceof String)) {
@@ -265,9 +269,7 @@ public final class Adapter {
         result.put("request", decodeJsonObjectBase64Url(requirePresent(echo.request(), "request", errorType, false), "request", errorType));
         putIfNotNull(result, "expires", echo.expires());
         putIfNotNull(result, "digest", echo.digest());
-        if (echo.opaque() != null) {
-            result.put("opaque", stableJson(echo.opaque(), errorType));
-        }
+        putIfNotNull(result, "opaque", echo.opaqueRaw());
         return result;
     }
 

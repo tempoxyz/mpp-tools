@@ -89,8 +89,21 @@ def challenge_to_h(challenge)
   result[:expires] = challenge.expires unless challenge.expires.nil?
   result[:description] = challenge.description unless challenge.description.nil?
   result[:digest] = challenge.digest unless challenge.digest.nil?
-  result[:opaque] = challenge.opaque unless challenge.opaque.nil?
+  result[:opaque] = wire_opaque(challenge.opaque) unless challenge.opaque.nil?
   result
+end
+
+# mpp-rb decodes a challenge's opaque into a Hash; the conformance ABI carries
+# its wire form (base64url of the sorted compact JSON), as mppx sends it.
+def wire_opaque(opaque)
+  opaque.is_a?(Hash) ? base64url_encode(stable_json(opaque)) : opaque
+end
+
+# Mpp::Challenge takes opaque as the decoded Hash it encodes itself.
+def opaque_from_wire(opaque)
+  return opaque unless opaque.is_a?(String)
+
+  JSON.parse(base64url_decode(opaque))
 end
 
 def credential_to_h(credential)
@@ -105,7 +118,7 @@ def credential_to_h(credential)
   }
   challenge_hash[:expires] = challenge.expires unless challenge.expires.nil?
   challenge_hash[:digest] = challenge.digest unless challenge.digest.nil?
-  challenge_hash[:opaque] = challenge.opaque unless challenge.opaque.nil?
+  challenge_hash[:opaque] = wire_opaque(challenge.opaque) unless challenge.opaque.nil?
 
   result = {
     challenge: challenge_hash,
@@ -138,7 +151,7 @@ def challenge_from_h(data)
     digest: data["digest"],
     expires: data["expires"],
     description: data["description"],
-    opaque: data["opaque"]
+    opaque: opaque_from_wire(data["opaque"])
   )
 end
 
