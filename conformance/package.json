@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "mppx": "0.21.1",
-    "ox": "0.14.65",
+    "ox": "1.8.18",
     "viem": "2.58.4"
   },
   "devDependencies": {
