@@ -5,6 +5,6 @@
   "engines": { "node": ">=24" },
   "dependencies": {
     "ox": "0.14.59",
-    "viem": "2.57.13"
+    "viem": "2.58.0"
   }
 }
