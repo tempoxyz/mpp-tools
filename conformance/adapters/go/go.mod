@@ -3,7 +3,7 @@ module mpp-conformance-adapter-go
 go 1.26.11
 
 require (
-	github.com/ethereum/go-ethereum v1.17.5
+	github.com/ethereum/go-ethereum v1.17.10
 	github.com/tempoxyz/mpp-go v0.9.1
 )
 
