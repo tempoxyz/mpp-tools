@@ -5,6 +5,15 @@ on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
 
+# Approves Dependabot's patch and minor updates and merges them once checks
+# pass. Majors are left for a person.
+#
+# Where the base branch requires status checks, the job turns on GitHub's
+# native auto-merge, so GitHub merges the pull request whenever the required
+# checks pass: a slow check, a re-run or a rebase no longer strands the
+# update. Where no checks are required, auto-merge would merge at once, so
+# the job waits for every check to pass first and then merges.
+#
 # The approve and merge steps authenticate with a short-lived GitHub App
 # token minted via github-sts (authorized by .github/sts/dependabot.sts.yaml
 # in the repository the workflow runs against) rather than the built-in
@@ -37,10 +46,31 @@ jobs:
         id: metadata
         uses: tempoxyz/gh-actions/vendor/dependabot/fetch-metadata@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
 
-      - name: Wait for checks
+      - name: Read required checks
         if: >-
           steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
           steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        id: required
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          rulesets=$(gh api "repos/${GITHUB_REPOSITORY}/rules/branches/${BASE_REF}" \
+            --jq 'any(.[]; .type == "required_status_checks")')
+          classic=$(gh api "repos/${GITHUB_REPOSITORY}/branches/${BASE_REF}" \
+            --jq '(.protection.required_status_checks.contexts // []) | length > 0')
+          if [ "$rulesets" = "true" ] || [ "$classic" = "true" ]; then
+            echo "auto-merge=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No required status checks on ${BASE_REF}: waiting for every check before merging"
+            echo "auto-merge=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wait for checks
+        if: >-
+          (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor') &&
+          steps.required.outputs.auto-merge != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -122,7 +152,13 @@ jobs:
           steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
           steps.metadata.outputs.update-type == 'version-update:semver-minor'
         env:
+          AUTO_MERGE: ${{ steps.required.outputs.auto-merge }}
           GH_TOKEN: ${{ steps.sts.outputs.token }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_URL: ${{ github.event.pull_request.html_url }}
-        run: gh pr merge "$PR_URL" --squash --match-head-commit "$HEAD_SHA"
+        run: |
+          if [ "$AUTO_MERGE" = "true" ]; then
+            gh pr merge "$PR_URL" --auto --squash --match-head-commit "$HEAD_SHA"
+          else
+            gh pr merge "$PR_URL" --squash --match-head-commit "$HEAD_SHA"
+          fi

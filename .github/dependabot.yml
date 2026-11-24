@@ -1,115 +1,215 @@
 version: 2
 
-multi-ecosystem-groups:
-  weekly-dependencies:
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-      timezone: "America/Los_Angeles"
-  # Tempo SDK adapters get their own group: a bump can re-run scenarios skipped
-  # with ">pinned" for gaps that are not fixed yet, and a red Tempo SDK
-  # Conformance check should hold back only these bumps.
-  tempo-sdk-dependencies:
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-      timezone: "America/Los_Angeles"
-
+# Patch and minor updates are grouped per ecosystem and merge on their own
+# through the Dependabot workflow once checks pass. A major update opens its
+# own pull request, so a breaking release holds back only itself. Security
+# updates are grouped separately and are not held to the weekly schedule.
 updates:
   - package-ecosystem: "npm"
     directory: "/conformance"
     cooldown:
       default-days: 7
-    patterns: ["*"]
     # Bump reference SDK pins (bump-reference-pins.yml) owns this pin.
     ignore:
       - dependency-name: "mppx"
-    multi-ecosystem-group: "weekly-dependencies"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    groups:
+      weekly-dependencies:
+        patterns: ["*"]
+        update-types: [minor, patch]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
 
   - package-ecosystem: "cargo"
     directory: "/conformance/adapters/rust"
     cooldown:
       default-days: 7
-    patterns: ["*"]
     # Bump reference SDK pins (bump-reference-pins.yml) owns this pin.
     ignore:
       - dependency-name: "mpp"
-    multi-ecosystem-group: "weekly-dependencies"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    groups:
+      weekly-dependencies:
+        patterns: ["*"]
+        update-types: [minor, patch]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
 
   - package-ecosystem: "uv"
     directory: "/conformance/adapters/python"
     cooldown:
       default-days: 7
-    patterns: ["*"]
     # Bump reference SDK pins (bump-reference-pins.yml) owns this pin.
     ignore:
       - dependency-name: "pympp"
-    multi-ecosystem-group: "weekly-dependencies"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    groups:
+      weekly-dependencies:
+        patterns: ["*"]
+        update-types: [minor, patch]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
 
   - package-ecosystem: "gomod"
     directory: "/conformance/adapters/go"
     cooldown:
       default-days: 7
-    patterns: ["*"]
     # Bump reference SDK pins (bump-reference-pins.yml) owns this pin.
     ignore:
       - dependency-name: "github.com/tempoxyz/mpp-go"
-    multi-ecosystem-group: "weekly-dependencies"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    groups:
+      weekly-dependencies:
+        patterns: ["*"]
+        update-types: [minor, patch]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
 
   - package-ecosystem: "bundler"
     directory: "/conformance/adapters/ruby"
     cooldown:
       default-days: 7
-    patterns: ["*"]
     # Bump reference SDK pins (bump-reference-pins.yml) owns this pin.
     ignore:
       - dependency-name: "mpp-rb"
-    multi-ecosystem-group: "weekly-dependencies"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    groups:
+      weekly-dependencies:
+        patterns: ["*"]
+        update-types: [minor, patch]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
 
   - package-ecosystem: "gradle"
     directory: "/conformance/adapters/java"
     cooldown:
       default-days: 7
-    patterns: ["*"]
     # Bump reference SDK pins (bump-reference-pins.yml) owns this pin.
     ignore:
       - dependency-name: "com.stripe:mpp-java"
-    multi-ecosystem-group: "weekly-dependencies"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    groups:
+      weekly-dependencies:
+        patterns: ["*"]
+        update-types: [minor, patch]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
 
+  # Tempo SDK adapters get their own groups: a bump can re-run scenarios
+  # skipped with ">pinned" for gaps that are not fixed yet, and a red Tempo SDK
+  # Conformance check should hold back only these bumps.
   - package-ecosystem: "npm"
     directory: "/tempo-conformance/adapters/typescript"
     cooldown:
       default-days: 7
-    patterns: ["*"]
-    multi-ecosystem-group: "tempo-sdk-dependencies"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    groups:
+      tempo-sdk-dependencies:
+        patterns: ["*"]
+        update-types: [minor, patch]
+      tempo-sdk-security:
+        applies-to: security-updates
+        patterns: ["*"]
 
   - package-ecosystem: "cargo"
     directory: "/tempo-conformance/adapters/rust"
     cooldown:
       default-days: 7
-    patterns: ["*"]
-    multi-ecosystem-group: "tempo-sdk-dependencies"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    groups:
+      tempo-sdk-dependencies:
+        patterns: ["*"]
+        update-types: [minor, patch]
+      tempo-sdk-security:
+        applies-to: security-updates
+        patterns: ["*"]
 
   - package-ecosystem: "uv"
     directory: "/tempo-conformance/adapters/python"
     cooldown:
       default-days: 7
-    patterns: ["*"]
-    multi-ecosystem-group: "tempo-sdk-dependencies"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    groups:
+      tempo-sdk-dependencies:
+        patterns: ["*"]
+        update-types: [minor, patch]
+      tempo-sdk-security:
+        applies-to: security-updates
+        patterns: ["*"]
 
   - package-ecosystem: "gomod"
     directory: "/tempo-conformance/adapters/go"
     cooldown:
       default-days: 7
-    patterns: ["*"]
-    multi-ecosystem-group: "tempo-sdk-dependencies"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    groups:
+      tempo-sdk-dependencies:
+        patterns: ["*"]
+        update-types: [minor, patch]
+      tempo-sdk-security:
+        applies-to: security-updates
+        patterns: ["*"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
     cooldown:
       # Buffer the scanner's seven-day minimum: Dependabot reads date-only tag metadata.
       default-days: 8
-    patterns: ["*"]
-    multi-ecosystem-group: "weekly-dependencies"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    groups:
+      weekly-dependencies:
+        patterns: ["*"]
+        update-types: [minor, patch]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
