@@ -3,7 +3,8 @@ version: 2
 # Patch and minor updates are grouped per ecosystem and merge on their own
 # through the Dependabot workflow once checks pass. A major update opens its
 # own pull request, so a breaking release holds back only itself. Security
-# updates are grouped separately and are not held to the weekly schedule.
+# updates are grouped separately, majors again on their own, and are not held
+# to the weekly schedule.
 updates:
   - package-ecosystem: "npm"
     directory: "/conformance"
@@ -24,6 +25,7 @@ updates:
       security:
         applies-to: security-updates
         patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: "cargo"
     directory: "/conformance/adapters/rust"
@@ -44,6 +46,7 @@ updates:
       security:
         applies-to: security-updates
         patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: "uv"
     directory: "/conformance/adapters/python"
@@ -64,6 +67,7 @@ updates:
       security:
         applies-to: security-updates
         patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: "gomod"
     directory: "/conformance/adapters/go"
@@ -84,6 +88,7 @@ updates:
       security:
         applies-to: security-updates
         patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: "bundler"
     directory: "/conformance/adapters/ruby"
@@ -104,6 +109,7 @@ updates:
       security:
         applies-to: security-updates
         patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: "gradle"
     directory: "/conformance/adapters/java"
@@ -124,6 +130,7 @@ updates:
       security:
         applies-to: security-updates
         patterns: ["*"]
+        update-types: [minor, patch]
 
   # Tempo SDK adapters get their own groups: a bump can re-run scenarios
   # skipped with ">pinned" for gaps that are not fixed yet, and a red Tempo SDK
@@ -144,6 +151,7 @@ updates:
       tempo-sdk-security:
         applies-to: security-updates
         patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: "cargo"
     directory: "/tempo-conformance/adapters/rust"
@@ -161,6 +169,7 @@ updates:
       tempo-sdk-security:
         applies-to: security-updates
         patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: "uv"
     directory: "/tempo-conformance/adapters/python"
@@ -178,6 +187,7 @@ updates:
       tempo-sdk-security:
         applies-to: security-updates
         patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: "gomod"
     directory: "/tempo-conformance/adapters/go"
@@ -195,6 +205,7 @@ updates:
       tempo-sdk-security:
         applies-to: security-updates
         patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -213,3 +224,4 @@ updates:
       security:
         applies-to: security-updates
         patterns: ["*"]
+        update-types: [minor, patch]
