@@ -8,9 +8,9 @@ on:
 # Approves Dependabot's patch and minor updates and squash-merges them once
 # every check on the pull request has passed, required or not, so a red
 # optional gate (such as Tempo SDK Conformance) still holds an update back.
-# Majors are left for a person. The job merges directly instead of turning on
-# GitHub's auto-merge: auto-merge waits only for required checks and stays
-# armed after a maintainer pushes to the branch.
+# Majors and security updates are left for a person. The job merges
+# directly instead of turning on GitHub's auto-merge: auto-merge waits only
+# for required checks and stays armed after a maintainer pushes to the branch.
 #
 # Claude Code Review is an advisory review bot, not a gate: it can stay
 # pending for many minutes, so the wait ignores it. A run that times out or
@@ -48,10 +48,28 @@ jobs:
         id: metadata
         uses: tempoxyz/gh-actions/vendor/dependabot/fetch-metadata@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
 
+      # Merge only patch and minor version updates. Security updates skip
+      # Dependabot's cooldown, so a release hours old could otherwise land
+      # with nobody looking: leave them, like majors, for a person. Callers
+      # keep security fixes in groups whose names end in "security".
+      - name: Decide whether to merge
+        id: decide
+        env:
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+          GROUP: ${{ steps.metadata.outputs.dependency-group }}
+        run: |
+          merge=false
+          case "$UPDATE_TYPE" in
+            version-update:semver-patch|version-update:semver-minor) merge=true ;;
+          esac
+          case "$GROUP" in
+            *security) merge=false; echo "Security update: left for a person" ;;
+          esac
+          echo "merge=$merge" >> "$GITHUB_OUTPUT"
+
       - name: Wait for checks
         if: >-
-          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
-          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+          steps.decide.outputs.merge == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_URL: ${{ github.event.pull_request.html_url }}
@@ -109,8 +127,7 @@ jobs:
 
       - name: Fetch GitHub token via STS
         if: >-
-          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
-          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+          steps.decide.outputs.merge == 'true'
         id: sts
         uses: tempoxyz/gh-actions/actions/github-sts@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
         with:
@@ -118,8 +135,7 @@ jobs:
 
       - name: Approve update
         if: >-
-          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
-          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+          steps.decide.outputs.merge == 'true'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ steps.sts.outputs.token }}
@@ -128,8 +144,7 @@ jobs:
 
       - name: Merge update
         if: >-
-          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
-          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+          steps.decide.outputs.merge == 'true'
         env:
           GH_TOKEN: ${{ steps.sts.outputs.token }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
