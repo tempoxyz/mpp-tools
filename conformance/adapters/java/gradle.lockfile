@@ -2,12 +2,12 @@
 # Manual edits can break the build and are not advised.
 # This file is expected to be part of source control.
 # To regenerate this file, run: ./gradlew :dependencies --write-locks
-com.fasterxml.jackson.core:jackson-annotations:2.22=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
-com.fasterxml.jackson.core:jackson-core:2.22.3=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
-com.fasterxml.jackson.core:jackson-databind:2.22.3=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
-com.fasterxml.jackson:jackson-bom:2.22.3=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+com.fasterxml.jackson.core:jackson-annotations:2.23=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+com.fasterxml.jackson.core:jackson-core:2.23.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+com.fasterxml.jackson.core:jackson-databind:2.23.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+com.fasterxml.jackson:jackson-bom:2.23.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 com.google.code.gson:gson:2.10.1=runtimeClasspath,testRuntimeClasspath
 com.stripe:mpp-java:0.1.6=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 com.stripe:stripe-java:25.3.0=runtimeClasspath,testRuntimeClasspath
-org.bouncycastle:bcprov-jdk18on:1.86=runtimeClasspath,testRuntimeClasspath
+org.bouncycastle:bcprov-jdk18on:1.87=runtimeClasspath,testRuntimeClasspath
 empty=annotationProcessor,testAnnotationProcessor
