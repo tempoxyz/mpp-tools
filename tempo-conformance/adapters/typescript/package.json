@@ -4,7 +4,7 @@
   "type": "module",
   "engines": { "node": ">=24" },
   "dependencies": {
-    "ox": "0.14.59",
+    "ox": "1.8.18",
     "viem": "2.58.0"
   }
 }
