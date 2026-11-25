@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
   "spec_ref": "Tempo zero-amount proof credential",
-  "description": "Server-side verification of zero-amount Tempo proof credentials ({type: 'proof', signature}), as mppx's tempo/server/Charge.ts validates them: the EIP-712 Proof (domain MPP v3, chain 4217) binds account, challengeId and realm, and must be signed by the did:pkh source account or by an access key the AccountKeychain holds for it, unrevoked and unexpired, bare or wrapped in a Keychain V1/V2 envelope naming the source. The adapter's fake node serves eth_chainId, AccountKeychain.getKey from accessKeys, and the ERC-6492 universal validator for accounts without code. Fixture keys: source 0xf39F...2266 (Anvil account 0), access key 0x7099...79C8 (Anvil account 1).",
+  "description": "Server-side verification of zero-amount Tempo proof credentials ({type: 'proof', signature}), as mppx's tempo/server/Charge.ts validates them: the EIP-712 Proof (domain MPP v3, chain 4217) binds account, challengeId and realm, and must be signed by the did:pkh source account or by an access key the AccountKeychain holds for it, unrevoked and unexpired, bare or wrapped in a Keychain V1/V2 envelope naming the source. The adapter's fake node serves eth_chainId, AccountKeychain.getKey from accessKeys, and the ERC-6492 universal validator for accounts without code. Fixture keys: source 0xf39F...2266 (Anvil account 0), access key 0x7099...79C8 (Anvil account 1). Each challenge carries a per-issuance nonce (`_mpp_nonce` in opaque), which servers need before they accept proof credentials.",
   "commands": {
     "operation": "tempo.proof.verify"
   },
@@ -26,6 +26,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "0",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -68,6 +69,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "0",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -108,6 +110,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "0",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -148,6 +151,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -188,6 +192,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "0",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -227,6 +232,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "0",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -272,6 +278,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "0",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -327,6 +334,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "0",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -380,6 +388,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "0",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -431,6 +440,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "0",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -474,6 +484,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "0",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -524,6 +535,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "0",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -577,6 +589,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "0",
               "currency": "0x1234567890123456789012345678901234567890",

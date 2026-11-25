@@ -1,7 +1,7 @@
 {
   "version": "2.0.0",
   "spec_ref": "MPP Tempo receipt fixture verification",
-  "description": "Server-side Tempo receipt fixture verification of push (hash) credentials must require the primary transfer to carry an attribution memo bound to the credential challenge id and realm when no explicit server memo is configured: a plain transfer, a memo not in attribution format, or an attribution memo for another challenge or realm is rejected. These staged vectors use a transaction-hash credential with a did:pkh source and TIP-20 receipt logs (each TransferWithMemo paired with its Transfer), and split requests and does not exercise signed transaction deserialization.",
+  "description": "Server-side Tempo receipt fixture verification of push (hash) credentials must require the primary transfer to carry an attribution memo bound to the credential challenge id and realm when no explicit server memo is configured: a plain transfer, a memo not in attribution format, or an attribution memo for another challenge or realm is rejected. These staged vectors use a transaction-hash credential with a did:pkh source and TIP-20 receipt logs (each TransferWithMemo paired with its Transfer), and split requests and does not exercise signed transaction deserialization. Each challenge carries a per-issuance nonce (`_mpp_nonce` in opaque), which servers need before they accept push (hash) and Zone credentials.",
   "commands": {
     "operation": "tempo.receipt.verify"
   },
@@ -22,6 +22,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -87,6 +88,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -140,6 +142,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -204,6 +207,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -268,6 +272,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -331,6 +336,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -429,6 +435,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -528,6 +535,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "01000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -628,6 +636,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "0001000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -695,6 +704,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -790,6 +800,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -875,6 +886,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -952,6 +964,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -1014,6 +1027,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -1076,6 +1090,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -1145,6 +1160,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "0",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -1208,6 +1224,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -1282,6 +1299,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -1362,6 +1380,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -1427,6 +1446,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -1497,6 +1517,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -1564,6 +1585,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -1640,6 +1662,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -1717,6 +1740,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -1791,6 +1815,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -1861,6 +1886,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -1921,6 +1947,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
@@ -1989,6 +2016,7 @@
             "method": "tempo",
             "intent": "charge",
             "expires": "2030-01-01T00:00:00Z",
+            "opaque": "eyJfbXBwX25vbmNlIjoiQVFJREJBVUdCd2dKQ2dzTURRNFBFQSJ9",
             "request": {
               "amount": "1000",
               "currency": "0x1234567890123456789012345678901234567890",
