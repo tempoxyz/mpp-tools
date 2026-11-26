@@ -817,11 +817,11 @@
     },
     {
       "name": "error_unquoted_value_without_comma",
-      "description": "Rejects an unquoted (token) value followed by another auth-param without a comma",
+      "description": "Rejects an unquoted (token) extension value followed by another auth-param without a comma",
       "tags": ["error", "auth-param-list"],
       "adapters": ["typescript", "python", "go", "rust"],
       "sdkVersions": { "typescript": ">=0.22.0", "python": ">0.26.0", "go": ">0.10.1", "rust": ">0.22.0" },
-      "wire": "Payment id=\"ch_token_no_comma\", method=tempo realm=\"api.example.com\", intent=\"charge\", request=\"e30\"",
+      "wire": "Payment id=\"ch_token_no_comma\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e30\", ext=tok other=\"x\"",
       "tests": {
         "parse": {
           "success": false,
