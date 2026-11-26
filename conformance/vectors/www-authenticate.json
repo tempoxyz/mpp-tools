@@ -150,6 +150,7 @@
       "name": "unescaped_quotes_in_description",
       "description": "Unescaped quotes in description value — parsers truncate at quote boundary, remaining text is ignored",
       "tags": ["happy-path", "edge-case", "permissive-parsing"],
+      "sdkVersions": { "typescript": "<0.22.0", "python": "<=0.26.0", "rust": "<=0.22.0" },
       "object": {
         "description": "Payment for ",
         "id": "ch_special",
@@ -808,6 +809,62 @@
       "adapters": ["typescript", "python", "go", "rust"],
       "sdkVersions": { "python": ">0.26.0" },
       "wire": "Payment id=\"ch_request_dot\", realm=\"api.example.com\", method=\"tempo\", intent=\"charge\", request=\"e3.0\"",
+      "tests": {
+        "parse": {
+          "success": false,
+          "error_type": "parse_error"
+        }
+      }
+    },
+    {
+      "name": "error_unquoted_value_without_comma",
+      "description": "Rejects an unquoted (token) value followed by another auth-param without a comma",
+      "tags": ["error", "auth-param-list"],
+      "adapters": ["typescript", "python", "go", "rust"],
+      "sdkVersions": { "typescript": ">=0.22.0", "python": ">0.26.0", "go": ">0.10.1", "rust": ">0.22.0" },
+      "wire": "Payment id=\"ch_token_no_comma\", method=tempo realm=\"api.example.com\", intent=\"charge\", request=\"e30\"",
+      "tests": {
+        "parse": {
+          "success": false,
+          "error_type": "parse_error"
+        }
+      }
+    },
+    {
+      "name": "error_unquoted_value_with_slash",
+      "description": "Rejects an unquoted auth-param value containing \"/\", which is not a tchar (token = 1*tchar)",
+      "tags": ["error", "token"],
+      "adapters": ["typescript", "python", "go", "rust"],
+      "sdkVersions": { "typescript": ">=0.22.0", "python": ">0.26.0", "go": ">0.10.1", "rust": ">0.22.0" },
+      "wire": "Payment id=\"ch_token_slash\", realm=api/v1, method=\"tempo\", intent=\"charge\", request=\"e30\"",
+      "tests": {
+        "parse": {
+          "success": false,
+          "error_type": "parse_error"
+        }
+      }
+    },
+    {
+      "name": "error_unquoted_value_with_backslash",
+      "description": "Rejects an unquoted auth-param value containing a backslash, which is not a tchar (token = 1*tchar)",
+      "tags": ["error", "token"],
+      "adapters": ["typescript", "python", "go", "rust"],
+      "sdkVersions": { "typescript": ">=0.22.0", "python": ">0.26.0", "go": ">0.10.1", "rust": ">0.22.0" },
+      "wire": "Payment id=\"ch_token_backslash\", realm=api\\v1, method=\"tempo\", intent=\"charge\", request=\"e30\"",
+      "tests": {
+        "parse": {
+          "success": false,
+          "error_type": "parse_error"
+        }
+      }
+    },
+    {
+      "name": "error_empty_unquoted_value",
+      "description": "Rejects an empty unquoted auth-param value (token = 1*tchar)",
+      "tags": ["error", "token"],
+      "adapters": ["typescript", "python", "go", "rust"],
+      "sdkVersions": { "typescript": ">=0.22.0", "python": ">0.26.0", "go": ">0.10.1", "rust": ">0.22.0" },
+      "wire": "Payment id=\"ch_token_empty\", realm=, method=\"tempo\", intent=\"charge\", request=\"e30\"",
       "tests": {
         "parse": {
           "success": false,
