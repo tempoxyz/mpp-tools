@@ -150,7 +150,6 @@
       "name": "unescaped_quotes_in_description",
       "description": "Unescaped quotes in description value — parsers truncate at quote boundary, remaining text is ignored",
       "tags": ["happy-path", "edge-case", "permissive-parsing"],
-      "sdkVersions": { "typescript": "<0.22.0", "python": "<=0.26.0", "rust": "<=0.22.0" },
       "object": {
         "description": "Payment for ",
         "id": "ch_special",
@@ -860,11 +859,11 @@
     },
     {
       "name": "error_empty_unquoted_value",
-      "description": "Rejects an empty unquoted auth-param value (token = 1*tchar)",
+      "description": "Rejects an empty unquoted value for an extension auth-param (token = 1*tchar)",
       "tags": ["error", "token"],
       "adapters": ["typescript", "python", "go", "rust"],
       "sdkVersions": { "typescript": ">=0.22.0", "python": ">0.26.0", "go": ">0.10.1", "rust": ">0.22.0" },
-      "wire": "Payment id=\"ch_token_empty\", realm=, method=\"tempo\", intent=\"charge\", request=\"e30\"",
+      "wire": "Payment id=\"ch_token_empty\", realm=\"api.example.com\", ext=, method=\"tempo\", intent=\"charge\", request=\"e30\"",
       "tests": {
         "parse": {
           "success": false,
